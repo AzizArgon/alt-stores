@@ -15,20 +15,20 @@ const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
 // Rows the seller should look at: no price, unknown category, no brand or an Anti-Fraud warning
 const isFlagged = (r) => (r.flags || []).some((f) => f.level !== 'info')
 const needsAttention = (r) => r.source === 'failed' || r.currency_check || r.condition === 'unknown' || Boolean(r.specs?._suspect) || r.price == null || r.category === 'other' || !r.brand || isFlagged(r)
-const SOURCE_STYLE = { rule: 'text-sky-700', cache: 'text-slate-500', ai: 'text-violet-700', failed: 'text-red-600' }
+const SOURCE_STYLE = { rule: 'text-info', cache: 'text-muted', ai: 'text-primary', failed: 'text-danger' }
 
-const cellInput = 'w-full rounded border border-transparent bg-transparent px-1.5 py-1 hover:border-slate-300 focus:border-slate-900 focus:bg-white outline-none'
+const cellInput = 'w-full rounded border border-transparent bg-transparent px-1.5 py-1 hover:border-slate-300 focus:border-primary focus:bg-white outline-none'
 
 function Progress({ imp }) {
   const { t } = useTranslation()
   const pct = imp.chunks_total ? Math.round((imp.chunks_done / imp.chunks_total) * 100) : 0
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
+    <div className="rounded-xl border border-line bg-surface shadow-card p-6">
       <p>{imp.chunks_total
         ? t('import.processing', { done: imp.chunks_done, total: imp.chunks_total })
         : t('import.preparing')}</p>
-      <div className="mt-3 h-2 rounded bg-slate-100">
-        <div className="h-2 rounded bg-slate-900 transition-all" style={{ width: `${pct}%` }} />
+      <div className="mt-3 h-2 rounded bg-surface-2">
+        <div className="h-2 rounded bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   )
@@ -48,11 +48,11 @@ function Specs({ category, specs, guess }) {
   if (!confirmed && !guessed && !suspect) return null
   return (
     <>
-      {suspect && <p className="px-1.5 text-xs font-medium text-red-700">{t('import.possibleTypo')}: {suspect}</p>}
-      <p className="truncate px-1.5 text-xs text-slate-500" title={[confirmed, guessed].filter(Boolean).join('\n')}>
+      {suspect && <p className="px-1.5 text-xs font-medium text-danger">{t('import.possibleTypo')}: {suspect}</p>}
+      <p className="truncate px-1.5 text-xs text-muted" title={[confirmed, guessed].filter(Boolean).join('\n')}>
         {confirmed}
         {guessed && (
-          <span className="italic text-amber-700">{confirmed && ' · '}{t('import.aiGuess')}: {guessed}</span>
+          <span className="italic text-warning">{confirmed && ' · '}{t('import.aiGuess')}: {guessed}</span>
         )}
       </p>
     </>
@@ -65,8 +65,8 @@ function ConvertedPrice({ price, currency, rate }) {
   if (price == null || !rate) return null
   const hint = t('price.rateHint', { date: formatDayMonth(rate.rate_date) })
   return currency === 'USD'
-    ? <p className="px-1.5 text-xs font-medium text-slate-700" title={hint}>≈ {formatPrice(roundSum(price * rate.rate), 'UZS')}</p>
-    : <p className="px-1.5 text-xs text-slate-500" title={hint}>≈ {formatPrice(roundUsd(price / rate.rate), 'USD')}</p>
+    ? <p className="px-1.5 text-xs font-medium text-ink" title={hint}>≈ {formatPrice(roundSum(price * rate.rate), 'UZS')}</p>
+    : <p className="px-1.5 text-xs text-muted" title={hint}>≈ {formatPrice(roundUsd(price / rate.rate), 'USD')}</p>
 }
 
 function PreviewTable({ importId, rows, setRows, categories, currency, rate, readOnly }) {
@@ -125,11 +125,11 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-center gap-4 border-b border-slate-200 p-4 text-sm">
+    <div className="rounded-xl border border-line bg-surface shadow-card">
+      <div className="flex items-center gap-4 border-b border-line p-4 text-sm">
         <input value={query} placeholder={t('import.search')}
           onChange={(e) => { setQuery(e.target.value); setPage(1) }}
-          className="w-72 rounded-md border border-slate-300 px-3 py-1.5 outline-none focus:border-slate-900" />
+          className="w-72 rounded-md border border-line-strong px-3 py-1.5 outline-none focus:border-primary" />
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={onlyIssues} onChange={(e) => { setOnlyIssues(e.target.checked); setPage(1) }} />
           {t('import.onlyIssues')}
@@ -138,10 +138,10 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
           <input type="checkbox" checked={onlyFlagged} onChange={(e) => { setOnlyFlagged(e.target.checked); setPage(1) }} />
           {t('import.onlyFlagged')}
         </label>
-        <span className="ml-auto text-slate-500">{t('import.rows', { count: visible.length })}</span>
+        <span className="ml-auto text-muted">{t('import.rows', { count: visible.length })}</span>
       </div>
       <table className="w-full table-fixed text-sm">
-        <thead className="bg-slate-50 text-left text-slate-500">
+        <thead className="bg-surface-2 text-left text-muted">
           <tr>
             <th className="w-[32%] px-3 py-2 font-medium">{t('import.col.name')}</th>
             <th className="w-[11%] px-3 py-2 font-medium">{t('import.col.brand')}</th>
@@ -153,20 +153,20 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
             <th className="w-[7%]" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody className="divide-y divide-line">
           {pageRows.map((r) => (
-            <tr key={r.row} className={needsAttention(r) ? 'bg-amber-50/60' : ''}>
+            <tr key={r.row} className={needsAttention(r) ? 'bg-warning-soft/50' : ''}>
               <td className="px-2 py-1.5 align-top">
                 <input className={`${cellInput} font-medium`} disabled={readOnly} value={r.name} required
                   onChange={(e) => edit(r.row, 'name', e.target.value)} />
-                <p className="truncate px-1.5 text-xs text-slate-400" title={r.raw_name}>
+                <p className="truncate px-1.5 text-xs text-faint" title={r.raw_name}>
                   <span className={SOURCE_STYLE[r.source] || ''}>{t(`import.source.${r.source || 'ai'}`)}</span>
                   {' · '}{t('import.original')}: {r.raw_name}
                 </p>
-                {r.note && <p className="truncate px-1.5 text-xs text-slate-600" title={r.note}>{t('import.note')}: {r.note}</p>}
+                {r.note && <p className="truncate px-1.5 text-xs text-muted" title={r.note}>{t('import.note')}: {r.note}</p>}
                 <Specs category={r.category} specs={r.specs} guess={r.specs_guess} />
                 <Flags flags={r.flags} />
-                {rowErrors[r.row] && <p className="px-1.5 text-xs text-red-700">{rowErrors[r.row]}</p>}
+                {rowErrors[r.row] && <p className="px-1.5 text-xs text-danger">{rowErrors[r.row]}</p>}
               </td>
               <td className="px-2 py-1.5 align-top">
                 <input className={cellInput} disabled={readOnly} value={r.brand ?? ''}
@@ -182,38 +182,38 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
                   onChange={(e) => edit(r.row, 'price', e.target.value === '' ? null : Number(e.target.value))} />
                 {r.currency && (
                   <select disabled={readOnly} value={r.currency} onChange={(e) => edit(r.row, 'currency', e.target.value)}
-                    className={`${cellInput} mt-1 ${r.currency_check ? 'border-amber-400 bg-amber-50' : ''}`}>
+                    className={`${cellInput} mt-1 ${r.currency_check ? 'border-warning-line bg-warning-soft' : ''}`}>
                     {['USD', 'UZS'].map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 )}
-                {r.currency_check && <p className="px-1.5 text-xs text-amber-800">{t('import.checkCurrency')}</p>}
+                {r.currency_check && <p className="px-1.5 text-xs text-warning">{t('import.checkCurrency')}</p>}
                 <ConvertedPrice price={r.price} currency={r.currency || currency} rate={rate} />
               </td>
               <td className="px-2 py-1.5 align-top">
                 <select className={cellInput} disabled={readOnly} value={r.condition} onChange={(e) => edit(r.row, 'condition', e.target.value)}>
                   {CONDITIONS.map((c) => <option key={c} value={c}>{t(`condition.${c}`)}</option>)}
                 </select>
-                {r.condition === 'unknown' && <p className="px-1.5 text-xs text-amber-800">{t('import.checkCondition')}</p>}
+                {r.condition === 'unknown' && <p className="px-1.5 text-xs text-warning">{t('import.checkCondition')}</p>}
               </td>
-              <td className={`px-3 py-2.5 align-top ${r.is_in_stock ? 'text-emerald-700' : 'text-slate-400'}`}>
+              <td className={`px-3 py-2.5 align-top ${r.is_in_stock ? 'text-success' : 'text-faint'}`}>
                 {t(r.is_in_stock ? 'import.inStock' : 'import.outOfStock')}
               </td>
               <td className="px-2 py-1.5 text-center align-top">
                 <button title={t('import.reparse')} hidden={readOnly} disabled={reparsing[r.row]} onClick={() => reparse(r.row)}
-                  className="rounded px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900 disabled:animate-spin">↻</button>
+                  className="rounded px-2 py-1 text-faint hover:bg-surface-2 hover:text-ink disabled:animate-spin">↻</button>
                 <button title={t('import.remove')} hidden={readOnly} onClick={() => setRows(rows.filter((x) => x.row !== r.row))}
-                  className="rounded px-2 py-1 text-slate-400 hover:bg-red-50 hover:text-red-600">✕</button>
+                  className="rounded px-2 py-1 text-faint hover:bg-danger-soft hover:text-danger">✕</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="flex items-center justify-end gap-3 border-t border-slate-200 p-3 text-sm">
+      <div className="flex items-center justify-end gap-3 border-t border-line p-3 text-sm">
         <button disabled={current <= 1} onClick={() => setPage(current - 1)}
-          className="rounded px-3 py-1 hover:bg-slate-100 disabled:opacity-40">{t('import.prev')}</button>
-        <span className="text-slate-500">{t('import.page', { page: current, pages })}</span>
+          className="rounded px-3 py-1 hover:bg-surface-2 disabled:opacity-40">{t('import.prev')}</button>
+        <span className="text-muted">{t('import.page', { page: current, pages })}</span>
         <button disabled={current >= pages} onClick={() => setPage(current + 1)}
-          className="rounded px-3 py-1 hover:bg-slate-100 disabled:opacity-40">{t('import.next')}</button>
+          className="rounded px-3 py-1 hover:bg-surface-2 disabled:opacity-40">{t('import.next')}</button>
       </div>
     </div>
   )
@@ -284,12 +284,12 @@ export default function ImportPage() {
     <div className="grid gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/seller" className="text-sm text-slate-500 hover:underline">← {t('import.back')}</Link>
-          <h1 className="mt-1 text-2xl font-semibold">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
+          <Link to="/seller" className="text-sm text-muted hover:underline">← {t('import.back')}</Link>
+          <h1 className="mt-1 text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
         {imp?.status === 'ready' && (
           <button onClick={publish} disabled={busy || rows.length === 0}
-            className="rounded-md bg-slate-900 px-5 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-50">
+            className="rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-50">
             {busy ? t('import.publishing') : t('import.publish')}
           </button>
         )}
@@ -300,7 +300,7 @@ export default function ImportPage() {
         <ErrorText>{t([`import.error.${imp.error?.split(':')[0]}`, 'import.failed'])}</ErrorText>
       )}
       {imp?.status === 'published' && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+        <div className="rounded-xl border border-success-line bg-success-soft p-4 text-success">
           <p className="font-medium">{t('import.published')}</p>
           {stats && <p className="mt-1 text-sm">{t('import.publishedStats', stats)}</p>}
         </div>
@@ -308,22 +308,22 @@ export default function ImportPage() {
       {imp?.status === 'ready' && (
         <>
           {failedCount && (
-            <div className="flex items-center justify-between rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <div className="flex items-center justify-between rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
               <span>{t(failReason === 'ai_quota' ? 'import.partialQuota' : 'import.partial', { count: failedCount })}</span>
-              <button onClick={retry} className="rounded-md border border-amber-300 px-3 py-1 hover:bg-amber-100">
+              <button onClick={retry} className="rounded-md border border-warning-line px-3 py-1 hover:bg-warning-line">
                 {t('import.retry')}
               </button>
             </div>
           )}
-          {parseStats && <p className="text-sm text-slate-500">{t('import.stats', parseStats)}</p>}
+          {parseStats && <p className="text-sm text-muted">{t('import.stats', parseStats)}</p>}
           {/* Shop remarks found in the file ("Оплата только в национальной валюте"): they do not set the currency */}
           {imp?.stats?.notices?.length > 0 && (
-            <p className="mt-1 text-sm text-amber-800">{t('import.notices', { text: imp.stats.notices.join(' · ') })}</p>
+            <p className="mt-1 text-sm text-warning">{t('import.notices', { text: imp.stats.notices.join(' · ') })}</p>
           )}
           {rows.some((r) => r.flags?.length) && (
-            <p className="text-sm text-amber-800">{t('import.flaggedStats', { count: rows.filter((r) => r.flags?.length).length })}</p>
+            <p className="text-sm text-warning">{t('import.flaggedStats', { count: rows.filter((r) => r.flags?.length).length })}</p>
           )}
-          <p className="text-sm text-slate-500">{t('import.hint')}</p>
+          <p className="text-sm text-muted">{t('import.hint')}</p>
         </>
       )}
       {(imp?.status === 'ready' || imp?.status === 'published') && rows.length > 0 && (

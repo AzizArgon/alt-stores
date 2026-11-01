@@ -1,11 +1,14 @@
+import { Suspense, lazy } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import Footer from './components/Footer'
 import Header from './components/Header'
 import CatalogPage from './pages/CatalogPage'
 import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
+import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
 import SellerPage from './pages/SellerPage'
@@ -25,30 +28,25 @@ function RoleOnly({ role, children }) {
   return user?.role === role ? children : <Navigate to="/" replace />
 }
 
-const GITHUB_URL = 'https://github.com/AzizArgon/-'
+// Any logged-in user; guests go to the login page
+function UserOnly({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return user ? children : <Navigate to="/login" replace />
+}
+
+// The components page exists only in development: the public build does not contain it
+const UiPage = import.meta.env.DEV ? lazy(() => import('./pages/UiPage')) : null
+
 // Set only for the public server build (deploy.bat)
 const PUBLIC_DEMO = import.meta.env.VITE_PUBLIC_DEMO === '1'
 
 function DemoBanner() {
   const { t } = useTranslation()
   return (
-    <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-center text-sm text-amber-900">
+    <div className="bg-ink px-4 py-1.5 text-center text-xs text-white/85">
       {t('demo.banner')}
     </div>
-  )
-}
-
-function Footer() {
-  const { t } = useTranslation()
-  return (
-    <footer className="border-t border-slate-200">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-6 text-sm text-slate-500">
-        <span>{t('demo.footer')}</span>
-        <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="shrink-0 font-medium text-slate-700 hover:underline">
-          {t('demo.github')}
-        </a>
-      </div>
-    </footer>
   )
 }
 
@@ -57,7 +55,7 @@ export default function App() {
     <div className="flex min-h-screen flex-col">
       {PUBLIC_DEMO && <DemoBanner />}
       <Header />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
         <Routes>
           <Route path="/" element={<CatalogPage />} />
           <Route path="/products/:id" element={<ProductPage />} />
@@ -67,6 +65,8 @@ export default function App() {
           <Route path="/seller" element={<RoleOnly role="seller"><SellerPage /></RoleOnly>} />
           <Route path="/seller/analytics" element={<RoleOnly role="seller"><SellerAnalyticsPage /></RoleOnly>} />
           <Route path="/seller/imports/:id" element={<RoleOnly role="seller"><ImportPage /></RoleOnly>} />
+          <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
+          {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

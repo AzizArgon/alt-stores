@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
-import { AuthCard, ErrorText, Field, SubmitButton } from '../components/AuthForm'
+import { AuthCard, ErrorText, SocialButtons, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
+import { Input, PasswordInput } from '../components/ui'
 import { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 
@@ -11,36 +12,45 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
 
   const onSubmit = async (e) => {
     e.preventDefault()
-    setError('')
+    const found = {}
+    const emailError = emailErrorKey(email)
+    if (emailError) found.email = t(emailError)
+    if (!password) found.password = t('errors.required')
+    setErrors(found)
+    if (Object.keys(found).length) return
     setBusy(true)
     try {
       await login(email, password)
       navigate('/')
     } catch (err) {
-      setError(t(errorKey(err)))
+      const key = errorKey(err)
+      setErrors({ [fieldOfError(key)]: t(key) })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <AuthCard title={t('auth.loginTitle')}>
-      <form onSubmit={onSubmit}>
-        <Field label={t('auth.email')} type="email" required autoComplete="email"
+    <AuthCard title={t('auth.loginTitle')} hint={t('auth.loginHint')}>
+      <SocialButtons />
+      <form onSubmit={onSubmit} noValidate className="grid gap-4">
+        <Input label={t('auth.email')} type="email" autoComplete="email" error={errors.email}
           value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Field label={t('auth.password')} type="password" required autoComplete="current-password"
+        <PasswordInput label={t('auth.password')} autoComplete="current-password" error={errors.password}
           value={password} onChange={(e) => setPassword(e.target.value)} />
-        <ErrorText>{error}</ErrorText>
-        <SubmitButton busy={busy} busyText={t('auth.loading')}>{t('auth.submitLogin')}</SubmitButton>
+        <div className="mt-1">
+          <ErrorText>{errors.form}</ErrorText>
+          <SubmitButton busy={busy} busyText={t('auth.loading')}>{t('auth.submitLogin')}</SubmitButton>
+        </div>
       </form>
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-muted">
         {t('auth.noAccount')}{' '}
-        <Link to="/register" className="font-medium text-slate-900 underline">{t('nav.register')}</Link>
+        <Link to="/register" className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
       </p>
     </AuthCard>
   )

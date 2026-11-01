@@ -8,14 +8,14 @@ import { formatMonthYear, formatPrice, roundSum } from '../services/format'
 function Movers({ title, items, sum, demo }) {
   const { t } = useTranslation()
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6">
-      <h2 className="flex items-center gap-2 text-lg font-semibold">{title} <DemoNote show={demo} /></h2>
-      {items.length === 0 ? <p className="mt-3 text-sm text-slate-500">{t('market.notEnoughData')}</p> : (
+    <section className="rounded-xl border border-line bg-surface shadow-card p-6">
+      <h2 className="flex items-center gap-2 text-h2">{title} <DemoNote show={demo} /></h2>
+      {items.length === 0 ? <p className="mt-3 text-sm text-muted">{t('market.notEnoughData')}</p> : (
         <ul className="mt-3 grid gap-1.5 text-sm">
           {items.map((m) => (
-            <li key={m.id} className="flex justify-between gap-4 border-t border-slate-100 pt-1.5">
+            <li key={m.id} className="flex justify-between gap-4 border-t border-line pt-1.5">
               <span className="min-w-0"><ProductLink item={m} /></span>
-              <span className="whitespace-nowrap text-slate-600">{sum(m.from_usd)} → {sum(m.to_usd)} <PctText value={m.pct} /></span>
+              <span className="whitespace-nowrap text-muted">{sum(m.from_usd)} → {sum(m.to_usd)} <PctText value={m.pct} /></span>
             </li>
           ))}
         </ul>
@@ -44,19 +44,19 @@ export default function MarketPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('market.pageTitle')}</h1>
-        <p className="mt-1 text-slate-500">{t('market.pageHint')}</p>
+        <h1 className="text-h1">{t('market.pageTitle')}</h1>
+        <p className="mt-1 text-muted">{t('market.pageHint')}</p>
       </div>
       <IndexSection indices={data.indices} period={period} onPeriod={setPeriod} demo={data.includes_demo} />
       <div className="grid grid-cols-2 gap-6">
         <Movers title={t('market.moversUp')} items={data.movers.up} sum={sum} demo={data.includes_demo} />
         <Movers title={t('market.moversDown')} items={data.movers.down} sum={sum} demo={data.includes_demo} />
       </div>
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">{t('market.archiveTitle', { date: then })} <DemoNote show={data.includes_demo} /></h2>
-        <p className="mt-1 text-sm text-slate-500">{t('market.archiveHint', { date: then })}</p>
+      <section className="rounded-xl border border-line bg-surface shadow-card p-6">
+        <h2 className="flex items-center gap-2 text-h2">{t('market.archiveTitle', { date: then })} <DemoNote show={data.includes_demo} /></h2>
+        <p className="mt-1 text-sm text-muted">{t('market.archiveHint', { date: then })}</p>
         <table className="mt-4 w-full text-sm">
-          <thead className="text-left text-slate-500">
+          <thead className="text-left text-muted">
             <tr>
               <th className="py-1 font-normal">{t('market.table.product')}</th>
               <th className="py-1 text-right font-normal">{then}</th>
@@ -66,22 +66,22 @@ export default function MarketPage() {
           </thead>
           <tbody>
             {data.archive.map((a) => (
-              <tr key={a.id} className="border-t border-slate-100">
+              <tr key={a.id} className="border-t border-line">
                 <td className="py-1.5 pr-4"><ProductLink item={a} /></td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   {a.archive.price_uzs != null ? formatPrice(a.archive.price_uzs, 'UZS') : ''}
-                  <span className="block text-xs text-slate-500">{formatPrice(a.archive.price_usd, 'USD')}</span>
+                  <span className="block text-xs text-muted">{formatPrice(a.archive.price_usd, 'USD')}</span>
                 </td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   {sum(a.market_usd)}
-                  <span className="block text-xs text-slate-500">{formatPrice(a.market_usd, 'USD')} · {t('market.storesCount', { count: a.stores })}</span>
+                  <span className="block text-xs text-muted">{formatPrice(a.market_usd, 'USD')} · {t('market.storesCount', { count: a.stores })}</span>
                 </td>
                 <td className="py-1.5 text-right"><PctText value={a.change_pct} /></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="mt-3 text-xs text-slate-400">{t('market.archiveNote', { date: then })}</p>
+        <p className="mt-3 text-xs text-faint">{t('market.archiveNote', { date: then })}</p>
       </section>
     </div>
   )

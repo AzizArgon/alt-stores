@@ -10,18 +10,18 @@ import Price from './Price'
 
 const CURRENCIES = ['USD', 'UZS']
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished']
-const input = 'w-full rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-slate-900'
+const input = 'w-full rounded-md border border-line-strong px-3 py-2 outline-none focus:border-primary'
 
 function ProductLine({ product, rate }) {
   const { t } = useTranslation()
   return (
     <div className="min-w-0">
       <p className="truncate font-medium">{product.name}</p>
-      <p className="truncate text-xs text-slate-500">
+      <p className="truncate text-xs text-muted">
         {t(`categories.${product.category}`)}{product.specs.length > 0 && ` · ${specsLine(product.specs)}`}
       </p>
       {product.my_offer && (
-        <div className="mt-1 flex items-center gap-2 text-xs text-amber-800">
+        <div className="mt-1 flex items-center gap-2 text-xs text-warning">
           <span>{t('manual.alreadyHave')}</span>
           <Price price={product.my_offer.price} currency={product.my_offer.currency} usdRate={rate?.rate}
             rateDate={rate?.rate_date} size="text-sm" />
@@ -63,23 +63,23 @@ function OfferForm({ product, defaultCurrency, rate, onDone, onConflict }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-4 rounded-lg border border-slate-200 p-4">
+    <form onSubmit={onSubmit} className="mt-4 rounded-lg border border-line p-4">
       <ProductLine product={product} rate={rate} />
-      {mine && <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{t('manual.updateHint')}</p>}
+      {mine && <p className="mt-2 rounded bg-warning-soft px-3 py-2 text-sm text-warning">{t('manual.updateHint')}</p>}
       <div className="mt-4 grid grid-cols-4 gap-3">
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-600">{t('manual.price')}</span>
+          <span className="mb-1 block text-sm text-muted">{t('manual.price')}</span>
           <input type="number" min="0" step="any" required autoFocus value={form.price} className={input}
             onChange={(e) => setForm({ ...form, price: e.target.value })} />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-600">{t('manual.currency')}</span>
+          <span className="mb-1 block text-sm text-muted">{t('manual.currency')}</span>
           <select value={form.currency} className={input} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm text-slate-600">{t('import.col.condition')}</span>
+          <span className="mb-1 block text-sm text-muted">{t('import.col.condition')}</span>
           <select value={form.condition} className={input} onChange={(e) => setForm({ ...form, condition: e.target.value })}>
             {CONDITIONS.map((c) => <option key={c} value={c}>{t(`condition.${c}`)}</option>)}
           </select>
@@ -90,7 +90,7 @@ function OfferForm({ product, defaultCurrency, rate, onDone, onConflict }) {
         </label>
       </div>
       <div className="mt-3"><ErrorText>{error}</ErrorText></div>
-      <button disabled={busy} className="rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50">
+      <button disabled={busy} className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50">
         {busy ? t('auth.loading') : t(mine ? 'manual.update' : 'manual.add')}
       </button>
     </form>
@@ -133,10 +133,10 @@ export default function AddFromCatalog({ defaultCurrency, onAdded }) {
         <input value={q} placeholder={t('manual.searchPlaceholder')} className={input}
           onChange={(e) => { setQ(e.target.value); setChosen(null); setDone(null) }} />
         {items.length > 0 && !chosen && (
-          <ul className="absolute z-10 mt-1 max-h-96 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          <ul className="absolute z-10 mt-1 max-h-96 w-full overflow-auto rounded-md border border-line bg-surface shadow-lg">
             {items.map((p) => (
               <li key={p.id}>
-                <button type="button" onClick={() => choose(p)} className="w-full px-3 py-2 text-left hover:bg-slate-50">
+                <button type="button" onClick={() => choose(p)} className="w-full px-3 py-2 text-left hover:bg-surface-2">
                   <ProductLine product={p} rate={rate} />
                 </button>
               </li>
@@ -144,12 +144,12 @@ export default function AddFromCatalog({ defaultCurrency, onAdded }) {
           </ul>
         )}
         {found.q === q && q.trim().length >= 2 && items.length === 0 && !chosen && !done && !creating && (
-          <p className="mt-2 text-sm text-slate-500">{t('manual.nothingFound')}</p>
+          <p className="mt-2 text-sm text-muted">{t('manual.nothingFound')}</p>
         )}
       </div>
       {!chosen && !creating && (
         <button type="button" onClick={() => { setCreating(true); setDone(null) }}
-          className="mt-3 text-sm text-slate-600 underline hover:text-slate-900">{t('manual.notInCatalog')}</button>
+          className="mt-3 text-sm text-muted underline hover:text-ink">{t('manual.notInCatalog')}</button>
       )}
       {creating && <NewProductForm initialName={q} onCreated={choose} onCancel={() => setCreating(false)} />}
       {chosen && (
@@ -158,8 +158,8 @@ export default function AddFromCatalog({ defaultCurrency, onAdded }) {
           onDone={(res) => { setDone({ ...res, product: chosen }); setChosen(null); setQ(''); onAdded?.() }} />
       )}
       {done && (
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
-          <p className="text-emerald-800">
+        <div className="mt-4 rounded-lg border border-success-line bg-success-soft p-4 text-sm">
+          <p className="text-success">
             {t(done.created ? 'manual.added' : 'manual.updated')}{' '}
             <Link to={`/products/${done.product.id}`} className="font-medium underline">{done.product.name}</Link>
           </p>

@@ -1,43 +1,196 @@
+import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Search, UserCog } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { CITIES } from '../config/cities'
 import { useAuth } from '../services/auth.jsx'
+import { useCity } from '../services/city.jsx'
+import Logo, { BrandName } from './Logo'
+import { Dropdown, DropdownItem, Sheet } from './overlays'
+import { Button, Select, inputClass } from './ui'
+
+const SEARCH_DELAY_MS = 300
+// The PC builder link waits for its phase: `hidden: false` shows it in the header and in the phone menu
+const NAV_LINKS = [
+  { to: '/', label: 'nav.catalog' },
+  { to: '/market', label: 'nav.market' },
+  { to: '/builder', label: 'nav.builder', hidden: true },
+].filter((link) => !link.hidden)
+const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
+
+// In the catalog the search works as you type (through the address); on other pages Enter opens the catalog
+function HeaderSearch({ className = '' }) {
+  const { t } = useTranslation()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const onCatalog = location.pathname === '/'
+  const urlQuery = onCatalog ? new URLSearchParams(location.search).get('q') || '' : null
+  const [value, setValue] = useState(urlQuery || '')
+
+  const openResults = (text, replace) => {
+    const next = new URLSearchParams(onCatalog ? location.search : '')
+    if (text) next.set('q', text)
+    else next.delete('q')
+    next.delete('page')
+    navigate({ pathname: '/', search: next.toString() }, { replace })
+  }
+
+  // The address changed from outside (logo, "back"): the field follows it
+  useEffect(() => {
+    if (urlQuery !== null && urlQuery !== value.trim()) setValue(urlQuery)
+  }, [urlQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!onCatalog || value.trim() === urlQuery) return
+    const timer = setTimeout(() => openResults(value.trim(), true), SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onSubmit = (e) => {
+    e.preventDefault()
+    openResults(value.trim(), onCatalog)
+  }
+
+  return (
+    <form role="search" onSubmit={onSubmit} className={`relative min-w-0 ${className}`}>
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
+      <input type="search" enterKeyHint="search" value={value} onChange={(e) => setValue(e.target.value)}
+        placeholder={t('catalog.searchPlaceholder')} aria-label={t('catalog.searchPlaceholder')}
+        className={`${inputClass} bg-surface-2 pl-9 hover:border-line-strong focus:bg-surface`} />
+    </form>
+  )
+}
+
+function CityMenu() {
+  const { t } = useTranslation()
+  const { city, setCity } = useCity()
+  return (
+    <Dropdown align="left" panelClassName="max-h-96 w-56 overflow-y-auto" trigger={({ open, toggle }) => (
+      <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.city')} title={t('nav.city')}
+        className="flex min-h-11 max-w-40 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary">
+        <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
+        <span className="truncate">{t(`cities.${city}`)}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
+      </button>
+    )}>
+      {CITIES.map((c) => (
+        <DropdownItem key={c} selected={c === city} onClick={() => setCity(c)}>{t(`cities.${c}`)}</DropdownItem>
+      ))}
+    </Dropdown>
+  )
+}
+
+function Avatar({ email, className = 'size-10 text-base' }) {
+  const code = [...email].reduce((sum, ch) => sum + ch.codePointAt(0), 0)
+  return (
+    <span aria-hidden style={{ background: AVATAR_COLORS[code % AVATAR_COLORS.length] }}
+      className={`flex shrink-0 items-center justify-center rounded-full font-semibold text-white uppercase ${className}`}>
+      {email[0]}
+    </span>
+  )
+}
+
+function UserLinks({ user, logout, Item }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {user.role === 'seller' && <Item as={Link} to="/seller" icon={LayoutDashboard}>{t('nav.seller')}</Item>}
+      <Item as={Link} to="/profile" icon={UserCog}>{t('nav.profile')}</Item>
+      <Item icon={LogOut} onClick={logout}>{t('nav.logout')}</Item>
+    </>
+  )
+}
+
+function UserMenu({ user, logout }) {
+  const { t } = useTranslation()
+  return (
+    <Dropdown trigger={({ open, toggle }) => (
+      <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.account')} title={user.email}
+        className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        <Avatar email={user.email} />
+      </button>
+    )}>
+      <div className="flex items-center gap-2.5 border-b border-line p-2.5 pb-3 mb-1.5">
+        <Avatar email={user.email} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold" title={user.email}>{user.email}</p>
+          <p className="text-xs text-muted">{t(`roles.${user.role}`)}</p>
+        </div>
+      </div>
+      <UserLinks user={user} logout={logout} Item={DropdownItem} />
+    </Dropdown>
+  )
+}
+
+// Phone and tablet menu: everything the desktop header shows in its row
+function MobileMenu({ open, onClose, user, logout }) {
+  const { t } = useTranslation()
+  const { city, setCity } = useCity()
+  const row = 'flex min-h-11 items-center rounded-md px-2.5 text-sm font-medium hover:bg-surface-2'
+  return (
+    <Sheet open={open} onClose={onClose} side="left" title={<BrandName />}>
+      {user && (
+        <div className="mb-3 flex items-center gap-2.5 border-b border-line pb-4">
+          <Avatar email={user.email} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{user.email}</p>
+            <p className="text-xs text-muted">{t(`roles.${user.role}`)}</p>
+          </div>
+        </div>
+      )}
+      <nav onClick={(e) => e.target.closest('a,button') && onClose()} className="grid gap-0.5">
+        {NAV_LINKS.map((link) => <Link key={link.to} to={link.to} className={row}>{t(link.label)}</Link>)}
+        {user && <div className="my-2 border-t border-line" />}
+        {user && <UserLinks user={user} logout={logout} Item={DropdownItem} />}
+      </nav>
+      <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
+        {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
+      </Select>
+      {!user && (
+        <div className="mt-5 grid gap-2" onClick={(e) => e.target.closest('a') && onClose()}>
+          <Button to="/login" variant="secondary">{t('nav.login')}</Button>
+          <Button to="/register">{t('nav.register')}</Button>
+        </div>
+      )}
+    </Sheet>
+  )
+}
 
 export default function Header() {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <Link to="/" className="text-xl font-semibold tracking-tight">
-          {t('app.name')}
-        </Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link to="/market" className="rounded-md px-3 py-1.5 hover:bg-slate-100">{t('nav.market')}</Link>
-          {user ? (
-            <>
-              {user.role === 'seller' && (
-                <Link to="/seller" className="rounded-md px-3 py-1.5 hover:bg-slate-100">{t('nav.seller')}</Link>
-              )}
-              <span className="text-slate-500">
-                {user.email} · {t(`roles.${user.role}`)}
-              </span>
-              <button onClick={logout} className="rounded-md px-3 py-1.5 hover:bg-slate-100">
-                {t('nav.logout')}
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className="rounded-md px-3 py-1.5 hover:bg-slate-100">
-                {t('nav.login')}
-              </Link>
-              <Link to="/register" className="rounded-md bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-700">
-                {t('nav.register')}
-              </Link>
-            </>
+    <header className="sticky top-0 z-30 border-b border-line bg-surface">
+      <div className="mx-auto max-w-7xl px-4 md:px-6">
+        <div className="flex h-16 items-center gap-2 md:gap-3">
+          <button type="button" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')}
+            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary lg:hidden">
+            <Menu className="size-6" aria-hidden />
+          </button>
+          <Logo />
+          <div className="hidden md:block"><CityMenu /></div>
+          <HeaderSearch className="hidden flex-1 md:block" />
+          <div className="flex-1 md:hidden" />
+          <nav className="hidden shrink-0 items-center gap-1 lg:flex">
+            {NAV_LINKS.map((link) => (
+              <NavLink key={link.to} to={link.to} end className={({ isActive }) =>
+                `rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-surface-2 ${isActive ? 'text-primary' : 'text-ink'}`}>
+                {t(link.label)}
+              </NavLink>
+            ))}
+          </nav>
+          {user ? <UserMenu user={user} logout={logout} /> : (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button to="/login" variant="secondary" size="sm" className="lg:min-h-10">{t('nav.login')}</Button>
+              <Button to="/register" size="sm" className="hidden sm:inline-flex lg:min-h-10">{t('nav.register')}</Button>
+            </div>
           )}
-        </nav>
+        </div>
+        <HeaderSearch className="pb-3 md:hidden" />
       </div>
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} />
     </header>
   )
 }

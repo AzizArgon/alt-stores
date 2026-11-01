@@ -1,5 +1,118 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter/wght.css";
+
+/* Design tokens: the only place for colours, type, radii and shadows. Spacing is Tailwind's 4 px scale. */
+@theme {
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Brand and surfaces */
+  --color-primary: #2546e8;
+  --color-primary-hover: #1b36bd;
+  --color-primary-soft: #eaeefe;
+  --color-accent: #ff8a1f;
+  --color-accent-soft: #fff1e3;
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2f5;
+
+  /* Text and borders */
+  --color-ink: #14171f;
+  --color-muted: #5b6472;
+  --color-faint: #8a93a3;
+  --color-line: #e3e6eb;
+  --color-line-strong: #c9ced7;
+
+  /* States */
+  --color-success: #0f7a55;
+  --color-success-soft: #e5f6ef;
+  --color-success-line: #a9e0c9;
+
+  /* Anti-Fraud levels */
+  --color-info: #0b6a94;
+  --color-info-soft: #e6f4fa;
+  --color-info-line: #aedaed;
+  --color-warning: #8f5400;
+  --color-warning-soft: #fff5e0;
+  --color-warning-line: #f6d48f;
+  --color-danger: #c02b2b;
+  --color-danger-hover: #9f2020;
+  --color-danger-soft: #fdecec;
+  --color-danger-line: #f5b9b9;
+
+  /* Market labels */
+  --color-below: #0f7a55;
+  --color-below-soft: #e5f6ef;
+  --color-at: #4a5361;
+  --color-at-soft: #eceef2;
+  --color-above: #a64b00;
+  --color-above-soft: #fff0e0;
+
+  /* Type: text-h1 .. text-h3 for headings, Tailwind's text-xs .. text-lg for text */
+  --text-h1: 1.75rem;
+  --text-h1--line-height: 2.25rem;
+  --text-h1--font-weight: 700;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-h2--font-weight: 650;
+  --text-h2--letter-spacing: -0.01em;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.5rem;
+  --text-h3--font-weight: 600;
+
+  /* Radii and shadows */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --shadow-card: 0 1px 2px rgb(20 23 31 / 0.05);
+  --shadow-hover: 0 6px 20px rgb(20 23 31 / 0.09);
+  --shadow-pop: 0 12px 32px rgb(20 23 31 / 0.16);
+}
+
+html {
+  /* Reserve the scrollbar so pages do not jump, and never scroll the page sideways */
+  scrollbar-gutter: stable;
+}
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-bg text-ink antialiased;
+  overflow-x: clip;
+}
+
+/* A tap on a phone must not zoom into a small field (iOS zooms below 16 px) */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px; }
+}
+
+@keyframes slide-left { from { transform: translateX(-100%); } }
+@keyframes slide-right { from { transform: translateX(100%); } }
+@keyframes slide-up { from { transform: translateY(100%); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Tables become cards on a phone: each cell shows its column name from data-label */
+@media (max-width: 767px) {
+  .table-cards thead { display: none; }
+  .table-cards, .table-cards tbody { display: block; }
+  .table-cards tr {
+    display: block;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .table-cards tr:first-child { border-top: 0; }
+  .table-cards td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.125rem 0 !important;
+    text-align: right;
+    white-space: normal !important;
+  }
+  .table-cards td:first-child { display: block; padding-bottom: 0.25rem !important; font-weight: 500; text-align: left; }
+  .table-cards td[data-label]::before {
+    content: attr(data-label);
+    color: var(--color-muted);
+    text-align: left;
+  }
 }

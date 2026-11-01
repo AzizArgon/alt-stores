@@ -12,20 +12,20 @@ const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
 const SEARCH_DELAY_MS = 300
 const VISIBLE_VALUES = 8
 const SPEC_PREFIX = 'f_' // spec filters in the address: ?category=ram&f_type=DDR5,DDR4&f_form_factor=SODIMM
-const inputClass = 'rounded-md border border-slate-300 bg-white px-3 py-2 outline-none focus:border-slate-900'
+const inputClass = 'rounded-md border border-line-strong bg-surface px-3 py-2 outline-none focus:border-primary'
 
 function ProductTile({ item, usdRate, rateDate }) {
   const { t } = useTranslation()
   return (
     <Link to={`/products/${item.id}`}
-      className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm">
-      <span className="text-xs text-slate-500">{t(`categories.${item.category}`)}</span>
+      className="flex flex-col rounded-xl border border-line bg-surface shadow-card p-4 hover:border-primary hover:shadow-sm">
+      <span className="text-xs text-muted">{t(`categories.${item.category}`)}</span>
       <span className="mt-1 line-clamp-3 font-medium leading-snug">{item.name}</span>
-      {item.specs?.length > 0 && <span className="mt-1 text-sm text-slate-600">{specsLine(item.specs)}</span>}
+      {item.specs?.length > 0 && <span className="mt-1 text-sm text-muted">{specsLine(item.specs)}</span>}
       <div className="mt-auto pt-3">
         <Price price={item.min_price} currency={item.min_currency} usdRate={usdRate} rateDate={rateDate}
           prefix={`${t('catalog.from')} `} size="text-lg" />
-        <span className="block text-sm text-slate-500">{t('catalog.offers', { count: item.offers })}</span>
+        <span className="block text-sm text-muted">{t('catalog.offers', { count: item.offers })}</span>
       </div>
     </Link>
   )
@@ -60,11 +60,11 @@ function Facet({ facet, category, selected, onToggle, onAtLeast }) {
       {values.map(({ value, count }) => (
         <label key={urlValue(value)} className="flex items-center gap-2 py-0.5 text-sm">
           <input type="checkbox" checked={selected.includes(urlValue(value))} onChange={() => onToggle(urlValue(value))} />
-          <span>{format(value)} <span className="text-slate-400">({count})</span></span>
+          <span>{format(value)} <span className="text-faint">({count})</span></span>
         </label>
       ))}
       {facet.values.length > VISIBLE_VALUES && (
-        <button onClick={() => setOpen(!open)} className="mt-0.5 text-sm text-slate-500 hover:underline">
+        <button onClick={() => setOpen(!open)} className="mt-0.5 text-sm text-muted hover:underline">
           {open ? t('catalog.showLess') : t('catalog.showAll', { count: facet.values.length })}
         </button>
       )}
@@ -159,7 +159,7 @@ export default function CatalogPage() {
 
   return (
     <section>
-      <h1 className="text-2xl font-semibold tracking-tight">{t('app.tagline')}</h1>
+      <h1 className="text-h1">{t('app.tagline')}</h1>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('catalog.searchPlaceholder')}
@@ -168,7 +168,7 @@ export default function CatalogPage() {
           <option value="">{t('catalog.allCategories')}</option>
           {categories.map((c) => <option key={c.slug} value={c.slug}>{t(`categories.${c.slug}`)}</option>)}
         </select>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 text-sm text-muted">
           {t('catalog.price')}
           <input type="number" min="0" value={params.get('price_min') || ''} placeholder={t('catalog.priceMin')}
             onChange={(e) => setParam('price_min', e.target.value)} className={`${inputClass} w-36`} step="100000" />
@@ -189,7 +189,7 @@ export default function CatalogPage() {
       {data && (
         <div className="flex items-start gap-6">
           {facets.length > 0 && (
-            <aside className="w-60 shrink-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4" aria-label={t('catalog.filters')}>
+            <aside className="w-60 shrink-0 space-y-4 rounded-xl border border-line bg-surface shadow-card p-4" aria-label={t('catalog.filters')}>
               <p className="font-semibold">{t('catalog.filters')}</p>
               {facets.map((f) => (
                 <Facet key={f.key} facet={f} category={category} selected={selectedOf(f.key)}
@@ -202,17 +202,17 @@ export default function CatalogPage() {
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {chips.map((c) => (
                   <button key={c.id} onClick={c.remove}
-                    className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white hover:bg-slate-700">{c.text} ✕</button>
+                    className="rounded-full bg-primary px-3 py-1 text-sm text-white hover:bg-slate-700">{c.text} ✕</button>
                 ))}
-                <button onClick={resetFilters} className="text-sm text-slate-600 underline hover:text-slate-900">{t('catalog.reset')}</button>
+                <button onClick={resetFilters} className="text-sm text-muted underline hover:text-ink">{t('catalog.reset')}</button>
               </div>
             )}
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted">
               {t('catalog.found', { count: data.total })}
               {data.usd_rate && <> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</>}
             </p>
             {data.items.length === 0 ? (
-              <p className="mt-6 text-slate-500">{t('catalog.empty')}</p>
+              <p className="mt-6 text-muted">{t('catalog.empty')}</p>
             ) : (
               <div className={`mt-4 grid gap-4 ${facets.length > 0 ? 'grid-cols-3' : 'grid-cols-4'}`}>
                 {data.items.map((item) => <ProductTile key={item.id} item={item} usdRate={data.usd_rate} rateDate={data.usd_rate_date} />)}
@@ -221,10 +221,10 @@ export default function CatalogPage() {
             {pages > 1 && (
               <div className="mt-6 flex items-center justify-center gap-3 text-sm">
                 <button disabled={page <= 1} onClick={() => setParams((p) => { p.set('page', page - 1); return p })}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40">{t('catalog.prev')}</button>
+                  className="rounded-md border border-line-strong px-3 py-1.5 disabled:opacity-40">{t('catalog.prev')}</button>
                 <span>{t('catalog.page', { page, pages })}</span>
                 <button disabled={page >= pages} onClick={() => setParams((p) => { p.set('page', page + 1); return p })}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-40">{t('catalog.next')}</button>
+                  className="rounded-md border border-line-strong px-3 py-1.5 disabled:opacity-40">{t('catalog.next')}</button>
               </div>
             )}
           </div>

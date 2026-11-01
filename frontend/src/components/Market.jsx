@@ -14,7 +14,7 @@ export function formatPct(value) {
   return `${sign}${Math.abs(value).toLocaleString('ru', { maximumFractionDigits: 1 })}%`
 }
 
-const PCT_COLOR = (v) => (v > 0.5 ? 'text-rose-700' : v < -0.5 ? 'text-emerald-700' : 'text-slate-600')
+const PCT_COLOR = (v) => (v > 0.5 ? 'text-danger' : v < -0.5 ? 'text-success' : 'text-muted')
 
 export function PctText({ value }) {
   return <span className={`font-medium ${PCT_COLOR(value)}`}>{formatPct(value)}</span>
@@ -25,7 +25,7 @@ export function DemoNote({ show }) {
   const { t } = useTranslation()
   if (!show) return null
   return (
-    <span title={t('market.demoHint')} className="cursor-help whitespace-nowrap rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-xs font-normal text-slate-500">
+    <span title={t('market.demoHint')} className="cursor-help whitespace-nowrap rounded border border-dashed border-line-strong px-1.5 py-0.5 text-xs font-normal text-muted">
       {t('market.demoNote')}
     </span>
   )
@@ -35,7 +35,7 @@ export function DemoNote({ show }) {
 export function MarketLabel({ info }) {
   const { t } = useTranslation()
   if (!info) return null
-  const style = { below: 'bg-emerald-50 text-emerald-800', at: 'bg-slate-100 text-slate-700', above: 'bg-amber-50 text-amber-900' }
+  const style = { below: 'bg-success-soft text-success', at: 'bg-surface-2 text-ink', above: 'bg-warning-soft text-warning' }
   return (
     <span className={`rounded px-1.5 py-0.5 text-xs ${style[info.label]}`} title={t('market.labelHint')}>
       {t(`market.label.${info.label}`, { pct: Math.abs(info.diff_pct) })}
@@ -46,7 +46,7 @@ export function MarketLabel({ info }) {
 // "за 3 месяца цена выросла на 5%"
 export function ChangePhrase({ change }) {
   const { t } = useTranslation()
-  if (!change) return <span className="text-slate-500">{t('market.notEnoughHistory')}</span>
+  if (!change) return <span className="text-muted">{t('market.notEnoughHistory')}</span>
   const period = change.days >= 80 ? t('market.period.quarter') : change.days >= 28 ? t('market.period.month') : t('market.days', { count: change.days })
   const key = Math.abs(change.pct) < 0.5 ? 'same' : change.pct > 0 ? 'up' : 'down'
   return <span>{t(`market.change.${key}`, { period, pct: formatPct(Math.abs(change.pct)).replace('+', '') })}</span>
@@ -72,26 +72,26 @@ export function ProductMarket({ market, usdRate }) {
   const formatValue = useMemo(() => (v) => formatPrice(v, usdRate ? 'UZS' : 'USD'), [usdRate])
 
   return (
-    <div className="mt-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5">
+    <div className="mt-6 max-w-3xl rounded-xl border border-line bg-surface shadow-card p-5">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
+        <h2 className="flex items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
         {info?.market_usd != null && (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted">
             {t('market.marketNow', { stores: info.stores })}: <b>≈ {formatValue(toSum(info.market_usd))}</b>
           </p>
         )}
       </div>
       {info?.market_usd == null ? (
-        <p className="mt-2 text-sm text-slate-500">{t('market.notEnoughStores')}</p>
+        <p className="mt-2 text-sm text-muted">{t('market.notEnoughStores')}</p>
       ) : (
         <>
           <p className="mt-1 text-sm"><ChangePhrase change={info.change} /></p>
           {chart && <div className="mt-3"><LineChart labels={chart.labels} datasets={chart.datasets} formatValue={formatValue} height={200} /></div>}
-          <p className="mt-2 text-xs text-slate-400">{t('market.chartNote')}</p>
+          <p className="mt-2 text-xs text-faint">{t('market.chartNote')}</p>
         </>
       )}
       {archive && (
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="mt-2 text-sm text-muted">
           {t('market.archiveLine', { store: archive.store, date: formatMonthYear(archive.date) })}: {archive.price_uzs != null && <>{formatPrice(archive.price_uzs, 'UZS')} · </>}
           {formatPrice(archive.price_usd, 'USD')}
           {info?.market_usd != null && <> · {t('market.sinceArchive')} <PctText value={(info.market_usd / archive.price_usd - 1) * 100} /></>}
@@ -115,23 +115,23 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
   const formatValue = useMemo(() => (v) => v.toLocaleString('ru', { maximumFractionDigits: 1 }), [])
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6">
+    <section className="rounded-xl border border-line bg-surface shadow-card p-6">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">{t('market.indexTitle')} <DemoNote show={demo} /></h2>
-        <div className="flex rounded-md border border-slate-300 bg-white p-0.5 text-sm">
+        <h2 className="flex items-center gap-2 text-h2">{t('market.indexTitle')} <DemoNote show={demo} /></h2>
+        <div className="flex rounded-md border border-line-strong bg-surface p-0.5 text-sm">
           {PERIODS.map((p) => (
             <button key={p} onClick={() => onPeriod(p)}
-              className={`rounded px-3 py-1.5 ${period === p ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'}`}>
+              className={`rounded px-3 py-1.5 ${period === p ? 'bg-primary text-white' : 'hover:bg-surface-2'}`}>
               {t(`market.periodShort.${p}`)}
             </button>
           ))}
         </div>
       </div>
-      <p className="mt-1 text-sm text-slate-500">{t('market.indexHint')}</p>
+      <p className="mt-1 text-sm text-muted">{t('market.indexHint')}</p>
       {chart ? <div className="mt-4"><LineChart labels={chart.labels} datasets={chart.datasets} formatValue={formatValue} /></div>
-        : <p className="mt-4 text-sm text-slate-500">{t('market.notEnoughData')}</p>}
+        : <p className="mt-4 text-sm text-muted">{t('market.notEnoughData')}</p>}
       <table className="mt-6 w-full text-sm">
-        <thead className="text-left text-slate-500">
+        <thead className="text-left text-muted">
           <tr>
             <th className="py-1 font-normal">{t('market.table.category')}</th>
             <th className="py-1 text-right font-normal">{t('market.table.products')}</th>
@@ -140,9 +140,9 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
         </thead>
         <tbody>
           {indices.rows.map((r) => (
-            <tr key={r.category} className="border-t border-slate-100">
+            <tr key={r.category} className="border-t border-line">
               <td className="py-1.5">{t(`categories.${r.category}`)}</td>
-              <td className="py-1.5 text-right text-slate-500">{r.products}</td>
+              <td className="py-1.5 text-right text-muted">{r.products}</td>
               {PERIODS.map((p) => <td key={p} className="py-1.5 text-right"><PctText value={r[p]} /></td>)}
             </tr>
           ))}

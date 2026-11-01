@@ -6,7 +6,7 @@ import { DemoNote, IndexSection, MarketLabel, ProductLink } from '../components/
 import api, { errorKey } from '../services/api'
 import { formatPrice, roundSum } from '../services/format'
 
-const COUNT_STYLE = { below: 'text-emerald-700', at: 'text-slate-700', above: 'text-amber-800' }
+const COUNT_STYLE = { below: 'text-success', at: 'text-ink', above: 'text-warning' }
 
 export default function SellerAnalyticsPage() {
   const { t } = useTranslation()
@@ -28,29 +28,29 @@ export default function SellerAnalyticsPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <Link to="/seller" className="text-sm text-slate-500 hover:underline">← {t('nav.seller')}</Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t('market.analyticsTitle')}</h1>
-        <p className="mt-1 text-slate-500">{t('market.analyticsHint')}</p>
+        <Link to="/seller" className="text-sm text-muted hover:underline">← {t('nav.seller')}</Link>
+        <h1 className="mt-2 text-h1">{t('market.analyticsTitle')}</h1>
+        <p className="mt-1 text-muted">{t('market.analyticsHint')}</p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">{t('market.positionTitle')} <DemoNote show={data.includes_demo} /></h2>
-        <p className="mt-1 text-sm text-slate-500">{t('market.positionHint')}</p>
+      <section className="rounded-xl border border-line bg-surface shadow-card p-6">
+        <h2 className="flex items-center gap-2 text-h2">{t('market.positionTitle')} <DemoNote show={data.includes_demo} /></h2>
+        <p className="mt-1 text-sm text-muted">{t('market.positionHint')}</p>
         <div className="mt-4 grid grid-cols-4 gap-4">
           {['below', 'at', 'above'].map((k) => (
-            <div key={k} className="rounded-lg bg-slate-50 p-4">
-              <p className={`text-2xl font-semibold ${COUNT_STYLE[k]}`}>{counts[k]}</p>
-              <p className="text-sm text-slate-600">{t(`market.counts.${k}`)}</p>
+            <div key={k} className="rounded-lg bg-surface-2 p-4">
+              <p className={`text-h1 ${COUNT_STYLE[k]}`}>{counts[k]}</p>
+              <p className="text-sm text-muted">{t(`market.counts.${k}`)}</p>
             </div>
           ))}
-          <div className="rounded-lg bg-slate-50 p-4">
-            <p className="text-2xl font-semibold text-slate-400">{noData}</p>
-            <p className="text-sm text-slate-600">{t('market.counts.noData')}</p>
+          <div className="rounded-lg bg-surface-2 p-4">
+            <p className="text-h1 text-faint">{noData}</p>
+            <p className="text-sm text-muted">{t('market.counts.noData')}</p>
           </div>
         </div>
         <h3 className="mt-6 font-medium">{t('market.gapsTitle')}</h3>
         <table className="mt-2 w-full text-sm">
-          <thead className="text-left text-slate-500">
+          <thead className="text-left text-muted">
             <tr>
               <th className="py-1 font-normal">{t('market.table.product')}</th>
               <th className="py-1 text-right font-normal">{t('market.table.yourPrice')}</th>
@@ -61,11 +61,11 @@ export default function SellerAnalyticsPage() {
           </thead>
           <tbody>
             {gaps.map((g) => (
-              <tr key={`${g.id}-${g.condition}`} className="border-t border-slate-100">
-                <td className="py-1.5 pr-4"><ProductLink item={g} />{g.condition !== 'new' && <span className="text-slate-500"> · {t(`condition.${g.condition}`)}</span>}</td>
+              <tr key={`${g.id}-${g.condition}`} className="border-t border-line">
+                <td className="py-1.5 pr-4"><ProductLink item={g} />{g.condition !== 'new' && <span className="text-muted"> · {t(`condition.${g.condition}`)}</span>}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{sum(g.price_usd)}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">{sum(g.market_usd)}</td>
-                <td className="py-1.5 text-right text-slate-500">{g.stores}</td>
+                <td className="py-1.5 text-right text-muted">{g.stores}</td>
                 <td className="py-1.5 text-right whitespace-nowrap"><MarketLabel info={g} /></td>
               </tr>
             ))}
@@ -73,15 +73,15 @@ export default function SellerAnalyticsPage() {
         </table>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-lg font-semibold">{t('market.missingTitle')}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t('market.missingHint')}</p>
-        {data.missing.length === 0 ? <p className="mt-3 text-sm text-slate-500">{t('market.missingNone')}</p> : (
+      <section className="rounded-xl border border-line bg-surface shadow-card p-6">
+        <h2 className="text-h2">{t('market.missingTitle')}</h2>
+        <p className="mt-1 text-sm text-muted">{t('market.missingHint')}</p>
+        {data.missing.length === 0 ? <p className="mt-3 text-sm text-muted">{t('market.missingNone')}</p> : (
           <ol className="mt-3 grid gap-1.5 text-sm">
             {data.missing.map((m, i) => (
-              <li key={m.id} className="flex justify-between gap-4 border-t border-slate-100 pt-1.5">
-                <span><span className="mr-2 text-slate-400">{i + 1}.</span><ProductLink item={m} /> <span className="text-slate-500">· {t(`categories.${m.category}`)}</span></span>
-                <span className="whitespace-nowrap text-slate-600">{t('market.storesCount', { count: m.stores })} · {sum(m.market_usd)}</span>
+              <li key={m.id} className="flex justify-between gap-4 border-t border-line pt-1.5">
+                <span><span className="mr-2 text-faint">{i + 1}.</span><ProductLink item={m} /> <span className="text-muted">· {t(`categories.${m.category}`)}</span></span>
+                <span className="whitespace-nowrap text-muted">{t('market.storesCount', { count: m.stores })} · {sum(m.market_usd)}</span>
               </li>
             ))}
           </ol>
