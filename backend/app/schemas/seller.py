@@ -55,7 +55,7 @@ class PreviewRow(BaseModel):
     # + "_suspect": {key: number} for numbers outside their plausible range (a typo?)
     specs: dict[str, bool | int | float | str | dict[str, str | int | float]] = {}
     # AI specs not found in the row text: shown to the seller, never saved to the product
-    specs_guess: dict[str, str] = {}
+    specs_guess: dict[str, str | int | float | bool] = {}  # values inferred by rules are not always text
     is_in_stock: bool = True
     # Pasted text: the currency of this line (None = the import's one); check = not written, default was taken
     currency: Literal["USD", "UZS"] | None = None

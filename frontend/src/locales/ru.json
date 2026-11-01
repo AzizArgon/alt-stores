@@ -16,7 +16,7 @@
     "account": "Аккаунт"
   },
   "catalog": {
-    "searchPlaceholder": "Поиск: модель, бренд или тип товара",
+    "searchPlaceholder": "Модель, бренд или тип товара",
     "allCategories": "Все категории",
     "price": "Цена, сум",
     "priceMin": "от",
@@ -35,7 +35,6 @@
     "offers_other": "{{count}} предложения",
     "prev": "Назад",
     "next": "Вперёд",
-    "page": "Страница {{page}} из {{pages}}",
     "filters": "Фильтры",
     "reset": "Сбросить фильтры",
     "showAll": "Показать все ({{count}})",
@@ -345,9 +344,6 @@
     "publish": "Опубликовать",
     "publishing": "Публикация…",
     "back": "К кабинету",
-    "page": "Стр. {{page}} из {{pages}}",
-    "prev": "Назад",
-    "next": "Вперёд",
     "remove": "Удалить строку",
     "original": "Исходная строка",
     "col": {

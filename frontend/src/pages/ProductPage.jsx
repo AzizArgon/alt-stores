@@ -1,9 +1,11 @@
+import { ArrowLeft, BadgeCheck, Phone, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
+import { Badge, Button, Card, Skeleton, Tabs } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
 import { formatDate, formatDayMonth, formatPrice, telegramUrl } from '../services/format'
@@ -15,11 +17,11 @@ function Contacts({ store }) {
   const { t } = useTranslation()
   if (!store.phone && !store.telegram) return <p className="text-sm text-muted">{t('product.noContacts')}</p>
   return (
-    <div className="flex flex-col items-end gap-1 text-sm">
-      {store.phone && <a href={`tel:${store.phone}`} className="font-medium hover:underline">☎ {store.phone}</a>}
+    <div className="flex flex-col gap-1 text-sm md:items-end">
+      {store.phone && <a href={`tel:${store.phone}`} className="font-medium hover:underline"><Phone className="mr-1 inline size-4" aria-hidden />{store.phone}</a>}
       {store.telegram && (
         <a href={telegramUrl(store.telegram)} target="_blank" rel="noreferrer" className="font-medium text-info hover:underline">
-          ✈ {t('product.telegram')}
+          <Send className="mr-1 inline size-4" aria-hidden />{t('product.telegram')}
         </a>
       )}
     </div>
@@ -32,15 +34,15 @@ function OfferRow({ offer, usdRate, rateDate, market }) {
   const { store } = offer
 
   return (
-    <li className={`rounded-xl border border-line bg-surface shadow-card p-4 ${offer.is_in_stock ? '' : 'opacity-60'}`}>
-      <div className="flex items-start gap-6">
+    <Card as="li" padded={false} className={`min-w-0 p-4 ${offer.is_in_stock ? '' : 'opacity-60'}`}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-6">
         <div className="min-w-0 flex-1">
-          <p className="font-medium">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">
             {store.name}
-            {store.is_verified && <span className="ml-2 rounded bg-success-soft px-1.5 py-0.5 text-xs text-success">✓ {t('product.verified')}</span>}
+            {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
           </p>
           <p className="text-sm text-muted">{[store.district, store.address].filter(Boolean).join(', ')}</p>
-          <p className="mt-1 text-xs text-faint" title={offer.raw_name}>{offer.raw_name}</p>
+          <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
           {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
           <p className="mt-1 text-sm">
             <span className={offer.is_in_stock ? 'text-success' : 'text-muted'}>
@@ -50,20 +52,16 @@ function OfferRow({ offer, usdRate, rateDate, market }) {
             {' · '}<span className="text-muted">{t('product.updated', { date: formatDate(offer.updated_at) })}</span>
           </p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 md:text-right">
           <Price price={offer.price} currency={offer.currency} usdRate={usdRate} rateDate={rateDate} />
           {offer.is_in_stock && <div className="mt-1"><MarketLabel info={market} /></div>}
         </div>
-        <div className="w-44 text-right">
-          {open ? <Contacts store={store} /> : (
-            <button onClick={() => setOpen(true)} className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700">
-              {t('product.contact')}
-            </button>
-          )}
+        <div className="shrink-0 md:w-44 md:text-right">
+          {open ? <Contacts store={store} /> : <Button className="w-full md:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
         </div>
       </div>
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
-    </li>
+    </Card>
   )
 }
 
@@ -82,20 +80,32 @@ export default function ProductPage() {
   }, [id, sort, t])
 
   if (error) return <ErrorText>{error}</ErrorText>
-  if (!product) return null
+  if (!product) {
+    return (
+      <div className="grid gap-4">
+        <Skeleton className="h-5 w-24" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+      </div>
+    )
+  }
   const specs = product.specs.filter((s) => s.key !== 'brand') // the brand has its own line
 
   return (
     <section>
-      <button onClick={() => navigate(-1)} className="text-sm text-muted hover:underline">← {t('product.back')}</button>
-      <p className="mt-4 text-sm text-muted">
+      <button onClick={() => navigate(-1)} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-muted hover:text-ink">
+        <ArrowLeft className="size-4" aria-hidden />{t('product.back')}
+      </button>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2 lg:gap-6">
+      <Card>
+      <p className="text-sm break-words text-muted">
         {t(`categories.${product.category}`)}
         {product.mxik_code && <span> · {t('product.mxik')}: {product.mxik_code}</span>}
       </p>
-      <h1 className="mt-1 text-h1">{product.name}</h1>
+      <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>
       {product.brand && <p className="mt-1 text-muted">{t('product.brand')}: {product.brand}</p>}
       {specs.length > 0 && (
-        <dl className="mt-4 grid max-w-xl grid-cols-2 gap-x-6 gap-y-1 text-sm">
+        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           {specs.map((s) => (
             <div key={s.key} className="contents">
               <dt className="text-muted">{specLabel(s.key, product.category)}</dt>
@@ -119,24 +129,19 @@ export default function ProductPage() {
         </p>
       )}
 
+      </Card>
       <ProductMarket market={product.market} usdRate={product.usd_rate} />
+      </div>
 
-      <div className="mt-8 flex items-center justify-between">
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2">{t('product.offers', { count: product.offers.length })}</h2>
-        <div className="flex rounded-md border border-line-strong bg-surface p-0.5 text-sm">
-          {SORTS.map((s) => (
-            <button key={s} onClick={() => setSort(s)}
-              className={`rounded px-3 py-1.5 ${sort === s ? 'bg-primary text-white' : 'hover:bg-surface-2'}`}>
-              {t(`product.sort.${s}`)}
-            </button>
-          ))}
-        </div>
+        <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />
       </div>
       {sort === 'recommended' && <p className="mt-1 text-sm text-muted">{t('product.recommendedHint')}</p>}
       {product.usd_rate && (
         <p className="mt-1 text-sm text-muted">{t('price.rateNote', { date: formatDayMonth(product.usd_rate_date), rate: formatPrice(product.usd_rate, 'UZS') })}</p>
       )}
-      <ul className="mt-4 grid gap-3">
+      <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3">
         {product.offers.map((o) => <OfferRow key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} />)}
       </ul>
     </section>

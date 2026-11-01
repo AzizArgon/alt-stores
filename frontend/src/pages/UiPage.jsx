@@ -37,7 +37,7 @@ export default function UiPage() {
   const [page, setPage] = useState(5)
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <h1 className="text-h1">Компоненты</h1>
       <Block title="Логотип и типографика">
         <div className="flex items-center gap-3"><LogoMark className="size-10" /><BrandName className="text-2xl" /></div>

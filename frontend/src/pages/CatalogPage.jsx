@@ -1,7 +1,10 @@
+import { SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
+import { Sheet } from '../components/overlays'
+import { Button, Card, Checkbox, EmptyState, Input, Pagination, Select, SkeletonCards } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
 import { formatDayMonth, formatPrice } from '../services/format'
@@ -9,23 +12,21 @@ import { formatSpec, fromUrlValue, specLabel, specsLine, urlValue } from '../ser
 
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
 
-const SEARCH_DELAY_MS = 300
 const VISIBLE_VALUES = 8
 const SPEC_PREFIX = 'f_' // spec filters in the address: ?category=ram&f_type=DDR5,DDR4&f_form_factor=SODIMM
-const inputClass = 'rounded-md border border-line-strong bg-surface px-3 py-2 outline-none focus:border-primary'
 
 function ProductTile({ item, usdRate, rateDate }) {
   const { t } = useTranslation()
   return (
     <Link to={`/products/${item.id}`}
-      className="flex flex-col rounded-xl border border-line bg-surface shadow-card p-4 hover:border-primary hover:shadow-sm">
+      className="flex min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow hover:shadow-hover md:p-4">
       <span className="text-xs text-muted">{t(`categories.${item.category}`)}</span>
-      <span className="mt-1 line-clamp-3 font-medium leading-snug">{item.name}</span>
-      {item.specs?.length > 0 && <span className="mt-1 text-sm text-muted">{specsLine(item.specs)}</span>}
+      <span className="mt-1 line-clamp-3 text-sm font-semibold leading-snug break-words md:text-base">{item.name}</span>
+      {item.specs?.length > 0 && <span className="mt-1 line-clamp-3 text-xs break-words text-muted md:text-sm">{specsLine(item.specs)}</span>}
       <div className="mt-auto pt-3">
         <Price price={item.min_price} currency={item.min_currency} usdRate={usdRate} rateDate={rateDate}
-          prefix={`${t('catalog.from')} `} size="text-lg" />
-        <span className="block text-sm text-muted">{t('catalog.offers', { count: item.offers })}</span>
+          prefix={`${t('catalog.from')} `} size="text-base md:text-lg" />
+        <span className="mt-1 block text-xs text-muted">{t('catalog.offers', { count: item.offers })}</span>
       </div>
     </Link>
   )
@@ -43,31 +44,59 @@ function Facet({ facet, category, selected, onToggle, onAtLeast }) {
     const atLeast = (v) => facet.values.filter((x) => x.value >= v).reduce((sum, x) => sum + x.count, 0)
     return (
       <div>
-        <p className="mb-1 text-sm font-medium">{label}</p>
-        <select value={selected[0] || ''} onChange={(e) => onAtLeast(e.target.value)} className={`${inputClass} w-full py-1.5 text-sm`}>
+        <Select label={label} value={selected[0] || ''} onChange={(e) => onAtLeast(e.target.value)}>
           <option value="">{t('catalog.any')}</option>
           {facet.values.map(({ value }) => (
             <option key={value} value={urlValue(value)}>{t('catalog.atLeast', { value: format(value) })} ({atLeast(value)})</option>
           ))}
-        </select>
+        </Select>
       </div>
     )
   }
   const values = open ? facet.values : facet.values.slice(0, VISIBLE_VALUES)
   return (
     <div>
-      <p className="mb-1 text-sm font-medium">{label}</p>
+      <p className="mb-1 text-sm font-semibold">{label}</p>
       {values.map(({ value, count }) => (
-        <label key={urlValue(value)} className="flex items-center gap-2 py-0.5 text-sm">
-          <input type="checkbox" checked={selected.includes(urlValue(value))} onChange={() => onToggle(urlValue(value))} />
-          <span>{format(value)} <span className="text-faint">({count})</span></span>
-        </label>
+        <Checkbox key={urlValue(value)} checked={selected.includes(urlValue(value))} onChange={() => onToggle(urlValue(value))}
+          label={<>{format(value)} <span className="text-faint">({count})</span></>} />
       ))}
       {facet.values.length > VISIBLE_VALUES && (
-        <button onClick={() => setOpen(!open)} className="mt-0.5 text-sm text-muted hover:underline">
+        <button onClick={() => setOpen(!open)} className="mt-1 text-sm font-medium text-primary hover:underline">
           {open ? t('catalog.showLess') : t('catalog.showAll', { count: facet.values.length })}
         </button>
       )}
+    </div>
+  )
+}
+
+// All filters of the catalog: a column on a big screen, a panel from below on a phone
+function FiltersPanel({ categories, category, setCategory, params, setParam, facets, selectedOf, toggleValue }) {
+  const { t } = useTranslation()
+  return (
+    <div className="grid gap-4">
+      <Select label={t('import.col.category')} value={category} onChange={(e) => setCategory(e.target.value)}>
+        <option value="">{t('catalog.allCategories')}</option>
+        {categories.map((c) => <option key={c.slug} value={c.slug}>{t(`categories.${c.slug}`)}</option>)}
+      </Select>
+      <div>
+        <p className="mb-1.5 text-sm font-medium">{t('catalog.price')}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="number" min="0" step="100000" aria-label={t('catalog.priceMin')} placeholder={t('catalog.priceMin')}
+            value={params.get('price_min') || ''} onChange={(e) => setParam('price_min', e.target.value)} />
+          <Input type="number" min="0" step="100000" aria-label={t('catalog.priceMax')} placeholder={t('catalog.priceMax')}
+            value={params.get('price_max') || ''} onChange={(e) => setParam('price_max', e.target.value)} />
+        </div>
+      </div>
+      <Select label={t('import.col.condition')} value={params.get('condition') || ''} onChange={(e) => setParam('condition', e.target.value, true)}>
+        <option value="">{t('catalog.anyCondition')}</option>
+        {CONDITIONS.map((c) => <option key={c} value={c}>{t(`condition.${c}`)}</option>)}
+      </Select>
+      <Checkbox label={t('catalog.inStockOnly')} checked={!params.get('all')} onChange={(e) => setParam('all', e.target.checked ? '' : '1', true)} />
+      {facets.map((f) => (
+        <Facet key={f.key} facet={f} category={category} selected={selectedOf(f.key)}
+          onToggle={(v) => toggleValue(f.key, v)} onAtLeast={(v) => setParam(SPEC_PREFIX + f.key, v, true)} />
+      ))}
     </div>
   )
 }
@@ -76,7 +105,7 @@ export default function CatalogPage() {
   const { t } = useTranslation()
   // Filters live in the URL: "back" from a product card returns to the same search
   const [params, setParams] = useSearchParams()
-  const [query, setQuery] = useState(params.get('q') || '')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [categories, setCategories] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -118,13 +147,6 @@ export default function CatalogPage() {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (query !== (params.get('q') || '')) setParam('q', query.trim())
-    }, SEARCH_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     const req = Object.fromEntries(params)
     req.in_stock = params.get('all') ? 'false' : 'true'
     delete req.all
@@ -157,79 +179,62 @@ export default function CatalogPage() {
     }
   }
 
+  const activeFilters = chips.length + ['category', 'condition', 'all'].filter((k) => params.get(k)).length
+  const filters = (
+    <FiltersPanel categories={categories} category={category} setCategory={setCategory} params={params} setParam={setParam}
+      facets={facets} selectedOf={selectedOf} toggleValue={toggleValue} />
+  )
+
   return (
     <section>
-      <h1 className="text-h1">{t('app.tagline')}</h1>
-
-      <div className="mt-6 flex flex-wrap items-end gap-3">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('catalog.searchPlaceholder')}
-          className={`${inputClass} min-w-80 flex-1`} autoFocus />
-        <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
-          <option value="">{t('catalog.allCategories')}</option>
-          {categories.map((c) => <option key={c.slug} value={c.slug}>{t(`categories.${c.slug}`)}</option>)}
-        </select>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          {t('catalog.price')}
-          <input type="number" min="0" value={params.get('price_min') || ''} placeholder={t('catalog.priceMin')}
-            onChange={(e) => setParam('price_min', e.target.value)} className={`${inputClass} w-36`} step="100000" />
-          <input type="number" min="0" value={params.get('price_max') || ''} placeholder={t('catalog.priceMax')}
-            onChange={(e) => setParam('price_max', e.target.value)} className={`${inputClass} w-36`} step="100000" />
-        </label>
-        <select value={params.get('condition') || ''} onChange={(e) => setParam('condition', e.target.value, true)} className={inputClass}>
-          <option value="">{t('catalog.anyCondition')}</option>
-          {CONDITIONS.map((c) => <option key={c} value={c}>{t(`condition.${c}`)}</option>)}
-        </select>
-        <label className="flex items-center gap-2 py-2 text-sm">
-          <input type="checkbox" checked={!params.get('all')} onChange={(e) => setParam('all', e.target.checked ? '' : '1', true)} />
-          {t('catalog.inStockOnly')}
-        </label>
-      </div>
-
+      <h1 className="text-h2 md:text-h1">{t('app.tagline')}</h1>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      {data && (
-        <div className="flex items-start gap-6">
-          {facets.length > 0 && (
-            <aside className="w-60 shrink-0 space-y-4 rounded-xl border border-line bg-surface shadow-card p-4" aria-label={t('catalog.filters')}>
-              <p className="font-semibold">{t('catalog.filters')}</p>
-              {facets.map((f) => (
-                <Facet key={f.key} facet={f} category={category} selected={selectedOf(f.key)}
-                  onToggle={(v) => toggleValue(f.key, v)} onAtLeast={(v) => setParam(SPEC_PREFIX + f.key, v, true)} />
+      <div className="flex items-start gap-6">
+        <aside className="hidden w-64 shrink-0 lg:block" aria-label={t('catalog.filters')}>
+          <Card padded={false} className="p-4">{filters}</Card>
+        </aside>
+        <div className="min-w-0 flex-1">
+          <Button variant="secondary" className="mb-3 w-full lg:hidden" onClick={() => setFiltersOpen(true)}>
+            <SlidersHorizontal className="size-4" aria-hidden />
+            {activeFilters ? t('catalog.filtersActive', { count: activeFilters }) : t('catalog.filters')}
+          </Button>
+          <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title={t('catalog.filters')}
+            footer={<Button className="w-full" onClick={() => setFiltersOpen(false)}>{t('catalog.show')}{data && ` (${data.total})`}</Button>}>
+            {filters}
+          </Sheet>
+          {chips.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {chips.map((c) => (
+                <button key={c.id} onClick={c.remove}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary-soft px-3 py-1 text-left text-sm font-medium text-primary hover:bg-line">
+                  <span className="min-w-0">{c.text}</span><X className="size-3.5 shrink-0" aria-hidden />
+                </button>
               ))}
-            </aside>
+              <button onClick={resetFilters} className="text-sm font-medium text-muted hover:text-ink hover:underline">{t('catalog.reset')}</button>
+            </div>
           )}
-          <div className="min-w-0 flex-1">
-            {chips.length > 0 && (
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {chips.map((c) => (
-                  <button key={c.id} onClick={c.remove}
-                    className="rounded-full bg-primary px-3 py-1 text-sm text-white hover:bg-slate-700">{c.text} ✕</button>
-                ))}
-                <button onClick={resetFilters} className="text-sm text-muted underline hover:text-ink">{t('catalog.reset')}</button>
-              </div>
-            )}
-            <p className="text-sm text-muted">
-              {t('catalog.found', { count: data.total })}
-              {data.usd_rate && <> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</>}
-            </p>
-            {data.items.length === 0 ? (
-              <p className="mt-6 text-muted">{t('catalog.empty')}</p>
-            ) : (
-              <div className={`mt-4 grid gap-4 ${facets.length > 0 ? 'grid-cols-3' : 'grid-cols-4'}`}>
-                {data.items.map((item) => <ProductTile key={item.id} item={item} usdRate={data.usd_rate} rateDate={data.usd_rate_date} />)}
-              </div>
-            )}
-            {pages > 1 && (
-              <div className="mt-6 flex items-center justify-center gap-3 text-sm">
-                <button disabled={page <= 1} onClick={() => setParams((p) => { p.set('page', page - 1); return p })}
-                  className="rounded-md border border-line-strong px-3 py-1.5 disabled:opacity-40">{t('catalog.prev')}</button>
-                <span>{t('catalog.page', { page, pages })}</span>
-                <button disabled={page >= pages} onClick={() => setParams((p) => { p.set('page', page + 1); return p })}
-                  className="rounded-md border border-line-strong px-3 py-1.5 disabled:opacity-40">{t('catalog.next')}</button>
-              </div>
-            )}
-          </div>
+          {!data && !error && <SkeletonCards count={9} />}
+          {data && (
+            <>
+              <p className="text-sm text-muted">
+                {t('catalog.found', { count: data.total })}
+                {data.usd_rate && <> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</>}
+              </p>
+              {data.items.length === 0 ? (
+                <EmptyState title={t('catalog.empty')} hint={t('catalog.emptyHint')} />
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                  {data.items.map((item) => <ProductTile key={item.id} item={item} usdRate={data.usd_rate} rateDate={data.usd_rate_date} />)}
+                </div>
+              )}
+              <Pagination className="mt-6" page={page} pages={pages} onChange={(n) => {
+                setParams((prev) => { prev.set('page', n); return prev })
+                window.scrollTo(0, 0)
+              }} />
+            </>
+          )}
         </div>
-      )}
+      </div>
     </section>
   )
 }

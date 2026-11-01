@@ -102,3 +102,10 @@ def test_price_far_below_other_stores_is_flagged(db):
     publish_import(db, _import(db, c), c, [_row(1, "Lexar DDR4 8GB 3200MHz", 20)])
     cheap = db.scalar(select(Offer).where(Offer.store_id == c.id))
     assert [(f.type, f.level.value) for f in cheap.fraud_flags] == [("price_below_market", "danger")]
+
+
+def test_preview_row_keeps_inferred_values_that_are_not_text():
+    # An inferred "graphics: true" made the whole saved import unreadable (500 on the preview page)
+    from app.schemas.seller import PreviewRow
+    row = PreviewRow(row=1, raw_name="i5 12400F", category="cpu", name="i5 12400F", specs_guess={"graphics": False, "cores": 6, "socket": "LGA1700"})
+    assert row.specs_guess == {"graphics": False, "cores": 6, "socket": "LGA1700"}

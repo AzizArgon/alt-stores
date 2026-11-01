@@ -4,11 +4,12 @@ import {
 } from 'chart.js'
 
 Chart.register(CategoryScale, LinearScale, LineController, LineElement, PointElement, Tooltip, Legend, Filler)
+Chart.defaults.font.family = '"Inter Variable", system-ui, sans-serif'
 
 // One style for every chart: validated categorical palette (fixed order, never cycled), recessive grid, 2px lines
 export const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
-const INK = '#52514e'
-const GRID = '#e7e5e4'
+const INK = '#5b6472'
+const GRID = '#e3e6eb'
 
 // datasets: [{ label, data: [number|null], color, dashed?, points? }], labels: x axis texts
 export default function LineChart({ labels, datasets, formatValue, height = 260, legend = datasets.length > 1 }) {

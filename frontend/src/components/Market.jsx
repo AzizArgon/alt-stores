@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import LineChart, { SERIES_COLORS } from './LineChart'
+import { Badge, Card, Tabs } from './ui'
 import { formatDayMonth, formatMonthYear, formatPrice, roundSum } from '../services/format'
 
 export const PERIODS = ['week', 'month', 'quarter']
@@ -35,11 +36,10 @@ export function DemoNote({ show }) {
 export function MarketLabel({ info }) {
   const { t } = useTranslation()
   if (!info) return null
-  const style = { below: 'bg-success-soft text-success', at: 'bg-surface-2 text-ink', above: 'bg-warning-soft text-warning' }
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs ${style[info.label]}`} title={t('market.labelHint')}>
+    <Badge tone={info.label} title={t('market.labelHint')}>
       {t(`market.label.${info.label}`, { pct: Math.abs(info.diff_pct) })}
-    </span>
+    </Badge>
   )
 }
 
@@ -72,8 +72,8 @@ export function ProductMarket({ market, usdRate }) {
   const formatValue = useMemo(() => (v) => formatPrice(v, usdRate ? 'UZS' : 'USD'), [usdRate])
 
   return (
-    <div className="mt-6 max-w-3xl rounded-xl border border-line bg-surface shadow-card p-5">
-      <div className="flex items-baseline justify-between gap-4">
+    <Card className="min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="flex items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
         {info?.market_usd != null && (
           <p className="text-sm text-muted">
@@ -97,7 +97,7 @@ export function ProductMarket({ market, usdRate }) {
           {info?.market_usd != null && <> · {t('market.sinceArchive')} <PctText value={(info.market_usd / archive.price_usd - 1) * 100} /></>}
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -115,22 +115,15 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
   const formatValue = useMemo(() => (v) => v.toLocaleString('ru', { maximumFractionDigits: 1 }), [])
 
   return (
-    <section className="rounded-xl border border-line bg-surface shadow-card p-6">
-      <div className="flex items-center justify-between gap-4">
+    <Card as="section" className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-h2">{t('market.indexTitle')} <DemoNote show={demo} /></h2>
-        <div className="flex rounded-md border border-line-strong bg-surface p-0.5 text-sm">
-          {PERIODS.map((p) => (
-            <button key={p} onClick={() => onPeriod(p)}
-              className={`rounded px-3 py-1.5 ${period === p ? 'bg-primary text-white' : 'hover:bg-surface-2'}`}>
-              {t(`market.periodShort.${p}`)}
-            </button>
-          ))}
-        </div>
+        <Tabs value={period} onChange={onPeriod} tabs={PERIODS.map((p) => ({ value: p, label: t(`market.periodShort.${p}`) }))} />
       </div>
       <p className="mt-1 text-sm text-muted">{t('market.indexHint')}</p>
       {chart ? <div className="mt-4"><LineChart labels={chart.labels} datasets={chart.datasets} formatValue={formatValue} /></div>
         : <p className="mt-4 text-sm text-muted">{t('market.notEnoughData')}</p>}
-      <table className="mt-6 w-full text-sm">
+      <table className="table-cards mt-6 w-full text-sm">
         <thead className="text-left text-muted">
           <tr>
             <th className="py-1 font-normal">{t('market.table.category')}</th>
@@ -142,16 +135,16 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
           {indices.rows.map((r) => (
             <tr key={r.category} className="border-t border-line">
               <td className="py-1.5">{t(`categories.${r.category}`)}</td>
-              <td className="py-1.5 text-right text-muted">{r.products}</td>
-              {PERIODS.map((p) => <td key={p} className="py-1.5 text-right"><PctText value={r[p]} /></td>)}
+              <td data-label={t('market.table.products')} className="py-1.5 text-right text-muted">{r.products}</td>
+              {PERIODS.map((p) => <td key={p} data-label={t(`market.periodShort.${p}`)} className="py-1.5 text-right"><PctText value={r[p]} /></td>)}
             </tr>
           ))}
         </tbody>
       </table>
-    </section>
+    </Card>
   )
 }
 
 export function ProductLink({ item }) {
-  return <Link to={`/products/${item.id}`} className="hover:underline">{item.name}</Link>
+  return <Link to={`/products/${item.id}`} className="break-words hover:text-primary hover:underline">{item.name}</Link>
 }

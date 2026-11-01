@@ -4,13 +4,13 @@ import { Link } from 'react-router-dom'
 import api, { errorKey } from '../services/api'
 import { specsLine } from '../services/specs'
 import { ErrorText } from './AuthForm'
+import { Button, inputClass as input } from './ui'
 import Flags from './Flags'
 import NewProductForm from './NewProductForm'
 import Price from './Price'
 
 const CURRENCIES = ['USD', 'UZS']
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished']
-const input = 'w-full rounded-md border border-line-strong px-3 py-2 outline-none focus:border-primary'
 
 function ProductLine({ product, rate }) {
   const { t } = useTranslation()
@@ -66,7 +66,7 @@ function OfferForm({ product, defaultCurrency, rate, onDone, onConflict }) {
     <form onSubmit={onSubmit} className="mt-4 rounded-lg border border-line p-4">
       <ProductLine product={product} rate={rate} />
       {mine && <p className="mt-2 rounded bg-warning-soft px-3 py-2 text-sm text-warning">{t('manual.updateHint')}</p>}
-      <div className="mt-4 grid grid-cols-4 gap-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <label className="block">
           <span className="mb-1 block text-sm text-muted">{t('manual.price')}</span>
           <input type="number" min="0" step="any" required autoFocus value={form.price} className={input}
@@ -85,14 +85,14 @@ function OfferForm({ product, defaultCurrency, rate, onDone, onConflict }) {
           </select>
         </label>
         <label className="flex items-end gap-2 pb-2.5 text-sm">
-          <input type="checkbox" checked={form.is_in_stock} onChange={(e) => setForm({ ...form, is_in_stock: e.target.checked })} />
+          <input type="checkbox" className="size-4 accent-primary" checked={form.is_in_stock} onChange={(e) => setForm({ ...form, is_in_stock: e.target.checked })} />
           {t('import.inStock')}
         </label>
       </div>
       <div className="mt-3"><ErrorText>{error}</ErrorText></div>
-      <button disabled={busy} className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50">
+      <Button type="submit" disabled={busy}>
         {busy ? t('auth.loading') : t(mine ? 'manual.update' : 'manual.add')}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -149,7 +149,7 @@ export default function AddFromCatalog({ defaultCurrency, onAdded }) {
       </div>
       {!chosen && !creating && (
         <button type="button" onClick={() => { setCreating(true); setDone(null) }}
-          className="mt-3 text-sm text-muted underline hover:text-ink">{t('manual.notInCatalog')}</button>
+          className="mt-3 text-sm font-medium text-primary hover:underline">{t('manual.notInCatalog')}</button>
       )}
       {creating && <NewProductForm initialName={q} onCreated={choose} onCancel={() => setCreating(false)} />}
       {chosen && (

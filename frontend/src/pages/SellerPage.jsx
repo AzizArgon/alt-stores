@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ErrorText } from '../components/AuthForm'
+import { useToast } from '../components/overlays'
+import { Badge, Button, Card, Input, Skeleton, inputClass } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { importTitle } from '../services/format'
 
@@ -16,17 +19,16 @@ function StoreForm({ store, onSaved }) {
   const [form, setForm] = useState(() =>
     Object.fromEntries(STORE_FIELDS.map((f) => [f, store?.[f] ?? ''])))
   const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const toast = useToast()
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    setSaved(false)
     // Empty optional fields are sent as null
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim() || null]))
     try {
       const res = await api.put('/stores/me', payload)
-      setSaved(true)
+      toast(t('store.saved'))
       onSaved(res.data)
     } catch (err) {
       setError(t(errorKey(err)))
@@ -34,7 +36,7 @@ function StoreForm({ store, onSaved }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-line bg-surface shadow-card p-6">
+    <Card as="form" onSubmit={onSubmit}>
       <h2 className="text-h2">{t('store.title')}</h2>
       {!store && <p className="mt-1 text-sm text-muted">{t('store.createHint')}</p>}
       {store && (
@@ -42,35 +44,27 @@ function StoreForm({ store, onSaved }) {
           {t(store.is_verified ? 'store.verified' : 'store.notVerified')}
         </p>
       )}
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         {STORE_FIELDS.map((f) => (
-          <label key={f} className="block">
-            <span className="mb-1 block text-sm text-muted">{t(`store.${FIELD_LABELS[f] || f}`)}</span>
-            <input
-              value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
-              onChange={(e) => setForm({ ...form, [f]: e.target.value })}
-              className="w-full rounded-md border border-line-strong px-3 py-2 outline-none focus:border-primary"
-            />
-          </label>
+          <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
+            value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
+            onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
         ))}
       </div>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      <div className="flex items-center gap-3">
-        <button className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700">{t('store.save')}</button>
-        {saved && <span className="text-sm text-success">{t('store.saved')}</span>}
-      </div>
-    </form>
+      <Button type="submit">{t('store.save')}</Button>
+    </Card>
   )
 }
 
 function CurrencyChoice({ currency, onChange, label }) {
   const { t } = useTranslation()
   return (
-    <div className="mt-4 flex items-center gap-4">
+    <div className="mt-4 flex min-h-7 flex-wrap items-center gap-x-4 gap-y-1">
       <span className="text-sm text-muted">{t(label)}</span>
       {CURRENCIES.map((c) => (
         <label key={c} className="flex items-center gap-1.5 text-sm">
-          <input type="radio" name="currency" checked={currency === c} onChange={() => onChange(c)} />
+          <input type="radio" className="size-4 accent-primary" name="currency" checked={currency === c} onChange={() => onChange(c)} />
           {c}
         </label>
       ))}
@@ -116,22 +110,19 @@ function UploadBox({ defaultCurrency }) {
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`mt-4 cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition ${
-          dragging ? 'border-primary bg-surface-2' : 'border-line-strong hover:border-primary'}`}
+        className={`mt-4 cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors md:p-10 ${
+          dragging ? 'border-primary bg-primary-soft' : 'border-line-strong hover:border-primary'}`}
       >
-        <p className="font-medium">{file ? file.name : t('upload.drop')}</p>
+        <p className="font-medium break-words">{file ? file.name : t('upload.drop')}</p>
         <p className="mt-1 text-sm text-muted">{t('upload.formats')}</p>
         <input ref={inputRef} type="file" accept={ACCEPT} hidden
           onChange={(e) => e.target.files[0] && setFile(e.target.files[0])} />
       </div>
       <CurrencyChoice currency={currency} onChange={setCurrency} label="upload.currency" />
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      <button
-        onClick={onSubmit} disabled={!file || busy}
-        className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50"
-      >
+      <Button onClick={onSubmit} disabled={!file || busy}>
         {busy ? t('auth.loading') : t('upload.submit')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -160,13 +151,12 @@ function TextBox({ defaultCurrency }) {
   return (
     <div>
       <textarea value={text} rows={10} placeholder={t('manual.textPlaceholder')} onChange={(e) => setText(e.target.value)}
-        className="w-full rounded-md border border-line-strong px-3 py-2 font-mono text-sm outline-none focus:border-primary" />
+        className={`${inputClass} font-mono`} />
       <CurrencyChoice currency={currency} onChange={setCurrency} label="manual.textCurrency" />
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      <button onClick={onSubmit} disabled={text.trim().length < 3 || busy}
-        className="rounded-md bg-primary px-4 py-2 text-white hover:bg-slate-700 disabled:opacity-50">
+      <Button onClick={onSubmit} disabled={text.trim().length < 3 || busy}>
         {busy ? t('auth.loading') : t('upload.submit')}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -178,13 +168,13 @@ function AddGoods({ defaultCurrency, onAdded }) {
   const { t } = useTranslation()
   const [method, setMethod] = useState('file')
   return (
-    <div className="rounded-xl border border-line bg-surface shadow-card p-6">
+    <Card>
       <h2 className="text-h2">{t('manual.title')}</h2>
-      <div className="mt-4 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         {METHODS.map((m) => (
           <button key={m} type="button" onClick={() => setMethod(m)}
-            className={`rounded-lg border p-3 text-left transition ${
-              method === m ? 'border-primary bg-surface-2' : 'border-line hover:border-primary'}`}>
+            className={`rounded-lg border p-3 text-left transition-colors ${
+              method === m ? 'border-primary bg-primary-soft' : 'border-line hover:border-primary'}`}>
             <p className="font-medium">{t(`manual.method.${m}`)}</p>
             <p className="mt-1 text-xs text-muted">{t(`manual.methodHint.${m}`)}</p>
           </button>
@@ -195,32 +185,32 @@ function AddGoods({ defaultCurrency, onAdded }) {
         {method === 'text' && <TextBox defaultCurrency={defaultCurrency} />}
         {method === 'catalog' && <AddFromCatalog defaultCurrency={defaultCurrency} onAdded={onAdded} />}
       </div>
-    </div>
+    </Card>
   )
 }
 
 function ImportHistory({ items }) {
   const { t } = useTranslation()
   return (
-    <div className="rounded-xl border border-line bg-surface shadow-card p-6">
+    <Card>
       <h2 className="text-h2">{t('upload.history')}</h2>
       {items.length === 0 && <p className="mt-2 text-sm text-muted">{t('upload.empty')}</p>}
       <ul className="mt-2 divide-y divide-line">
         {items.map((imp) => (
-          <li key={imp.id} className="flex items-center justify-between py-2 text-sm">
-            <span className="min-w-0 truncate">
-              <span className="mr-2 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-muted">{t(`manual.source.${imp.source}`)}</span>
+          <li key={imp.id} className="flex flex-col justify-between gap-x-3 gap-y-0.5 py-2 text-sm md:flex-row md:items-center">
+            <span className="min-w-0 break-words md:truncate">
+              <Badge className="mr-2">{t(`manual.source.${imp.source}`)}</Badge>
               {imp.source === 'manual'
                 ? <span className="font-medium">{importTitle(imp)}</span>
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
-            <span className="shrink-0 pl-3 text-muted">
+            <span className="shrink-0 text-xs text-muted md:text-sm">
               {imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
             </span>
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   )
 }
 
@@ -238,15 +228,15 @@ export default function SellerPage() {
     if (store) loadImports()
   }, [store?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (store === undefined) return null
+  if (store === undefined) return <Skeleton className="h-64 w-full rounded-xl" />
   // Without a store profile goods can't be added in any way
   if (!store) return <StoreForm store={store} onSaved={setStore} />
-  if (imports === null) return null
+  if (imports === null) return <Skeleton className="h-64 w-full rounded-xl" />
   return (
-    <div className="grid gap-6">
-      <Link to="/seller/analytics" className="flex items-center justify-between rounded-xl border border-line bg-surface shadow-card px-6 py-4 hover:border-primary">
-        <span><span className="font-semibold">{t('market.analyticsTitle')}</span><span className="ml-3 text-sm text-muted">{t('market.analyticsHint')}</span></span>
-        <span aria-hidden>→</span>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <Link to="/seller/analytics" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-4 shadow-card transition-shadow hover:shadow-hover md:px-6">
+        <span><span className="block font-semibold md:inline">{t('market.analyticsTitle')}</span><span className="text-sm text-muted md:ml-3">{t('market.analyticsHint')}</span></span>
+        <ArrowRight className="size-5 shrink-0 text-muted" aria-hidden />
       </Link>
       {/* The currency the seller chose last time is the default everywhere */}
       <AddGoods defaultCurrency={imports[0]?.currency || 'USD'} onAdded={loadImports} />

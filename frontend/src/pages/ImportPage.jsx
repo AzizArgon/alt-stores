@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
+import { Monitor } from 'lucide-react'
 import { ErrorText } from '../components/AuthForm'
+import { Button, Card, Checkbox, Pagination, Skeleton, inputClass } from '../components/ui'
 import Flags from '../components/Flags'
 import api, { errorKey } from '../services/api'
 import { formatDayMonth, importTitle, formatPrice, roundSum, roundUsd } from '../services/format'
@@ -17,20 +19,20 @@ const isFlagged = (r) => (r.flags || []).some((f) => f.level !== 'info')
 const needsAttention = (r) => r.source === 'failed' || r.currency_check || r.condition === 'unknown' || Boolean(r.specs?._suspect) || r.price == null || r.category === 'other' || !r.brand || isFlagged(r)
 const SOURCE_STYLE = { rule: 'text-info', cache: 'text-muted', ai: 'text-primary', failed: 'text-danger' }
 
-const cellInput = 'w-full rounded border border-transparent bg-transparent px-1.5 py-1 hover:border-slate-300 focus:border-primary focus:bg-white outline-none'
+const cellInput = 'w-full rounded border border-transparent bg-transparent px-1.5 py-1 hover:border-line-strong focus:border-primary focus:bg-surface outline-none'
 
 function Progress({ imp }) {
   const { t } = useTranslation()
   const pct = imp.chunks_total ? Math.round((imp.chunks_done / imp.chunks_total) * 100) : 0
   return (
-    <div className="rounded-xl border border-line bg-surface shadow-card p-6">
+    <Card>
       <p>{imp.chunks_total
         ? t('import.processing', { done: imp.chunks_done, total: imp.chunks_total })
         : t('import.preparing')}</p>
       <div className="mt-3 h-2 rounded bg-surface-2">
         <div className="h-2 rounded bg-primary transition-all" style={{ width: `${pct}%` }} />
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -125,22 +127,21 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
   }
 
   return (
-    <div className="rounded-xl border border-line bg-surface shadow-card">
-      <div className="flex items-center gap-4 border-b border-line p-4 text-sm">
+    <Card padded={false} className="min-w-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line p-4 text-sm">
         <input value={query} placeholder={t('import.search')}
           onChange={(e) => { setQuery(e.target.value); setPage(1) }}
-          className="w-72 rounded-md border border-line-strong px-3 py-1.5 outline-none focus:border-primary" />
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={onlyIssues} onChange={(e) => { setOnlyIssues(e.target.checked); setPage(1) }} />
-          {t('import.onlyIssues')}
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={onlyFlagged} onChange={(e) => { setOnlyFlagged(e.target.checked); setPage(1) }} />
-          {t('import.onlyFlagged')}
-        </label>
+          className={`${inputClass} md:w-72`} />
+        <Checkbox label={t('import.onlyIssues')} checked={onlyIssues} onChange={(e) => { setOnlyIssues(e.target.checked); setPage(1) }} />
+        <Checkbox label={t('import.onlyFlagged')} checked={onlyFlagged} onChange={(e) => { setOnlyFlagged(e.target.checked); setPage(1) }} />
         <span className="ml-auto text-muted">{t('import.rows', { count: visible.length })}</span>
       </div>
-      <table className="w-full table-fixed text-sm">
+      {/* The preview stays a table even on a phone: it scrolls inside its own box, the page does not */}
+      <p className="flex gap-2 border-b border-line bg-info-soft px-4 py-2 text-xs text-info md:hidden">
+        <Monitor className="size-4 shrink-0" aria-hidden />{t('import.desktopHint')}
+      </p>
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[960px] table-fixed text-sm">
         <thead className="bg-surface-2 text-left text-muted">
           <tr>
             <th className="w-[32%] px-3 py-2 font-medium">{t('import.col.name')}</th>
@@ -208,14 +209,9 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
           ))}
         </tbody>
       </table>
-      <div className="flex items-center justify-end gap-3 border-t border-line p-3 text-sm">
-        <button disabled={current <= 1} onClick={() => setPage(current - 1)}
-          className="rounded px-3 py-1 hover:bg-surface-2 disabled:opacity-40">{t('import.prev')}</button>
-        <span className="text-muted">{t('import.page', { page: current, pages })}</span>
-        <button disabled={current >= pages} onClick={() => setPage(current + 1)}
-          className="rounded px-3 py-1 hover:bg-surface-2 disabled:opacity-40">{t('import.next')}</button>
       </div>
-    </div>
+      {pages > 1 && <div className="border-t border-line p-3"><Pagination page={current} pages={pages} onChange={setPage} /></div>}
+    </Card>
   )
 }
 
@@ -281,20 +277,20 @@ export default function ImportPage() {
   const parseStats = imp?.stats?.rows ? imp.stats : null
 
   return (
-    <div className="grid gap-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <Link to="/seller" className="text-sm text-muted hover:underline">← {t('import.back')}</Link>
-          <h1 className="mt-1 text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
+          <h1 className="mt-1 text-h2 break-words md:text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
         {imp?.status === 'ready' && (
-          <button onClick={publish} disabled={busy || rows.length === 0}
-            className="rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-slate-700 disabled:opacity-50">
+          <Button size="lg" className="w-full md:w-auto" onClick={publish} disabled={busy || rows.length === 0}>
             {busy ? t('import.publishing') : t('import.publish')}
-          </button>
+          </Button>
         )}
       </div>
       <ErrorText>{error}</ErrorText>
+      {!imp && !error && <Skeleton className="h-96 w-full rounded-xl" />}
       {imp?.status === 'processing' && <Progress imp={imp} />}
       {imp?.status === 'failed' && (
         <ErrorText>{t([`import.error.${imp.error?.split(':')[0]}`, 'import.failed'])}</ErrorText>
@@ -308,7 +304,7 @@ export default function ImportPage() {
       {imp?.status === 'ready' && (
         <>
           {failedCount && (
-            <div className="flex items-center justify-between rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
               <span>{t(failReason === 'ai_quota' ? 'import.partialQuota' : 'import.partial', { count: failedCount })}</span>
               <button onClick={retry} className="rounded-md border border-warning-line px-3 py-1 hover:bg-warning-line">
                 {t('import.retry')}

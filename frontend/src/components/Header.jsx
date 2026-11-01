@@ -67,7 +67,7 @@ function CityMenu() {
   return (
     <Dropdown align="left" panelClassName="max-h-96 w-56 overflow-y-auto" trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.city')} title={t('nav.city')}
-        className="flex min-h-11 max-w-40 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary">
+        className="flex min-h-11 max-w-48 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary">
         <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
         <span className="truncate">{t(`cities.${city}`)}</span>
         <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
@@ -183,12 +183,12 @@ export default function Header() {
           </nav>
           {user ? <UserMenu user={user} logout={logout} /> : (
             <div className="flex shrink-0 items-center gap-2">
-              <Button to="/login" variant="secondary" size="sm" className="lg:min-h-10">{t('nav.login')}</Button>
-              <Button to="/register" size="sm" className="hidden sm:inline-flex lg:min-h-10">{t('nav.register')}</Button>
+              <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
+              <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
             </div>
           )}
         </div>
-        <HeaderSearch className="pb-3 md:hidden" />
+        <div className="pb-3 md:hidden"><HeaderSearch /></div>
       </div>
       <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} />
     </header>
