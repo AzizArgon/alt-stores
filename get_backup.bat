@@ -10,5 +10,5 @@ pause
 exit /b %ERRORLEVEL%
 
 :auto
-"%BASH%" -lc "cd \"$(cygpath '%~dp0')\" && date '+%F %T' && bash deploy/get_backup.sh" >> "F:\claudy\backups\server\get_backup.log" 2>&1
+"%BASH%" -lc "cd \"$(cygpath '%~dp0')\" && date '+%%F %%T' && bash deploy/get_backup.sh" >> "F:\claudy\backups\server\get_backup.log" 2>&1
 exit /b %ERRORLEVEL%
