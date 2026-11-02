@@ -478,7 +478,7 @@ npm run dev        # http://localhost:5173 (backend должен быть зап
 ## Фаза Б1 — Дизайн-основа (02.11.2026)
 Версия для куратора зафиксирована тегом `v0.1-alpha`. Логика и данные не менялись, кроме одной найденной ошибки (ниже).
 
-**Название.** ALT_STORE: `frontend/src/config/brand.js` + `components/Logo.jsx` + `public/favicon.svg`; заголовок вкладки подставляет плагин в `vite.config.js`, тексты — переменная `{{brand}}` в i18n. Внутренние имена (`pc_market`, `pcmarket`) не менялись.
+**Название.** Сначала ALT_STORE, затем ALT STORES (сервис объединяет много магазинов; подчёркивание убрано и из логотипа). Файлы: `frontend/src/config/brand.js` + `components/Logo.jsx` + `public/favicon.svg`; заголовок вкладки подставляет плагин в `vite.config.js`, тексты — переменная `{{brand}}` в i18n. Внутренние имена (`pc_market`, `pcmarket`) не менялись.
 
 **Токены** — `@theme` в `frontend/src/index.css`: цвета (в том числе info/warning/danger и below/at/above), заголовки `text-h1..h3`, скругления, тени; отступы — шкала Tailwind (4 px). Шрифт Inter (`@fontsource-variable/inter`, файлы лежат у нас, кириллица и узбекская латиница с `ʻ`). Значки — `lucide-react`. Тёмная тема не делалась: не бесплатна (графики и все состояния надо проверять заново), токены её допускают.
 
