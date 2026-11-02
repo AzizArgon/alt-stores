@@ -3,7 +3,7 @@
 # Touches only its own files: user pcmarket, /opt/pcmarket, /var/www/pcmarket, its own nginx site and snippet,
 # its own systemd units and sudoers file. Other sites, nginx.conf and the firewall are not changed.
 set -euo pipefail
-REPO=https://github.com/AzizArgon/-.git
+REPO=https://github.com/AzizArgon/alt-stores.git
 HOST=pcmarket.khudoberdi.uz
 APP=/opt/pcmarket/app
 ADMIN=${SUDO_USER:-azi}
