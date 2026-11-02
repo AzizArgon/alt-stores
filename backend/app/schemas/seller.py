@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.db.seed import CITIES
+
 
 class StoreIn(BaseModel):
     name: str = Field(min_length=2, max_length=255)
@@ -11,6 +13,14 @@ class StoreIn(BaseModel):
     telegram: str | None = Field(default=None, max_length=64)
     address: str | None = Field(default=None, max_length=255)
     district: str | None = Field(default=None, max_length=128)
+    city: str
+
+    @field_validator("city")
+    @classmethod
+    def known_city(cls, value: str) -> str:
+        if value not in CITIES:
+            raise ValueError("unknown city")
+        return value
 
 
 class StoreOut(StoreIn):

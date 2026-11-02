@@ -145,3 +145,54 @@ def test_condition_filter_and_seller_note(db):
     assert search_products(db, 12_000, condition="used")["items"] == []
     card = product_card(db, db.scalar(select(Product)).id, 12_000)
     assert {o["note"] for o in card["offers"]} == {"Подписчикам 290$", None}
+
+
+def test_city_filters_catalog_price_from_and_summary(db):
+    from app.services.catalog import category_summary
+
+    tash, sam = _store(db, "a@example.com"), _store(db, "b@example.com")
+    sam.city = "samarkand"
+    db.commit()
+    cpu = lambda name, price: {**_row(1, name, price), "category": "cpu", "brand": "Intel"}  # noqa: E731
+    publish_import(db, _import(db, tash), tash, [cpu("Intel Core i5-12400F", 130)])
+    publish_import(db, _import(db, sam), sam, [cpu("Intel Core i5-12400F", 120), {**cpu("Intel Core i3-12100F", 80), "row": 2}])
+
+    everywhere = search_products(db, 12_000.0)
+    assert {i["name"]: (i["offers"], i["min_price"]) for i in everywhere["items"]} == {
+        "Intel Core i5-12400F": (2, 120), "Intel Core i3-12100F": (1, 80)}
+    tashkent = search_products(db, 12_000.0, city="tashkent")["items"]
+    assert [(i["name"], i["offers"], i["min_price"]) for i in tashkent] == [("Intel Core i5-12400F", 1, 130)]
+    assert search_products(db, 12_000.0, city="nukus")["items"] == []
+    cheap_first = search_products(db, 12_000.0, sort="price_asc")["items"]
+    assert [i["min_price"] for i in cheap_first] == [80, 120]
+    assert [i["min_price"] for i in search_products(db, 12_000.0, sort="price_desc")["items"]] == [120, 80]
+
+    assert category_summary(db, 12_000.0) == [{"slug": "cpu", "products": 2, "stores": 2, "min_price_usd": 80}]
+    assert category_summary(db, 12_000.0, "tashkent") == [{"slug": "cpu", "products": 1, "stores": 1, "min_price_usd": 130}]
+
+
+def test_catalog_tile_shows_the_most_serious_flag(db):
+    store = _store(db, "a@example.com")
+    publish_import(db, _import(db, store), store, [{**_row(1, "Kingston DDR5 16GB", 50), "category": "ram"}])
+    offer = db.scalar(select(Offer))
+    offer.fraud_flags.clear()
+    offer.fraud_flags.extend([
+        FraudFlag(type="price", level=FlagLevel.warning, reason_key="x", params={}, source=FlagSource.rule),
+        FraudFlag(type="price", level=FlagLevel.danger, reason_key="y", params={}, source=FlagSource.rule),
+    ])
+    db.commit()
+    assert search_products(db, 12_000.0)["items"][0]["flag_level"] == "danger"
+
+
+def test_store_city_must_be_known():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas.seller import StoreIn
+
+    assert StoreIn(name="Shop", city="bukhara").city == "bukhara"
+    for bad in ("all", "moscow"):
+        with pytest.raises(ValidationError):
+            StoreIn(name="Shop", city=bad)
+    with pytest.raises(ValidationError):
+        StoreIn(name="Shop")

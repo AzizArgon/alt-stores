@@ -5,11 +5,12 @@ import { ArrowRight } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ErrorText } from '../components/AuthForm'
 import { useToast } from '../components/overlays'
-import { Badge, Button, Card, Input, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { STORE_CITIES } from '../config/cities'
 import api, { errorKey } from '../services/api'
 import { importTitle } from '../services/format'
 
-const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'address', 'district']
+const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address']
 const FIELD_LABELS = { inn_stir: 'innStir' }
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
@@ -45,11 +46,17 @@ function StoreForm({ store, onSaved }) {
         </p>
       )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {STORE_FIELDS.map((f) => (
+        {STORE_FIELDS.map((f) => (f === 'city' ? (
+          <Select key={f} label={t('store.city')} value={form.city} required hint={t('store.cityHint')}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}>
+            <option value="" disabled>{t('store.cityChoose')}</option>
+            {STORE_CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
+          </Select>
+        ) : (
           <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
             value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
             onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-        ))}
+        )))}
       </div>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
       <Button type="submit">{t('store.save')}</Button>

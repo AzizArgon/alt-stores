@@ -38,6 +38,12 @@ CATEGORIES = [
 
 CATEGORY_SLUGS = [slug for slug, _, _ in CATEGORIES]
 
+# Cities of the stores: the regional centres, as in the header of the site (frontend/src/config/cities.js)
+CITIES = [
+    "tashkent", "samarkand", "bukhara", "andijan", "fergana", "namangan",
+    "nukus", "urgench", "karshi", "termez", "navoi", "jizzakh", "gulistan", "nurafshan",
+]
+
 
 def seed_categories(db: Session) -> None:
     existing = set(db.scalars(select(Category.slug)))

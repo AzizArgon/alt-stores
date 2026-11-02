@@ -3,10 +3,10 @@
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, true
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Category, Condition, Currency, FlagLevel, FlagStatus, Offer, Product, Store
+from app.db.models import Category, Condition, Currency, FlagLevel, FlagStatus, FraudFlag, Offer, Product, Store
 from app.services.exchange import to_usd, to_uzs
 from app.services.spec_dictionary import CARD_SPECS, NUMBER, YESNO, Spec, spec_map, specs_of
 from app.services.spec_inference import INFERABLE
@@ -191,8 +191,14 @@ def _usd_price(usd_rate: float | None):
     return case((Offer.currency == Currency.UZS, Offer.price / (usd_rate or 1e18)), else_=Offer.price)
 
 
-def _cheapest_offers(db: Session, product_ids: list[int], usd_rate: float | None, in_stock: bool) -> dict[int, Offer]:
-    query = select(Offer).where(Offer.product_id.in_(product_ids), Offer.price.is_not(None))
+def _in_city(city: str | None):
+    """Offers of the stores of one city; None = all of Uzbekistan."""
+    return Offer.store_id.in_(select(Store.id).where(Store.city == city)) if city else true()
+
+
+def _cheapest_offers(db: Session, product_ids: list[int], usd_rate: float | None, in_stock: bool,
+                     city: str | None = None) -> dict[int, Offer]:
+    query = select(Offer).where(Offer.product_id.in_(product_ids), Offer.price.is_not(None), _in_city(city))
     if in_stock:
         query = query.where(Offer.is_in_stock.is_(True))
     result: dict[int, Offer] = {}
@@ -248,9 +254,25 @@ def _spec_sql(spec: Spec, selected: list):
     return value.in_(selected)
 
 
-def _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition=None):
+def _flag_levels(db: Session, product_ids: list[int], in_stock: bool, city: str | None) -> dict[int, str]:
+    """The most serious active Anti-Fraud flag among the offers a tile counts: "warning" or "danger"."""
+    query = (
+        select(Offer.product_id, FraudFlag.level).join(FraudFlag, FraudFlag.offer_id == Offer.id)
+        .where(Offer.product_id.in_(product_ids), Offer.price.is_not(None), _in_city(city),
+               FraudFlag.status == FlagStatus.active, FraudFlag.level.in_([FlagLevel.warning, FlagLevel.danger]))
+    )
+    if in_stock:
+        query = query.where(Offer.is_in_stock.is_(True))
+    result: dict[int, str] = {}
+    for product_id, level in db.execute(query):
+        if result.get(product_id) != FlagLevel.danger.value:
+            result[product_id] = level.value
+    return result
+
+
+def _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition=None, city=None):
     usd = _usd_price(usd_rate)
-    offer_filter = [Offer.price.is_not(None)]
+    offer_filter = [Offer.price.is_not(None), _in_city(city)]
     if in_stock:
         offer_filter.append(Offer.is_in_stock.is_(True))
     if condition:
@@ -284,12 +306,15 @@ def search_products(
     db: Session, usd_rate: float | None, q: str = "", category: str | None = None,
     price_min: float | None = None, price_max: float | None = None, in_stock: bool = True, page: int = 1,
     spec_filters: dict[str, list] | None = None, condition: Condition | None = None,
+    city: str | None = None, sort: str = "popular", page_size: int = PAGE_SIZE,
 ) -> dict:
-    """Catalog page: products with the lowest USD price and the number of offers.
+    """Catalog page: products with the lowest USD price and the number of offers (one offer per store).
 
     With a category, also its spec filters ("facets") with product counts per value.
+    With a city, only offers of that city's stores count: products without them are not shown.
+    Sort: "popular" (more stores first), "price_asc", "price_desc".
     """
-    query, stats = _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition)
+    query, stats = _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition, city)
     spec_filters = spec_filters or {}
     facets = spec_facets(db, query, category, spec_filters) if category else []
     specs = spec_map(category) if category else {}
@@ -297,12 +322,17 @@ def search_products(
         query = query.where(_spec_sql(specs[key], selected))
 
     total = db.scalar(select(func.count()).select_from(query.subquery()))
+    order = {
+        "price_asc": (stats.c.min_usd, Product.normalized_name),
+        "price_desc": (stats.c.min_usd.desc(), Product.normalized_name),
+    }.get(sort, (stats.c.offers.desc(), Product.normalized_name))
     rows = db.execute(
         query.options(selectinload(Product.category))
-        .order_by(stats.c.offers.desc(), Product.normalized_name)
-        .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
+        .order_by(*order).offset((page - 1) * page_size).limit(page_size)
     ).all()
-    cheapest = _cheapest_offers(db, [p.id for p, _, _ in rows], usd_rate, in_stock)
+    ids = [p.id for p, _, _ in rows]
+    cheapest = _cheapest_offers(db, ids, usd_rate, in_stock, city)
+    flags = _flag_levels(db, ids, in_stock, city)
     items = []
     for p, min_usd, n in rows:
         slug = p.category.slug if p.category else "other"
@@ -313,8 +343,24 @@ def search_products(
             "min_price": cheapest[p.id].price if p.id in cheapest else None,
             "min_currency": cheapest[p.id].currency.value if p.id in cheapest else None,
             "specs": card_specs(slug, p.specs_json or {}),
+            "flag_level": flags.get(p.id),
         })
-    return {"items": items, "total": total, "page": page, "page_size": PAGE_SIZE, "facets": facets}
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "facets": facets}
+
+
+def category_summary(db: Session, usd_rate: float | None, city: str | None = None) -> list[dict]:
+    """Home page tiles: per category the number of products and stores and the lowest price (in stock, the city)."""
+    usd = _usd_price(usd_rate)
+    rows = db.execute(
+        select(Category.slug, func.count(func.distinct(Offer.product_id)), func.count(func.distinct(Offer.store_id)),
+               func.min(usd))
+        .join(Product, Product.category_id == Category.id).join(Offer, Offer.product_id == Product.id)
+        .where(Offer.price.is_not(None), Offer.is_in_stock.is_(True), _in_city(city))
+        .group_by(Category.slug).order_by(func.count(func.distinct(Offer.product_id)).desc())
+    ).all()
+    return [{"slug": slug, "products": products, "stores": stores,
+             "min_price_usd": round(min_usd, 2) if min_usd is not None else None}
+            for slug, products, stores, min_usd in rows]
 
 
 def spec_facets(db: Session, query, category: str, spec_filters: dict[str, list]) -> list[dict]:
@@ -398,7 +444,7 @@ def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str
             "price_usd": to_usd(o.price, o.currency, usd_rate), "price_uzs": to_uzs(o.price, o.currency, usd_rate),
             "is_in_stock": o.is_in_stock, "condition": o.condition.value, "note": o.note, "updated_at": o.updated_at,
             "store": {"id": store.id, "name": store.name, "is_verified": store.is_verified, "phone": store.phone,
-                      "telegram": store.telegram, "address": store.address, "district": store.district},
+                      "telegram": store.telegram, "address": store.address, "district": store.district, "city": store.city},
             "flags": [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
                        "source": f.source.value} for f in o.fraud_flags if f.status == FlagStatus.active],
         })

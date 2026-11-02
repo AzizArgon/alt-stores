@@ -40,12 +40,12 @@ DEMO_CACHE = BACKEND.parent / "samples" / "demo" / "cache.json"
 PRICE_FILE = SAMPLES / "Price of Age Computers (9).xlsx"
 ARCHIVE_FILE = SAMPLES / "old_store_2023.xlsx"
 SELLER = {"email": "seller1@example.com", "password": secrets.token_urlsafe(24), "name": "Age Computers",
-          "phone": "+998901234567", "district": "Чиланзар"}
+          "phone": "+998901234567", "city": "tashkent", "district": "Чиланзар"}
 # An empty store for the live upload: a file published by a store marks its other goods "out of stock",
 # so the demo files must not go to a store with a full price list
 LIVE_SELLER = {"email": "live@example.com", "password": "demo12345", "name": "Tech Point",
-               "phone": "+998900000404", "district": "Шайхантахур", "is_demo": True}
-STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "district", "is_verified")
+               "phone": "+998900000404", "city": "fergana", "district": "Центр", "is_demo": True}
+STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "city", "district", "is_verified")
 RESTORED_FILENAME = "restored_after_demo_reset"
 
 
@@ -150,7 +150,8 @@ def restore_real_store(db, data: dict) -> dict:
     u = data["user"]
     user = User(email=u["email"], password_hash=u["password_hash"], role=UserRole(u["role"]),
                 created_at=datetime.fromisoformat(u["created_at"]))
-    store = Store(owner=user, **data["store"])
+    # A copy made before stores had a city: the real store is in Tashkent
+    store = Store(owner=user, **{**data["store"], "city": data["store"].get("city") or "tashkent"})
     db.add(store)
     db.flush()
     imp = PriceImport(store_id=store.id, filename=RESTORED_FILENAME, currency=Currency.USD)
@@ -178,7 +179,7 @@ def add_seller(db, spec: dict):
     from app.db.models import Store, User, UserRole
 
     user = User(email=spec["email"], password_hash=hash_password(spec["password"]), role=UserRole.seller)
-    store = Store(owner=user, name=spec["name"], phone=spec["phone"], district=spec["district"],
+    store = Store(owner=user, name=spec["name"], phone=spec["phone"], city=spec["city"], district=spec["district"],
                   is_demo=spec.get("is_demo", False))
     db.add_all([user, store])
     db.flush()

@@ -36,18 +36,19 @@ HISTORY_DAYS_AGO = [92, 78, 64, 50, 36, 22, 10]
 TREND = {"ram": 0.24, "ssd": 0.09, "gpu": -0.04}
 
 STORES = [
-    {"email": "demo1@example.com", "name": "Silicon Plus", "district": "Юнусабад", "address": "ул. Амира Темура, 107",
-     "phone": "+998900000101", "telegram": "@silicon_plus_demo", "is_verified": True,
+    {"email": "demo1@example.com", "name": "Silicon Plus", "city": "tashkent", "district": "Юнусабад",
+     "address": "ул. Амира Темура, 107", "phone": "+998900000101", "telegram": "@silicon_plus_demo", "is_verified": True,
      "currency": Currency.USD, "days_old": 0, "below_market": []},
-    {"email": "demo2@example.com", "name": "Byte Market", "district": "Мирзо-Улугбек", "address": "Малика, ряд 3",
-     "phone": "+998900000202", "telegram": "@byte_market_demo", "is_verified": False,
+    {"email": "demo2@example.com", "name": "Byte Market", "city": "samarkand", "district": "Сиаб",
+     "address": "ул. Ташкентская, 12", "phone": "+998900000202", "telegram": "@byte_market_demo", "is_verified": False,
      "currency": Currency.UZS, "days_old": 4, "below_market": []},
     # Published last: its cheap items are compared with all the other stores
-    {"email": "demo3@example.com", "name": "PC Galaxy", "district": "Яккасарай", "address": "ул. Шота Руставели, 41",
-     "phone": "+998900000303", "telegram": None, "is_verified": False,
+    {"email": "demo3@example.com", "name": "PC Galaxy", "city": "bukhara", "district": "Центр",
+     "address": "ул. Бахауддина Накшбанди, 41", "phone": "+998900000303", "telegram": None, "is_verified": False,
      "currency": Currency.USD, "days_old": 25, "below_market": ["Ryzen 5 7500F", "RTX 5060 TWIN EDGE OC", "990 PRO 1TB"]},
 ]
 LIVE_EMAIL = "live@example.com"  # empty demo store for the live upload (scripts/demo_reset.py)
+LIVE_CITY, LIVE_DISTRICT = "fergana", "Центр"
 DEMO_EMAILS = [s["email"] for s in STORES] + [LIVE_EMAIL]
 
 
@@ -60,7 +61,7 @@ def _store(db: Session, spec: dict) -> Store:
     if store is None:
         store = Store(owner=user)
         db.add(store)
-    for field in ("name", "district", "address", "phone", "telegram", "is_verified"):
+    for field in ("name", "city", "district", "address", "phone", "telegram", "is_verified"):
         setattr(store, field, spec[field])
     store.is_demo = True
     db.commit()
@@ -176,6 +177,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
         report.append({"store": spec["name"], "rows": len(rows), **stats})
     for store in db.scalars(select(Store).join(Store.owner).where(User.email == LIVE_EMAIL)):
         store.is_demo = True
+        store.city, store.district = LIVE_CITY, LIVE_DISTRICT
     db.commit()
     store_ids = [db.scalar(select(Store.id).join(Store.owner).where(User.email == s["email"])) for s in STORES]
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
