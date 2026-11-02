@@ -72,7 +72,7 @@ ssh pcmarket sudo journalctl -u pcmarket --no-pager -n 200
 - Автоматически раз в день (около 03:30 по времени сервера, UTC) — `pcmarket-backup.timer`, хранятся последние 14 (`*_daily.db.gz`).
 - Перед каждым `deploy.bat` — ещё одна копия, хранятся последние 5 (`*_before_deploy.db.gz`).
 - Копия делается командой SQLite `.backup` — безопасно, пока сайт работает.
-- **Копия на ноутбук — автоматически:** задание Планировщика Windows `ALT STORES server backup` каждый день в 12:00 запускает `get_backup.bat auto`; если ПК был выключен, то при следующем входе в Windows. Файлы — в `F:\claudy\backups\server\`, хранятся последние 14, журнал — `get_backup.log` там же. Вход на сервер — по SSH-ключу, без пароля.
+- **Копия на ноутбук — автоматически:** задание Планировщика Windows `ALT STORES server backup` каждый день в 12:00 запускает копию скрипта из `F:\claudy\tools\` (`get_backup.bat auto` и `deploy\get_backup.sh`, вне репозитория: задание не зависит от открытой ветки; после правки `get_backup.bat` или `deploy/get_backup.sh` в `main` скопировать их туда заново); если ПК был выключен, то при следующем входе в Windows. Файлы — в `F:\claudy\backups\server\`, хранятся последние 14, журнал — `get_backup.log` там же. Вход на сервер — по SSH-ключу, без пароля.
 - **Скачать копию вручную:** `get_backup.bat`.
 - Сделать копию прямо сейчас: `ssh pcmarket sudo systemctl start pcmarket-backup`.
 
