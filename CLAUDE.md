@@ -34,6 +34,8 @@
 - `deploy.bat` работает только из ветки `alpha` и без незакоммиченных изменений; из другой ветки отказывает.
 - Теги: `v0.1-alpha` — версия до Б1, для показа куратору; `v0.2-stable` — версия после Б1, первая стабильная на сервере; `v0.2.1-stable` — она же с названием ALT STORES, сейчас на сервере. Посмотреть — `git checkout <тег>`, вернуться — `git checkout main`.
 
+- Пароли и заметки сервера — `F:\claudy\secrets\` (вне git). Копия базы сервера на ПК — ежедневно, задание Планировщика `ALT STORES server backup` (`docs/deploy.md`).
+
 ## Как запустить
 - `start.bat` в корне — оба сервера + браузер на http://localhost:5173; `stop.bat` — остановить.
 - `demo.bat` — демо с нуля (копия базы → чистая база → прайс из кэша → демо-магазины → архив Gshop → серверы), ≈40 с, без ИИ; `demo.bat live` — демо-файлы через живой ИИ. Кэш и курсы — `F:\claudy\samples\demo_cache.json`, кэш демо-файлов — `samples/demo/cache.json` (`scripts/demo_cache.py`). Сценарий — `docs/demo_script.md`, защита — `docs/defense.md`. Swagger: http://127.0.0.1:8000/docs.

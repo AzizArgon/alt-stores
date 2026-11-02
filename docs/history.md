@@ -436,7 +436,7 @@ npm run dev        # http://localhost:5173 (backend должен быть зап
 
 ## Фаза 8.5 — готово (размещение на VPS, 26.10.2026)
 
-Сайт: https://pcmarket.khudoberdi.uz. Подробная инструкция — `docs/deploy.md`; адрес сервера, пароли и команды для секретов — вне git (`F:\claudy\server_notes.txt`, `server_passwords.txt`).
+Сайт: https://pcmarket.khudoberdi.uz. Подробная инструкция — `docs/deploy.md`; адрес сервера, пароли и команды для секретов — вне git (`F:\claudy\secrets\server_notes.txt`, `server_passwords.txt`).
 
 ### Сервер и решения
 - Чужой VPS (Ubuntu 24.04, 2 ядра, 3,7 ГБ, свободно ~0,9 ГБ), на нём сайты другого человека, VPN, Docker, Minecraft. Наш сайт встроен рядом: свой пользователь `pcmarket`, папки `/opt/pcmarket` (код, закрытая папка прайсов, копии) и `/var/www/pcmarket` (статика), свой файл nginx, свои службы и `sudoers`. Чужие конфиги не менялись; копия `/etc/nginx` сделана до установки.
@@ -500,3 +500,6 @@ npm run dev        # http://localhost:5173 (backend должен быть зап
 ## Первая выкладка из `alpha`: название ALT STORES (02.11.2026)
 Коммит `d781c71` перенесён в `alpha` (fast-forward) и выложен через `deploy.bat`, копия базы — `2026-11-02_0542_before_deploy.db.gz`. Сервер перешёл с `main` на `alpha`. Тег `v0.2.1-stable` стоит на `d781c71`, `v0.2-stable` не менялся. Значок по адресу `favicon.svg` ещё до 4 часов отдавался старым из кэша Cloudflare; на сервере файл новый.
 
+
+## Автокопия базы сервера на ПК (02.11.2026)
+Задание Планировщика `ALT STORES server backup`: каждый день в 12:00, при выключенном ПК — при следующем входе в Windows, при ошибке — ещё 3 попытки через 30 минут. `get_backup.bat auto` пишет журнал, проверяет архив перед заменой и хранит 14 копий. Пароли и заметки сервера перенесены в `F:\claudy\secrets\` (синхронизируется с Google Диском).
