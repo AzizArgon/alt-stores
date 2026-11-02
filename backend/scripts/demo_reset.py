@@ -1,5 +1,8 @@
-"""Demo mode from scratch: backup -> clean DB -> categories -> cache -> real price list -> demo stores -> Gshop archive.
+"""Demo mode from scratch: backup -> clean DB -> categories -> cache -> real store -> demo stores -> Gshop archive.
 
+The real store (not demo, not archive: its owner's email, password, offers and price history) is exported before
+the DB is deleted and restored after; only on a DB without one is the real price list imported from the file
+(with a random password: set it by scripts/set_account.py).
 An empty store (live@example.com) is made for uploading the demo files during the show.
 No live AI requests: the full price list is parsed from the parse cache (rows the cache doesn't know fail and are
 reported, not sent to the AI). The cache and CBU rates are kept in a snapshot outside the repo
@@ -14,6 +17,7 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -33,12 +37,14 @@ SNAPSHOT = SAMPLES / "demo_cache.json"
 DEMO_CACHE = BACKEND.parent / "samples" / "demo" / "cache.json"
 PRICE_FILE = SAMPLES / "Price of Age Computers (9).xlsx"
 ARCHIVE_FILE = SAMPLES / "old_store_2023.xlsx"
-SELLER = {"email": "seller1@example.com", "password": "seller12345", "name": "Age Computers",
+SELLER = {"email": "seller1@example.com", "password": secrets.token_urlsafe(24), "name": "Age Computers",
           "phone": "+998901234567", "district": "Чиланзар"}
 # An empty store for the live upload: a file published by a store marks its other goods "out of stock",
 # so the demo files must not go to a store with a full price list
 LIVE_SELLER = {"email": "live@example.com", "password": "demo12345", "name": "Tech Point",
-               "phone": "+998900000404", "district": "Шайхантахур"}
+               "phone": "+998900000404", "district": "Шайхантахур", "is_demo": True}
+STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "district", "is_verified")
+RESTORED_FILENAME = "restored_after_demo_reset"
 
 
 def backup() -> Path | None:
@@ -83,12 +89,95 @@ def restore(db, snap: dict, demo: dict) -> None:
     db.commit()
 
 
+def export_real_stores() -> list[dict]:
+    """The real stores of the current DB (a copy goes to the backups folder)."""
+    if not DB_FILE.exists():
+        return []
+    from app.db.database import SessionLocal, engine, init_db
+
+    init_db()  # an older DB gets the is_demo column
+    with SessionLocal() as db:
+        stores = real_store_data(db)
+    engine.dispose()  # Windows: the DB file must be closed before it is deleted
+    if stores:
+        BACKUPS.mkdir(parents=True, exist_ok=True)
+        (BACKUPS / f"{date.today().isoformat()}_real_stores.json").write_text(
+            json.dumps(stores, ensure_ascii=False), encoding="utf-8")
+    return stores
+
+
+def real_store_data(db) -> list[dict]:
+    """Real stores (not demo, not archive) as JSON-ready dicts: owner, store, offers with their price history."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.db.models import Offer, Product, Store, User
+    from scripts.seed_demo import DEMO_EMAILS
+
+    stores = []
+    for store in db.scalars(
+        select(Store).join(Store.owner)
+        .where(Store.is_demo.is_(False), Store.is_archive.is_(False), User.email.not_in(DEMO_EMAILS))
+        .options(selectinload(Store.offers).selectinload(Offer.product).selectinload(Product.category),
+                 selectinload(Store.offers).selectinload(Offer.price_history))
+    ):
+        u = store.owner
+        stores.append({
+            "user": {"email": u.email, "password_hash": u.password_hash, "role": u.role.value,
+                     "created_at": u.created_at.isoformat()},
+            "store": {f: getattr(store, f) for f in STORE_FIELDS},
+            "offers": [{
+                "raw_name": o.raw_name, "name": o.product.normalized_name, "brand": o.product.brand,
+                "model": o.product.model, "specs": o.product.specs_json or {},
+                "category": o.product.category.slug if o.product.category else "other",
+                "price": o.price, "currency": o.currency.value, "condition": o.condition.value, "note": o.note,
+                "is_in_stock": o.is_in_stock, "updated_at": o.updated_at.isoformat(),
+                "history": [[h.price, h.currency.value, h.recorded_at.isoformat()] for h in o.price_history],
+            } for o in store.offers],
+        })
+    return stores
+
+
+def restore_real_store(db, data: dict) -> dict:
+    """Owner, store, offers (through publish_import: cards and flags) and the store's own price history."""
+    from sqlalchemy import select
+
+    from app.db.models import Currency, Offer, PriceHistory, PriceImport, Store, User, UserRole
+    from app.services.importer import publish_import
+
+    u = data["user"]
+    user = User(email=u["email"], password_hash=u["password_hash"], role=UserRole(u["role"]),
+                created_at=datetime.fromisoformat(u["created_at"]))
+    store = Store(owner=user, **data["store"])
+    db.add(store)
+    db.flush()
+    imp = PriceImport(store_id=store.id, filename=RESTORED_FILENAME, currency=Currency.USD)
+    db.add(imp)
+    rows = [{"row": i, "raw_name": o["raw_name"], "name": o["name"], "category": o["category"], "brand": o["brand"],
+             "model": o["model"], "specs": o["specs"], "price": o["price"], "currency": o["currency"],
+             "condition": o["condition"], "note": o["note"], "is_in_stock": o["is_in_stock"]}
+            for i, o in enumerate(data["offers"], 1)]
+    stats = publish_import(db, imp, store, rows)
+    offers = {o.raw_name: o for o in db.scalars(select(Offer).where(Offer.store_id == store.id))}
+    for o in data["offers"]:
+        offer = offers.get(o["raw_name"])
+        if offer is None:
+            continue
+        offer.price_history.clear()
+        offer.price_history.extend(PriceHistory(price=p, currency=Currency(c), recorded_at=datetime.fromisoformat(at))
+                                   for p, c, at in o["history"])
+        offer.updated_at = datetime.fromisoformat(o["updated_at"])
+    db.commit()
+    return {"store": store.name, "email": user.email, **stats}
+
+
 def add_seller(db, spec: dict):
     from app.core.security import hash_password
     from app.db.models import Store, User, UserRole
 
     user = User(email=spec["email"], password_hash=hash_password(spec["password"]), role=UserRole.seller)
-    store = Store(owner=user, name=spec["name"], phone=spec["phone"], district=spec["district"])
+    store = Store(owner=user, name=spec["name"], phone=spec["phone"], district=spec["district"],
+                  is_demo=spec.get("is_demo", False))
     db.add_all([user, store])
     db.flush()
     return store
@@ -125,12 +214,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--live", action="store_true", help="don't load the cache of the live demo files")
     args = parser.parse_args()
-    for f in (PRICE_FILE, ARCHIVE_FILE):
-        if not f.exists():
-            raise SystemExit(f"Not found: {f}")
-
     started = time.monotonic()
     print("backup:", backup())
+    real = export_real_stores()
+    for f in (ARCHIVE_FILE,) if real else (PRICE_FILE, ARCHIVE_FILE):
+        if not f.exists():
+            raise SystemExit(f"Not found: {f}")
     demo = load_json(DEMO_CACHE)
     snap = save_snapshot(set(demo["parse_cache"]))
     print(f"snapshot: {len(snap['parse_cache'])} cached rows, {len(snap['exchange_rates'])} rates")
@@ -141,7 +230,11 @@ if __name__ == "__main__":
     init_db()  # tables + categories with MXIK codes
     with SessionLocal() as db:
         restore(db, snap, {"parse_cache": {}} if args.live else demo)
-        print("price list:", import_price_list(db))
+        for data in real:
+            print("real store kept:", restore_real_store(db, data))
+        if not real:
+            print("price list:", import_price_list(db))
+            print(f"set the owner's password: scripts/set_account.py {SELLER['email']}")
         add_seller(db, LIVE_SELLER)
         db.commit()
     run_script("scripts/seed_demo.py")

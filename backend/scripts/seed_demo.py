@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import delete, select  # noqa: E402
+from sqlalchemy import delete, func, select  # noqa: E402
 from sqlalchemy.orm import Session, selectinload  # noqa: E402
 
 from app.core.security import hash_password  # noqa: E402
@@ -25,7 +25,6 @@ from app.db.models import (  # noqa: E402
 )
 from app.services.exchange import RateBook, ensure_rates  # noqa: E402
 
-SOURCE_EMAIL = "seller1@example.com"  # the real store price list the demo is built from
 DEMO_PASSWORD = "demo12345"
 DEMO_FILENAME = "demo_seed.xlsx"
 # Showcase items every demo store sells (matched by name, ids change on a clean DB)
@@ -48,6 +47,8 @@ STORES = [
      "phone": "+998900000303", "telegram": None, "is_verified": False,
      "currency": Currency.USD, "days_old": 25, "below_market": ["Ryzen 5 7500F", "RTX 5060 TWIN EDGE OC", "990 PRO 1TB"]},
 ]
+LIVE_EMAIL = "live@example.com"  # empty demo store for the live upload (scripts/demo_reset.py)
+DEMO_EMAILS = [s["email"] for s in STORES] + [LIVE_EMAIL]
 
 
 def _store(db: Session, spec: dict) -> Store:
@@ -61,6 +62,7 @@ def _store(db: Session, spec: dict) -> Store:
         db.add(store)
     for field in ("name", "district", "address", "phone", "telegram", "is_verified"):
         setattr(store, field, spec[field])
+    store.is_demo = True
     db.commit()
     return store
 
@@ -77,10 +79,19 @@ def _demo_import(db: Session, store: Store, currency: Currency) -> PriceImport:
     return imp
 
 
+def real_store(db: Session) -> Store | None:
+    """The real store the demo is built from: not demo, not archive, with the most offers (its email may change)."""
+    return db.scalar(
+        select(Store).join(Store.owner).join(Offer, Offer.store_id == Store.id)
+        .where(Store.is_demo.is_(False), Store.is_archive.is_(False), User.email.not_in(DEMO_EMAILS))
+        .group_by(Store.id).order_by(func.count(Offer.id).desc())
+    )
+
+
 def _source_offers(db: Session) -> list[Offer]:
-    source = db.scalar(select(Store).join(Store.owner).where(User.email == SOURCE_EMAIL))
+    source = real_store(db)
     if source is None:
-        raise SystemExit(f"No store of {SOURCE_EMAIL}: publish the real price list first")
+        raise SystemExit("No real store: publish the real price list first")
     return db.scalars(
         select(Offer).where(Offer.store_id == source.id, Offer.is_in_stock.is_(True), Offer.price.is_not(None),
                             Offer.currency == Currency.USD)
@@ -163,6 +174,9 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
             offer.updated_at = updated
         db.commit()
         report.append({"store": spec["name"], "rows": len(rows), **stats})
+    for store in db.scalars(select(Store).join(Store.owner).where(User.email == LIVE_EMAIL)):
+        store.is_demo = True
+    db.commit()
     store_ids = [db.scalar(select(Store.id).join(Store.owner).where(User.email == s["email"])) for s in STORES]
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
     return report

@@ -86,6 +86,8 @@ class Store(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Archive source (an old price list of a shop, e.g. Gshop, Dec 2022): its prices go only to the price history
     is_archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Invented store of the demo (scripts/seed_demo.py, live upload store); a real store is kept by demo_reset.py
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")

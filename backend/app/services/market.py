@@ -41,7 +41,7 @@ class MarketData:
     offer_usd: dict[int, float] = field(default_factory=dict)  # in-stock offer -> its USD price now
     offers: list[tuple[int, int, int, str]] = field(default_factory=list)  # (offer, product, store, condition)
     category: dict[int, str] = field(default_factory=dict)  # product -> category slug
-    # Stores whose prices are invented (scripts/seed_demo.py history is_demo): the pages say "includes demo data"
+    # Stores whose prices are invented (Store.is_demo, or history is_demo): the pages say "includes demo data"
     demo_stores: set[int] = field(default_factory=set)
 
     def has_demo(self, key) -> bool:
@@ -82,8 +82,8 @@ def build_market(db: Session, today: date) -> MarketData:
     md = MarketData(dates=dates)
     offers = db.execute(
         select(Offer.id, Offer.product_id, Offer.store_id, Offer.condition, Offer.price, Offer.currency,
-               Product.category_id)
-        .join(Product).join(Store, Offer.store_id == Store.id).where(Offer.is_in_stock.is_(True), Offer.price.is_not(None),
+               Product.category_id, Store.is_demo)
+        .select_from(Offer).join(Product).join(Store, Offer.store_id == Store.id).where(Offer.is_in_stock.is_(True), Offer.price.is_not(None),
                                          Store.is_archive.is_(False))
     ).all()
     slugs = dict(db.execute(select(Category.id, Category.slug)).all())
@@ -100,13 +100,13 @@ def build_market(db: Session, today: date) -> MarketData:
             history.setdefault(offer_id, []).append((at.date(), usd))
 
     per_store = md.per_store
-    for offer_id, product_id, store_id, condition, price, currency, category_id in offers:
+    for offer_id, product_id, store_id, condition, price, currency, category_id, store_demo in offers:
         usd_now = rates.usd(price, currency, today)
         if usd_now is None:
             continue
         cond = condition.value if isinstance(condition, Condition) else condition
         md.offers.append((offer_id, product_id, store_id, cond))
-        if offer_id in demo_offers:
+        if store_demo or offer_id in demo_offers:
             md.demo_stores.add(store_id)
         md.offer_usd[offer_id] = usd_now
         md.category[product_id] = slugs.get(category_id, "other")
