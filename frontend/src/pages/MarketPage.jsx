@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorText } from '../components/AuthForm'
-import { Card, Skeleton } from '../components/ui'
+import { MapPin } from 'lucide-react'
+import { Badge, Breadcrumbs, Card, Skeleton } from '../components/ui'
 import { DemoNote, IndexSection, PctText, ProductLink } from '../components/Market'
 import api, { errorKey } from '../services/api'
 import { formatMonthYear, formatPrice, roundSum } from '../services/format'
@@ -45,8 +46,11 @@ export default function MarketPage() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div>
-        <h1 className="text-h2 md:text-h1">{t('market.pageTitle')}</h1>
-        <p className="mt-1 text-muted">{t('market.pageHint')}</p>
+        <Breadcrumbs items={[{ to: '/', label: t('catalog.home') }, { label: t('market.pageTitle') }]} />
+        <h1 className="mt-2 flex flex-wrap items-center gap-3 text-h2 md:text-h1">
+          {t('market.pageTitle')} <Badge tone="primary" title={t('market.scopeHint')}><MapPin className="size-3.5" aria-hidden />{t('market.scope')}</Badge>
+        </h1>
+        <p className="mt-1 max-w-3xl text-muted">{t('market.pageHint')} {t('market.scopeHint')}</p>
       </div>
       <IndexSection indices={data.indices} period={period} onPeriod={setPeriod} demo={data.includes_demo} />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">

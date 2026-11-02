@@ -14,6 +14,7 @@ import { useCity } from '../services/city.jsx'
 import { formatPrice, roundSum } from '../services/format'
 
 const BIG_TILES = 2 // the most popular sections are drawn bigger
+const PHONE_TILES = 8 // a phone shows the first sections, the rest after "Все разделы"
 const POPULAR_COUNT = 10
 const MARKET_CATEGORIES = ['ram', 'ssd', 'gpu', 'cpu']
 const WHY = [
@@ -31,32 +32,34 @@ function Hero() {
     navigate(q.trim() ? `/catalog?q=${encodeURIComponent(q.trim())}` : '/catalog')
   }
   return (
-    <section className="rounded-xl bg-gradient-to-br from-primary to-primary-hover px-4 py-8 text-white md:px-10 md:py-12">
+    <section className="rounded-xl bg-gradient-to-br from-primary to-primary-hover px-4 py-6 text-white md:px-10 md:py-9">
       <h1 className="max-w-3xl text-h2 md:text-[2.25rem] md:leading-tight">{t('home.title')}</h1>
-      <p className="mt-2 max-w-2xl text-sm text-white/80 md:text-base">{t('home.hint')}</p>
-      <form role="search" onSubmit={onSubmit} className="mt-6 flex max-w-3xl flex-col gap-2 sm:flex-row">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted" aria-hidden />
-          <input type="search" enterKeyHint="search" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder={t('catalog.searchPlaceholder')} aria-label={t('catalog.searchPlaceholder')}
-            className={`${inputClass} min-h-13 border-transparent pl-12 text-base`} />
+      <p className="mt-2 hidden max-w-2xl text-sm text-white/80 sm:block md:text-base">{t('home.hint')}</p>
+      <form role="search" onSubmit={onSubmit} className="mt-5 flex max-w-4xl flex-col gap-2 sm:flex-row">
+        <div className="flex shrink-0 rounded-md bg-white text-ink">
+          <CityMenu className="min-h-13 w-full px-3 hover:bg-surface-2" />
         </div>
-        <Button type="submit" size="lg" variant="secondary" className="min-h-13 border-transparent">{t('home.searchSubmit')}</Button>
+        <div className="flex min-w-0 flex-1 gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted" aria-hidden />
+            <input type="search" enterKeyHint="search" value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder={t('catalog.searchPlaceholder')} aria-label={t('catalog.searchPlaceholder')}
+              className={`${inputClass} min-h-13 border-transparent pl-12 text-base`} />
+          </div>
+          <Button type="submit" size="lg" variant="secondary" className="min-h-13 border-transparent px-4 md:px-6">{t('home.searchSubmit')}</Button>
+        </div>
       </form>
-      <div className="mt-3 inline-flex rounded-md bg-white text-ink">
-        <CityMenu className="px-3 hover:bg-surface-2" />
-      </div>
     </section>
   )
 }
 
-function SectionTile({ item, usdRate, big }) {
+function SectionTile({ item, usdRate, big, hidden }) {
   const { t } = useTranslation()
   const from = item.min_price_usd != null && usdRate ? formatPrice(roundSum(item.min_price_usd * usdRate), 'UZS') : null
   return (
     <Link to={`/catalog?category=${item.slug}`}
       className={`group flex min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:p-4 ${
-        big ? 'md:col-span-2 md:row-span-2 md:p-6' : ''}`}>
+        big ? 'md:col-span-2 md:row-span-2 md:p-6' : ''} ${hidden ? 'max-md:hidden' : ''}`}>
       <span className={`flex items-center justify-center rounded-lg bg-primary-soft/60 text-primary ${big ? 'size-12 md:size-20' : 'size-12'}`}>
         <CategoryIcon category={item.slug} className={big ? 'size-7 md:size-11' : 'size-7'} />
       </span>
@@ -123,6 +126,7 @@ export default function HomePage() {
   const { city, setCity } = useCity()
   const [sections, setSections] = useState(null)
   const [popular, setPopular] = useState(null)
+  const [allSections, setAllSections] = useState(false)
 
   useEffect(() => {
     setSections(null)
@@ -156,9 +160,15 @@ export default function HomePage() {
         {sections?.items.length > 0 && (
           <div className="grid grid-flow-dense grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:grid-cols-6">
             {tiles.map((item, i) => (
-              <SectionTile key={item.slug} item={item} usdRate={sections.usd_rate} big={i < BIG_TILES} />
+              <SectionTile key={item.slug} item={item} usdRate={sections.usd_rate} big={i < BIG_TILES}
+                hidden={!allSections && i >= PHONE_TILES} />
             ))}
           </div>
+        )}
+        {!allSections && tiles.length > PHONE_TILES && (
+          <Button variant="secondary" className="mt-3 w-full md:hidden" onClick={() => setAllSections(true)}>
+            {t('home.allSections', { count: tiles.length })}
+          </Button>
         )}
       </section>
 
@@ -171,7 +181,7 @@ export default function HomePage() {
             <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0 lg:grid-cols-5">
               {popular.items.map((item) => (
                 <ProductTile key={item.id} item={item} usdRate={popular.usd_rate} rateDate={popular.usd_rate_date}
-                  className="w-44 shrink-0 snap-start md:w-auto" />
+                  className="w-40 shrink-0 snap-start md:w-auto" />
               ))}
             </div>
           )}

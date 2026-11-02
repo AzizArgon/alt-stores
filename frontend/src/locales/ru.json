@@ -68,6 +68,7 @@
     "searchSubmit": "Найти",
     "sections": "Разделы",
     "allCatalog": "Весь каталог",
+    "allSections": "Все разделы ({{count}})",
     "products_one": "{{count}} товар",
     "products_few": "{{count}} товара",
     "products_many": "{{count}} товаров",

@@ -158,6 +158,7 @@ export default function Header() {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const { pathname } = useLocation()
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
@@ -186,7 +187,8 @@ export default function Header() {
             </div>
           )}
         </div>
-        <div className="pb-3 md:hidden"><HeaderSearch /></div>
+        {/* The home page has its own big search: the phone row would repeat it */}
+        {pathname !== '/' && <div className="pb-3 md:hidden"><HeaderSearch /></div>}
       </div>
       <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} />
     </header>

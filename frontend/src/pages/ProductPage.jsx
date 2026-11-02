@@ -184,7 +184,7 @@ export default function ProductPage() {
 
       <Card className="mt-3 flex flex-col gap-4 sm:flex-row sm:gap-6">
         <ProductVisual category={product.category} image={product.image} alt={product.name}
-          className="aspect-[4/3] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-24 max-w-24" />
+          className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />
         <div className="min-w-0 flex-1">
           <p className="text-sm text-muted">{t(`categories.${product.category}`)}{product.brand && ` · ${product.brand}`}</p>
           <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>

@@ -125,6 +125,7 @@ export default function CatalogPage() {
     if (values.length) next.set(SPEC_PREFIX + key, values.join(','))
     else next.delete(SPEC_PREFIX + key)
   }, true)
+  const changeSort = (value) => setParam('sort', value === 'popular' ? '' : value, true)
   const resetFilters = () => update((next) => {
     specKeys.forEach((k) => next.delete(k))
     next.delete('price_min')
@@ -178,7 +179,8 @@ export default function CatalogPage() {
   )
 
   const cityName = t(`cities.${city}`)
-  const narrowed = activeFilters > 0 || Boolean(params.get('q'))
+  // A search or filters can be why nothing is found; a category alone is not
+  const narrowed = chips.length > 0 || ['q', 'condition', 'all'].some((k) => params.get(k))
   const crumbs = [{ to: '/', label: t('catalog.home') }, { to: '/catalog', label: t('catalog.title') }]
   if (category) crumbs.push({ label: t(`categories.${category}`) })
 
@@ -221,8 +223,12 @@ export default function CatalogPage() {
                   {t('catalog.found', { count: data.total })}
                   {data.usd_rate && <span className="hidden sm:inline"> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</span>}
                 </p>
-                <Tabs label={t('catalog.sortLabel')} value={sort} onChange={(v) => setParam('sort', v === 'popular' ? '' : v, true)}
+                {/* Three tabs don't fit a phone: there it is a list */}
+                <Tabs className="hidden sm:inline-flex" label={t('catalog.sortLabel')} value={sort} onChange={changeSort}
                   tabs={SORTS.map((s) => ({ value: s, label: t(`catalog.sort.${s}`) }))} />
+                <Select className="w-full sm:hidden" aria-label={t('catalog.sortLabel')} value={sort} onChange={(e) => changeSort(e.target.value)}>
+                  {SORTS.map((s) => <option key={s} value={s}>{t('catalog.sortLabel')}: {t(`catalog.sort.${s}`)}</option>)}
+                </Select>
               </div>
               {data.items.length === 0 ? (
                 <EmptyState

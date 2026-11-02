@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { CategoryIcon } from './CategoryIcon'
 import LineChart, { SERIES_COLORS } from './LineChart'
 import { Badge, Card, Tabs } from './ui'
 import { formatDayMonth, formatMonthYear, formatPrice, roundSum } from '../services/format'
@@ -135,7 +136,11 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
         <tbody>
           {indices.rows.map((r) => (
             <tr key={r.category} className="border-t border-line">
-              <td className="py-1.5">{t(`categories.${r.category}`)}</td>
+              <td className="py-1.5">
+                <Link to={`/catalog?category=${r.category}`} className="inline-flex items-center gap-2 hover:text-primary">
+                  <CategoryIcon category={r.category} className="size-5 shrink-0 text-primary" />{t(`categories.${r.category}`)}
+                </Link>
+              </td>
               <td data-label={t('market.table.products')} className="py-1.5 text-right text-muted">{r.products}</td>
               {PERIODS.map((p) => <td key={p} data-label={t(`market.periodShort.${p}`)} className="py-1.5 text-right"><PctText value={r[p]} /></td>)}
             </tr>
