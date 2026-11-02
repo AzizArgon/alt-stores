@@ -11,7 +11,7 @@ import { Button, Select, inputClass } from './ui'
 
 const SEARCH_DELAY_MS = 300
 const NAV_LINKS = [
-  { to: '/', label: 'nav.catalog' },
+  { to: '/catalog', label: 'nav.catalog' },
   { to: '/market', label: 'nav.market' },
 ]
 const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
@@ -21,7 +21,7 @@ function HeaderSearch({ className = '' }) {
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
-  const onCatalog = location.pathname === '/'
+  const onCatalog = location.pathname === '/catalog'
   const urlQuery = onCatalog ? new URLSearchParams(location.search).get('q') || '' : null
   const [value, setValue] = useState(urlQuery || '')
 
@@ -30,7 +30,7 @@ function HeaderSearch({ className = '' }) {
     if (text) next.set('q', text)
     else next.delete('q')
     next.delete('page')
-    navigate({ pathname: '/', search: next.toString() }, { replace })
+    navigate({ pathname: '/catalog', search: next.toString() }, { replace })
   }
 
   // The address changed from outside (logo, "back"): the field follows it
@@ -59,13 +59,13 @@ function HeaderSearch({ className = '' }) {
   )
 }
 
-function CityMenu() {
+export function CityMenu({ className = 'max-w-48 px-2 hover:bg-surface-2' }) {
   const { t } = useTranslation()
   const { city, setCity } = useCity()
   return (
     <Dropdown align="left" panelClassName="max-h-96 w-56 overflow-y-auto" trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.city')} title={t('nav.city')}
-        className="flex min-h-11 max-w-48 items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary">
+        className={`flex min-h-11 items-center gap-1.5 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}>
         <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
         <span className="truncate">{t(`cities.${city}`)}</span>
         <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />

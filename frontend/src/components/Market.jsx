@@ -74,13 +74,14 @@ export function ProductMarket({ market, usdRate }) {
   return (
     <Card className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="flex items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
-        {info?.market_usd != null && (
-          <p className="text-sm text-muted">
-            {t('market.marketNow', { stores: info.stores })}: <b>≈ {formatValue(toSum(info.market_usd))}</b>
-          </p>
-        )}
+        <h2 className="flex flex-wrap items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
+        <Badge title={t('market.scopeHint')}>{t('market.scope')}</Badge>
       </div>
+      {info?.market_usd != null && (
+        <p className="mt-1 text-sm text-muted">
+          {t('market.marketNow', { stores: info.stores })}: <b className="text-ink">≈ {formatValue(toSum(info.market_usd))}</b>
+        </p>
+      )}
       {info?.market_usd == null ? (
         <p className="mt-2 text-sm text-muted">{t('market.notEnoughStores')}</p>
       ) : (

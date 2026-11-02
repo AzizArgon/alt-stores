@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthCard, ErrorText, SocialButtons, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
 import { Input, PasswordInput } from '../components/ui'
 import api, { errorKey } from '../services/api'
@@ -15,10 +15,12 @@ export default function RegisterPage() {
   const { t } = useTranslation()
   const { register } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [role, setRole] = useState('buyer')
+  // "/register?role=seller" (the home page block for sellers) opens with the seller role chosen
+  const [role, setRole] = useState(() => (new URLSearchParams(location.search).get('role') === 'seller' ? 'seller' : 'buyer'))
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState('')

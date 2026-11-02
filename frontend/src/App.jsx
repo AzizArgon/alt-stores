@@ -1,9 +1,10 @@
 import { Suspense, lazy } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import CatalogPage from './pages/CatalogPage'
+import HomePage from './pages/HomePage'
 import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import MarketPage from './pages/MarketPage'
@@ -35,6 +36,12 @@ function UserOnly({ children }) {
   return user ? children : <Navigate to="/login" replace />
 }
 
+// The catalog lived on "/" before phase B2: old links with a search or filters ("/?category=ram&f_type=DDR5") still work
+function HomeOrOldCatalog() {
+  const { search } = useLocation()
+  return search ? <Navigate to={`/catalog${search}`} replace /> : <HomePage />
+}
+
 // The components page exists only in development: the public build does not contain it
 const UiPage = import.meta.env.DEV ? lazy(() => import('./pages/UiPage')) : null
 
@@ -57,7 +64,8 @@ export default function App() {
       <Header />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
         <Routes>
-          <Route path="/" element={<CatalogPage />} />
+          <Route path="/" element={<HomeOrOldCatalog />} />
+          <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/products/:id" element={<ProductPage />} />
           <Route path="/market" element={<MarketPage />} />
           <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />

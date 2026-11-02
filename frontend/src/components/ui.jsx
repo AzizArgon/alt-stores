@@ -171,6 +171,24 @@ export function EmptyState({ icon: Icon = SearchX, title, hint, children }) {
   )
 }
 
+// "Главная › Процессоры": items = [{ to, label }], the last one is the current page (no link)
+export function Breadcrumbs({ items, className = '' }) {
+  return (
+    <nav aria-label="breadcrumbs" className={`text-sm text-muted ${className}`}>
+      <ol className="flex flex-wrap items-center gap-1">
+        {items.map((item, i) => (
+          <li key={item.label} className="flex min-w-0 items-center gap-1">
+            {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-faint" aria-hidden />}
+            {item.to && i < items.length - 1
+              ? <Link to={item.to} className="hover:text-primary hover:underline">{item.label}</Link>
+              : <span aria-current="page" className="truncate text-ink">{item.label}</span>}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
+
 // The pages around the current one, with "…" over the gaps: 1 … 4 5 6 … 20
 function pageList(page, pages) {
   const near = [...new Set([1, page - 1, page, page + 1, pages])].filter((p) => p >= 1 && p <= pages).sort((a, b) => a - b)

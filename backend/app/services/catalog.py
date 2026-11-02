@@ -348,6 +348,14 @@ def search_products(
     return {"items": items, "total": total, "page": page, "page_size": page_size, "facets": facets}
 
 
+def counts_demo(db: Session, city: str | None = None) -> bool:
+    """Do the numbers of the catalog include invented demo stores (the page marks them)?"""
+    return db.scalar(
+        select(func.count(Offer.id)).join(Store, Store.id == Offer.store_id)
+        .where(Store.is_demo.is_(True), Offer.price.is_not(None), _in_city(city))
+    ) > 0
+
+
 def category_summary(db: Session, usd_rate: float | None, city: str | None = None) -> list[dict]:
     """Home page tiles: per category the number of products and stores and the lowest price (in stock, the city)."""
     usd = _usd_price(usd_rate)
@@ -457,7 +465,8 @@ def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str
         # Specs in dictionary order, with units and the source: "inferred" = the rule that added a value the
         # seller did not write (the page marks it), None = written by the seller
         "specs": [{"key": s.key, "kind": s.kind, "unit": s.unit, "value": (product.specs_json or {})[s.key],
-                   "inferred": (product.specs_json or {}).get(INFERRED, {}).get(s.key)}
+                   "inferred": (product.specs_json or {}).get(INFERRED, {}).get(s.key),
+                   "main": s.key in CARD_SPECS.get(slug, ())}  # key specs, also shown on the catalog tile
                   for s in specs_of(product.category.slug if product.category else "other")
                   if s.key in (product.specs_json or {})],
         # Numbers outside their plausible range (a typo?): not in filters, the page asks to check them

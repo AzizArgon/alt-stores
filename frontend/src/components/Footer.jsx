@@ -16,9 +16,9 @@ export default function Footer() {
           <p className="mt-2 max-w-md text-muted">{t('footer.about')}</p>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-2 md:grid md:content-start md:gap-2">
-          <Link to="/" className={link}>{t('nav.catalog')}</Link>
+          <Link to="/catalog" className={link}>{t('nav.catalog')}</Link>
           <Link to="/market" className={link}>{t('nav.market')}</Link>
-          <Link to={user?.role === 'seller' ? '/seller' : '/register'} className={link}>{t('footer.forSellers')}</Link>
+          <Link to={user?.role === 'seller' ? '/seller' : '/register?role=seller'} className={link}>{t('footer.forSellers')}</Link>
           <a href={BRAND.githubUrl} target="_blank" rel="noreferrer" className={link}>{t('footer.github')}</a>
         </nav>
         <p className="text-xs text-faint md:col-span-2">{t('footer.thesis')}</p>

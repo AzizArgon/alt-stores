@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.models import Condition
 from app.db.seed import CITIES
-from app.services.catalog import PAGE_SIZE, category_summary, parse_spec_filters, product_card, search_products
+from app.services.catalog import PAGE_SIZE, category_summary, counts_demo, parse_spec_filters, product_card, search_products
 from app.services.exchange import get_usd_rate
 from app.services.market import product_market
 
@@ -56,7 +56,8 @@ def list_products(
 def list_categories(city: str | None = None, db: Session = Depends(get_db)):
     """Home page: categories with products in stock, their number of products and stores and the lowest price."""
     usd_rate, rate_date = _rate(db)
-    return {"items": category_summary(db, usd_rate, _city(city)), "usd_rate": usd_rate, "usd_rate_date": rate_date}
+    return {"items": category_summary(db, usd_rate, _city(city)), "includes_demo": counts_demo(db, _city(city)),
+            "usd_rate": usd_rate, "usd_rate_date": rate_date}
 
 
 @router.get("/products/{product_id}")
