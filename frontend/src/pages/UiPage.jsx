@@ -2,6 +2,7 @@
 // Its texts are samples and it never reaches the public build, so they live here, not in ru.json
 import { ChevronDown, LogOut, Settings } from 'lucide-react'
 import { useState } from 'react'
+import { ICON_CATEGORIES, ProductVisual } from '../components/CategoryIcon'
 import Flags from '../components/Flags'
 import { BrandName, LogoMark } from '../components/Logo'
 import { MarketLabel } from '../components/Market'
@@ -92,6 +93,16 @@ export default function UiPage() {
           <Price price={120} currency="USD" usdRate={12700} rateDate="2026-11-01" />
           <Price price={1524000} currency="UZS" usdRate={12700} rateDate="2026-11-01" prefix="от " size="text-lg" />
           <Price price={120} currency="USD" />
+        </div>
+      </Block>
+      <Block title="Иконки категорий (вместо фото до фазы 9)">
+        <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+          {ICON_CATEGORIES.map((slug) => (
+            <div key={slug} className="text-center text-xs text-muted">
+              <ProductVisual category={slug} className="aspect-square w-full" />
+              <p className="mt-1 truncate">{slug}</p>
+            </div>
+          ))}
         </div>
       </Block>
       <Block title="Вкладки и пагинация">
