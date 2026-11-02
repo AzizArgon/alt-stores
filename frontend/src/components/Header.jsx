@@ -10,12 +10,10 @@ import { Dropdown, DropdownItem, Sheet } from './overlays'
 import { Button, Select, inputClass } from './ui'
 
 const SEARCH_DELAY_MS = 300
-// The PC builder link waits for its phase: `hidden: false` shows it in the header and in the phone menu
 const NAV_LINKS = [
   { to: '/', label: 'nav.catalog' },
   { to: '/market', label: 'nav.market' },
-  { to: '/builder', label: 'nav.builder', hidden: true },
-].filter((link) => !link.hidden)
+]
 const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
 
 // In the catalog the search works as you type (through the address); on other pages Enter opens the catalog
