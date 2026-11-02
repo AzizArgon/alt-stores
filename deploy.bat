@@ -10,6 +10,19 @@ if not exist "%BASH%" (
     pause
     exit /b 1
 )
+rem _local (price lists, DB copies, server passwords) must never reach git: refuse if any of it is in the index
+set GIT=%ProgramFiles%\Git\cmd\git.exe
+if not exist "%GIT%" (
+    echo Git for Windows not found
+    pause
+    exit /b 1
+)
+"%GIT%" ls-files -- _local | findstr . >nul
+if not errorlevel 1 (
+    echo REFUSED: files of _local are in the git index ^(git ls-files _local^). Remove them: git rm -r --cached _local
+    pause
+    exit /b 1
+)
 "%BASH%" -lc "cd \"$(cygpath '%~dp0')\" && bash deploy/deploy.sh"
 if errorlevel 1 (
     echo Deploy failed, see the messages above.

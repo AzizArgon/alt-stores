@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from app.core.config import settings  # noqa: E402
+from app.core.config import LOCAL_DIR, settings  # noqa: E402
 from app.db.database import Base  # noqa: E402
 from app.services import ai_parser, importer, text_import  # noqa: E402
 from app.services.antifraud import check_offer  # noqa: E402
@@ -41,7 +41,7 @@ from app.services.spec_normalizer import SUSPECT, canonical_brand, normalize_spe
 OLD_CHUNK_ROWS = 250  # Phase 3 version: every row, all cells, 250 rows per request
 BENCH = Path(__file__).resolve().parents[1] / "tests" / "benchmark"
 RESULTS = BENCH / "results"
-GSHOP = Path(r"F:\claudy\samples\old_store_2023.xlsx")
+GSHOP = LOCAL_DIR / "samples" / "old_store_2023.xlsx"
 RATE = 11_850  # the fixed UZS rate of the synthetic set
 PROVIDERS = {"rules": None, "gemini": "gemini", "groq": "groq", "gemini_nocheck": "gemini"}
 FIELDS = ("category", "brand", "model", "price", "currency", "condition")

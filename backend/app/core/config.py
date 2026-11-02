@@ -1,8 +1,12 @@
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+# Files outside git: price lists, DB copies, server passwords (<repo>/_local, ignored by git).
+# Moved elsewhere -> set ALT_LOCAL_DIR; get_backup.bat follows the same rule
+LOCAL_DIR = Path(os.environ.get("ALT_LOCAL_DIR", BACKEND_DIR.parent / "_local"))
 
 
 class Settings(BaseSettings):

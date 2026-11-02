@@ -6,7 +6,7 @@ the DB is deleted and restored after; only on a DB without one is the real price
 An empty store (live@example.com) is made for uploading the demo files during the show.
 No live AI requests: the full price list is parsed from the parse cache (rows the cache doesn't know fail and are
 reported, not sent to the AI). The cache and CBU rates are kept in a snapshot outside the repo
-(F:/claudy/samples/demo_cache.json), so the demo works without the internet and AI limits.
+(_local/samples/demo_cache.json), so the demo works without the internet and AI limits.
 The cache of the live demo files (samples/demo/cache.json) is loaded too, unless --live is given:
 then those files go through the rules and the real AI during the show.
 Usage (from backend/, servers stopped):
@@ -29,10 +29,12 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
+from app.core.config import LOCAL_DIR  # noqa: E402
+
 DB_FILE = BACKEND / "database.db"
 # On the server the samples and backups live in other folders (docs/deploy.md)
-BACKUPS = Path(os.environ.get("PC_MARKET_BACKUPS", "F:/claudy/backups"))
-SAMPLES = Path(os.environ.get("PC_MARKET_SAMPLES", "F:/claudy/samples"))
+BACKUPS = Path(os.environ.get("PC_MARKET_BACKUPS", LOCAL_DIR / "backups"))
+SAMPLES = Path(os.environ.get("PC_MARKET_SAMPLES", LOCAL_DIR / "samples"))
 SNAPSHOT = SAMPLES / "demo_cache.json"
 DEMO_CACHE = BACKEND.parent / "samples" / "demo" / "cache.json"
 PRICE_FILE = SAMPLES / "Price of Age Computers (9).xlsx"

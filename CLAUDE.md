@@ -16,7 +16,8 @@
 - Общение на русском; код, имена и коммиты — на английском. Тексты интерфейса — только через i18n (`frontend/src/locales/ru.json`; весной `uz`, `en`).
 - Адаптивная вёрстка: телефон от 360 px, планшет, ПК. Основной запуск — локально; публичная демо-версия — https://pcmarket.khudoberdi.uz (фаза 8.5, `docs/deploy.md`). Сервер чужой (сайты друга): трогать только своё, перезагрузку сервера — только с разрешения Азиза.
 - Секреты (`GEMINI_API_KEY`, `GROQ_API_KEY`, `JWT_SECRET`) — только в `backend/.env` (в `.gitignore`). AI только на бесплатных лимитах (решение Азиза).
-- Резервные копии БД — в `F:\claudy\backups\` (вне репозитория, в git не попадает), имя `ГГГГ-ММ-ДД_before_<что>.db`. Копию делать перед изменением схемы и массовыми правками данных.
+- Всё, что не кладётся в git (прайсы, копии БД, пароли сервера, скрипты Планировщика), — в `F:\claudy\diplom\_local\` (`samples`, `backups`, `secrets`, `tools`): в `.gitignore`, синхронизируется с Google Диском. Путь задаётся в одном месте: по умолчанию `<репозиторий>\_local`, иначе переменная окружения `ALT_LOCAL_DIR` (Python — `app/core/config.py` `LOCAL_DIR`, `get_backup.bat`). `deploy.bat` и тест `test_local_dir.py` отказывают, если файл из `_local` попал в git-индекс.
+- Резервные копии БД — в `_local\backups\` (в git не попадает), имя `ГГГГ-ММ-ДД_before_<что>.db`. Копию делать перед изменением схемы и массовыми правками данных.
 
 ## Ключевые решения
 1. Стек: FastAPI + SQLAlchemy + SQLite (`create_all`, без Alembic: при смене схемы — `ALTER TABLE` или удалить `backend/database.db`), React (Vite) + Tailwind + react-i18next, JWT.
@@ -34,15 +35,15 @@
 - `deploy.bat` работает только из ветки `alpha` и без незакоммиченных изменений; из другой ветки отказывает.
 - Теги: `v0.1-alpha` — версия до Б1, для показа куратору; `v0.2-stable` — версия после Б1, первая стабильная на сервере; `v0.2.1-stable` — она же с названием ALT STORES, сейчас на сервере. Посмотреть — `git checkout <тег>`, вернуться — `git checkout main`.
 
-- Пароли и заметки сервера — `F:\claudy\secrets\` (вне git). Копия базы сервера на ПК — ежедневно, задание Планировщика `ALT STORES server backup`, запускается из копии скриптов в `F:\claudy\tools\` (`docs/deploy.md`).
+- Пароли и заметки сервера — `_local\secrets\` (вне git). Копия базы сервера на ПК — ежедневно, задание Планировщика `ALT STORES server backup`, запускается из копии скриптов в `_local\tools\` (`docs/deploy.md`).
 
 ## Как запустить
 - `start.bat` в корне — оба сервера + браузер на http://localhost:5173; `stop.bat` — остановить.
-- `demo.bat` — демо с нуля (копия базы → чистая база → прайс из кэша → демо-магазины → архив Gshop → серверы), ≈40 с, без ИИ; `demo.bat live` — демо-файлы через живой ИИ. Кэш и курсы — `F:\claudy\samples\demo_cache.json`, кэш демо-файлов — `samples/demo/cache.json` (`scripts/demo_cache.py`). Сценарий — `docs/demo_script.md`, защита — `docs/defense.md`. Swagger: http://127.0.0.1:8000/docs.
+- `demo.bat` — демо с нуля (копия базы → чистая база → прайс из кэша → демо-магазины → архив Gshop → серверы), ≈40 с, без ИИ; `demo.bat live` — демо-файлы через живой ИИ. Кэш и курсы — `_local\samples\demo_cache.json`, кэш демо-файлов — `samples/demo/cache.json` (`scripts/demo_cache.py`). Сценарий — `docs/demo_script.md`, защита — `docs/defense.md`. Swagger: http://127.0.0.1:8000/docs.
 - Вручную: `cd backend` → `.\.venv\Scripts\python.exe -m uvicorn main:app --reload`; `cd frontend` → `npm run dev`. В Claude Code — `.claude/launch.json` (`backend`, `frontend`; если 8000/5173 заняты — `backend-verify` на 8001 + `frontend-verify` на 5175).
 - Тесты: `cd backend` → `.\.venv\Scripts\python.exe -m pytest` (без живых запросов к ИИ и cbu.uz).
 - Реальный магазин «Age Computers» (полный реальный прайс; флаг `stores.is_demo = 0`, значок «Проверенный»): логин и пароль задал владелец — `scripts/set_account.py` (пароль вводится только в терминале). `demo_reset.py` и `seed_demo.py` его не сбрасывают (экспорт → восстановление). Демо-магазины: `scripts/seed_demo.py` (повторный запуск без дублей), `demo1..3@example.com` / `demo12345`; пустой магазин для живой загрузки — `live@example.com` / `demo12345` (файл снимает с продажи остальные товары магазина). Для тестовых email — `@example.com` (`.test` отклоняется).
-- Реальный прайс: `F:\claudy\samples\Price of Age Computers (9).xlsx` (вне репозитория, в git не класть).
+- Реальный прайс: `_local\samples\Price of Age Computers (9).xlsx` (вне репозитория, в git не класть).
 - ⚠ `--reload` перезапускает сервер при изменении любого `.py` в `backend/` — во время импорта код не править.
 
 ## Дорожная карта
