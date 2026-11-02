@@ -11,7 +11,7 @@ from app.schemas.seller import (
     StoreOut, TextImportIn,
 )
 from app.services.importer import (
-    ALLOWED_EXTENSIONS, flag_rows, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
+    ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
 )
 from app.services.market import PERIODS, index_table, market_data, missing_popular, seller_position
 from app.services.manual import create_product, product_brief, save_offer, store_offer, suggest_products
@@ -62,6 +62,8 @@ async def upload_price(
     background: BackgroundTasks,
     file: UploadFile = File(...),
     currency: Currency = Form(...),
+    # No default: the seller chooses "full price list" or "addition" every time
+    mode: str = Form(..., pattern="^(full|append)$"),
     user: User = Depends(seller_only),
     db: Session = Depends(get_db),
 ):
@@ -74,7 +76,7 @@ async def upload_price(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large")
 
     spend_import(db, store.id)
-    imp = PriceImport(store_id=store.id, filename=filename, currency=currency)
+    imp = PriceImport(store_id=store.id, filename=filename, currency=currency, mode=mode)
     db.add(imp)
     db.commit()
     db.refresh(imp)
@@ -90,7 +92,7 @@ def paste_text(data: TextImportIn, background: BackgroundTasks, user: User = Dep
     store = _require_store(db, user)
     spend_import(db, store.id)
     # No file name: the page calls it "Текст от 25.10, 14:30" by the creation time
-    imp = PriceImport(store_id=store.id, filename="", source="text", text=data.text, currency=Currency(data.currency))
+    imp = PriceImport(store_id=store.id, filename="", source="text", mode="append", text=data.text, currency=Currency(data.currency))
     db.add(imp)
     db.commit()
     db.refresh(imp)
@@ -116,7 +118,20 @@ def publish(import_id: int, data: PublishRequest, user: User = Depends(seller_on
     store, imp = _my_import(db, user, import_id)
     if imp.status != ImportStatus.ready:
         raise HTTPException(status.HTTP_409_CONFLICT, "Import is not ready to publish")
-    return publish_import(db, imp, store, [r.model_dump() for r in data.rows])
+    rows = [r.model_dump() for r in data.rows]
+    if not data.confirm_drop and plan_import(db, imp, store, rows, data.mode)["large_drop"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": "large_drop"})
+    return publish_import(db, imp, store, rows, data.mode)
+
+
+@router.post("/imports/{import_id}/summary")
+def import_summary(import_id: int, data: PublishRequest, user: User = Depends(seller_only),
+                   db: Session = Depends(get_db)):
+    """"What will change" for the rows as the seller edited them: nothing is written."""
+    store, imp = _my_import(db, user, import_id)
+    if imp.status != ImportStatus.ready:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Import is not ready")
+    return plan_import(db, imp, store, [r.model_dump() for r in data.rows], data.mode)
 
 
 @router.post("/imports/{import_id}/check", response_model=CheckResult)

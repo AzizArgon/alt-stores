@@ -5,6 +5,8 @@ import { Monitor } from 'lucide-react'
 import { ErrorText } from '../components/AuthForm'
 import { Button, Card, Checkbox, Pagination, Skeleton, inputClass } from '../components/ui'
 import Flags from '../components/Flags'
+import ImportSummary, { ModeChoice } from '../components/ImportSummary'
+import { Modal } from '../components/overlays'
 import api, { errorKey } from '../services/api'
 import { formatDayMonth, importTitle, formatPrice, roundSum, roundUsd } from '../services/format'
 import { specsText, useSpecDictionary } from '../services/specs'
@@ -12,6 +14,7 @@ import { specsText, useSpecDictionary } from '../services/specs'
 const PAGE_SIZE = 50
 const POLL_MS = 2000
 const CHECK_DELAY_MS = 600
+const SUMMARY_DELAY_MS = 800
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
 
 // Rows the seller should look at: no price, unknown category, no brand or an Anti-Fraud warning
@@ -226,6 +229,10 @@ export default function ImportPage() {
   const [stats, setStats] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [rate, setRate] = useState(null)
+  const [mode, setMode] = useState(null) // a file may switch "full" / "append" before publishing
+  const [summary, setSummary] = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [confirmDrop, setConfirmDrop] = useState(false)
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data)).catch(() => {})
@@ -240,6 +247,7 @@ export default function ImportPage() {
         .then((res) => {
           setImp(res.data)
           setRows(res.data.rows)
+          setMode(res.data.mode)
           if (res.data.status === 'processing') timer = setTimeout(load, POLL_MS)
         })
         .catch((err) => setError(t(errorKey(err))))
@@ -247,15 +255,35 @@ export default function ImportPage() {
     return () => clearTimeout(timer)
   }, [id, t, reloadKey])
 
-  const publish = async () => {
+  // "What will change" is counted again after every edit of the rows or a change of the mode
+  const ready = imp?.status === 'ready'
+  useEffect(() => {
+    if (!ready || rows.length === 0) return undefined
+    setSummaryLoading(true)
+    const timer = setTimeout(() =>
+      api.post(`/imports/${id}/summary`, { rows, mode })
+        .then((res) => setSummary(res.data))
+        .catch(() => {})
+        .finally(() => setSummaryLoading(false)), SUMMARY_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [id, ready, rows, mode])
+
+  const publish = async (confirmed = false) => {
     setError('')
+    // A full file that takes off sale over 30% of the goods looks incomplete: the seller confirms first
+    if (summary?.large_drop && !confirmed) {
+      setConfirmDrop(true)
+      return
+    }
+    setConfirmDrop(false)
     setBusy(true)
     try {
-      const res = await api.post(`/imports/${id}/publish`, { rows })
+      const res = await api.post(`/imports/${id}/publish`, { rows, mode, confirm_drop: confirmed })
       setStats(res.data)
-      setImp({ ...imp, status: 'published' })
+      setImp({ ...imp, status: 'published', mode })
     } catch (err) {
-      setError(t(errorKey(err, { 409: 'errors.importNotReady' })))
+      if (err.response?.data?.detail?.code === 'large_drop') setConfirmDrop(true)
+      else setError(t(errorKey(err, { 409: 'errors.importNotReady' })))
     } finally {
       setBusy(false)
     }
@@ -284,7 +312,7 @@ export default function ImportPage() {
           <h1 className="mt-1 text-h2 break-words md:text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
         {imp?.status === 'ready' && (
-          <Button size="lg" className="w-full md:w-auto" onClick={publish} disabled={busy || rows.length === 0}>
+          <Button size="lg" className="w-full md:w-auto" onClick={() => publish()} disabled={busy || rows.length === 0}>
             {busy ? t('import.publishing') : t('import.publish')}
           </Button>
         )}
@@ -320,8 +348,24 @@ export default function ImportPage() {
             <p className="text-sm text-warning">{t('import.flaggedStats', { count: rows.filter((r) => r.flags?.length).length })}</p>
           )}
           <p className="text-sm text-muted">{t('import.hint')}</p>
+          {imp.source === 'file' && (
+            <Card><ModeChoice mode={mode} onChange={setMode} name="import-mode" /></Card>
+          )}
+          <ImportSummary summary={summary} loading={summaryLoading} />
+          {summary && (
+            <Button size="lg" className="w-full md:w-auto md:justify-self-end" onClick={() => publish()} disabled={busy || rows.length === 0}>
+              {busy ? t('import.publishing') : t('import.publish')}
+            </Button>
+          )}
         </>
       )}
+      <Modal open={confirmDrop} onClose={() => setConfirmDrop(false)} title={t('importSummary.confirmTitle')}
+        footer={<>
+          <Button variant="secondary" onClick={() => { setMode('append'); setConfirmDrop(false) }}>{t('importSummary.switchToAppend')}</Button>
+          <Button variant="danger" onClick={() => publish(true)}>{t('importSummary.publishAnyway')}</Button>
+        </>}>
+        <p className="text-sm">{t('importSummary.confirmText', { count: summary?.out_of_stock.length ?? 0, total: summary?.on_sale ?? 0 })}</p>
+      </Modal>
       {(imp?.status === 'ready' || imp?.status === 'published') && rows.length > 0 && (
         <PreviewTable importId={id} rows={rows} setRows={setRows} categories={categories}
           currency={imp.currency} rate={rate} readOnly={imp.status !== 'ready'} />

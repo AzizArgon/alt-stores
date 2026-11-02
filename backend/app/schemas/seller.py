@@ -89,6 +89,7 @@ class ImportOut(BaseModel):
     id: int
     filename: str
     source: str = "file"  # file / text / manual
+    mode: str = "full"  # full / append (text and manual are always append)
     currency: str
     status: str
     chunks_total: int
@@ -110,6 +111,10 @@ class ImportDetail(ImportOut):
 
 class PublishRequest(BaseModel):
     rows: list[PreviewRow]
+    # A file may switch its mode in the preview; None = the mode chosen at the upload
+    mode: Literal["full", "append"] | None = None
+    # The seller saw the warning "the file looks incomplete" and still publishes
+    confirm_drop: bool = False
 
 
 class CheckResult(BaseModel):

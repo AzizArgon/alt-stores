@@ -141,11 +141,46 @@ class Offer(Base):
     # The seller's own words next to the price: "Подписчикам 13$", "(только в сборках)"
     note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    # "Delete my offer": the row stays (its price history is kept), without a price it is out of the catalog.
+    # The next price list with the same item brings it back
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     product: Mapped[Product] = relationship(back_populates="offers")
     store: Mapped[Store] = relationship(back_populates="offers")
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     fraud_flags: Mapped[list["FraudFlag"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
+    events: Mapped[list["OfferEvent"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
+
+
+class OfferEvent(Base):
+    """A change of an offer other than its price (prices are in price_history): stock, condition, removal."""
+
+    __tablename__ = "offer_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), index=True)
+    field: Mapped[str] = mapped_column(String(16))  # stock / condition / removed / product
+    value: Mapped[str] = mapped_column(String(64))
+    # import (a price list), edit (the seller in the cabinet), bulk (a bulk action)
+    source: Mapped[str] = mapped_column(String(16))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    offer: Mapped[Offer] = relationship(back_populates="events")
+
+
+class ProductFix(Base):
+    """A seller's correction of a card that other stores sell too: waits for the admin (phase 12)."""
+
+    __tablename__ = "product_fixes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    # The card as it was and as the seller wants it: {name, brand, model, category, specs}
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending / accepted / rejected
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class PriceHistory(Base):
@@ -212,6 +247,9 @@ class PriceImport(Base):
     # Where the rows came from: a price list file, a pasted text (Telegram post) or one offer added by hand.
     # Only a file is the full price list: missing items become "out of stock" only after a file
     source: Mapped[str] = mapped_column(String(16), default="file", server_default="file")
+    # A file is "full" (missing items become out of stock) or "append" (only the listed items change);
+    # pasted text and manual adding are always "append"
+    mode: Mapped[str] = mapped_column(String(8), default="full", server_default="full")
     # Pasted text as the seller sent it: to see later why a post was parsed the way it was
     text: Mapped[str | None] = mapped_column(Text)
     currency: Mapped[Currency] = mapped_column(str_enum(Currency))

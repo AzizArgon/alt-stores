@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
+import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
 import { useToast } from '../components/overlays'
 import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
@@ -85,6 +86,7 @@ function UploadBox({ defaultCurrency }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [currency, setCurrency] = useState(defaultCurrency)
+  const [mode, setMode] = useState(null) // "full" / "append": the seller always chooses
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -101,6 +103,7 @@ function UploadBox({ defaultCurrency }) {
     const body = new FormData()
     body.append('file', file)
     body.append('currency', currency)
+    body.append('mode', mode)
     try {
       const res = await api.post('/imports', body)
       navigate(`/seller/imports/${res.data.id}`)
@@ -126,8 +129,10 @@ function UploadBox({ defaultCurrency }) {
           onChange={(e) => e.target.files[0] && setFile(e.target.files[0])} />
       </div>
       <CurrencyChoice currency={currency} onChange={setCurrency} label="upload.currency" />
+      <ModeChoice mode={mode} onChange={setMode} />
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      <Button onClick={onSubmit} disabled={!file || busy}>
+      {file && !mode && <p className="mb-2 text-sm text-warning">{t('upload.modeRequired')}</p>}
+      <Button onClick={onSubmit} disabled={!file || !mode || busy}>
         {busy ? t('auth.loading') : t('upload.submit')}
       </Button>
     </div>

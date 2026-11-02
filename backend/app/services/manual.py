@@ -84,7 +84,7 @@ def save_offer(db: Session, store: Store, product: Product, price: float, curren
         offer.price_history.append(PriceHistory(price=price, currency=currency))
     # The import history shows where the goods came from: "added by hand"
     db.add(PriceImport(
-        store_id=store.id, filename=product.normalized_name, source="manual", currency=currency,
+        store_id=store.id, filename=product.normalized_name, source="manual", mode="append", currency=currency,
         status=ImportStatus.published, rows_json=[{"row": 1, **row, "source": "seller"}],
         stats_json={"created": int(created), "updated": int(not created)},
     ))
