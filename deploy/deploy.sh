@@ -1,5 +1,5 @@
 #!/bin/bash
-# Updates the public site with one command (run through deploy.bat on the laptop).
+# Updates the public site with one command (run through deploy.bat on the laptop). Only from the alpha branch.
 # push -> backup of the server DB -> git pull -> dependencies -> frontend built here and uploaded -> restart -> check.
 # The server database is never replaced: only code and built files change.
 set -euo pipefail
@@ -9,12 +9,21 @@ SSH_HOST=pcmarket   # alias from ~/.ssh/config (docs/deploy.md)
 
 step() { echo; echo "=== $*"; }
 
-step "1/6 git push"
-if [ -n "$(git status --porcelain)" ]; then
-    echo "Warning: uncommitted changes are NOT deployed (only commits are):"
-    git status --short
+# The server is the alpha branch. The beta in main stays local until the author decides otherwise
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$branch" != alpha ]; then
+    echo "REFUSED: the server gets only the alpha branch, this is '$branch'. Nothing was changed."
+    exit 1
 fi
-git push origin main
+# The frontend is built from these files: uncommitted changes would reach the site without being in alpha
+if [ -n "$(git status --porcelain)" ]; then
+    echo "REFUSED: uncommitted changes. Commit or remove them first. Nothing was changed."
+    git status --short
+    exit 1
+fi
+
+step "1/6 git push"
+git push origin alpha
 
 step "2/6 build frontend"
 # Settings in frontend/.env.public: Git Bash would turn "/api" on the command line into a Windows path
@@ -28,7 +37,9 @@ ssh "$SSH_HOST" 'chmod 644 /tmp/pcm_dist.tgz && cd /tmp && sudo -u pcmarket -H b
 set -euo pipefail
 /opt/pcmarket/app/deploy/backup.sh before_deploy 5
 cd /opt/pcmarket/app
-git pull -q --ff-only
+git fetch -q origin
+git checkout -q alpha
+git pull -q --ff-only origin alpha
 git log --oneline -1
 backend/.venv/bin/pip install -q -r backend/requirements.txt
 rm -rf /opt/pcmarket/dist_new && mkdir /opt/pcmarket/dist_new

@@ -1,5 +1,6 @@
 @echo off
 rem Updates the public site pcmarket.khudoberdi.uz: push, server update, frontend build, restart, check.
+rem Works only from the alpha branch (deploy/deploy.sh refuses any other).
 rem Details - docs/deploy.md. Needs Git for Windows (bash, ssh) and the SSH key of the server.
 cd /d "%~dp0"
 set BASH=%ProgramFiles%\Git\usr\bin\bash.exe
