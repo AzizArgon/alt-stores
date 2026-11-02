@@ -50,13 +50,18 @@ function SpecField({ spec, category, value, onChange }) {
   )
 }
 
-// "Not in the catalog": a new reference card. If the same card exists, the seller is offered to use it
-export default function NewProductForm({ initialName, onCreated, onCancel }) {
+// "Not in the catalog": a new reference card. If the same card exists, the seller is offered to use it.
+// The cabinet editor uses it for an existing card too: `initial` values and its own `submit`
+// (returns {status: "exists", product} when the edited card would become another existing one)
+export default function NewProductForm({ initialName, initial, submit, title, hint, submitLabel, onCreated, onCancel }) {
   const { t } = useTranslation()
   const dictionary = useSpecDictionary()
   const [categories, setCategories] = useState([])
-  const [form, setForm] = useState({ category: '', brand: '', model: '', name: initialName || '' })
-  const [specs, setSpecs] = useState({})
+  const [form, setForm] = useState(() => ({
+    category: initial?.category || '', brand: initial?.brand || '', model: initial?.model || '',
+    name: initial?.name || initialName || '',
+  }))
+  const [specs, setSpecs] = useState(() => initial?.specs || {})
   const [existing, setExisting] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -74,8 +79,9 @@ export default function NewProductForm({ initialName, onCreated, onCancel }) {
     setExisting(null)
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim() || null]))
     try {
-      const res = await api.post('/seller/products', { ...payload, specs })
-      onCreated(res.data)
+      const res = submit ? await submit({ ...payload, specs }) : (await api.post('/seller/products', { ...payload, specs })).data
+      if (res?.status === 'exists') setExisting(res.product)
+      else onCreated(res)
     } catch (err) {
       if (err.response?.status === 409 && err.response.data.detail?.code === 'product_exists') {
         setExisting(err.response.data.detail.product)
@@ -88,8 +94,8 @@ export default function NewProductForm({ initialName, onCreated, onCancel }) {
 
   return (
     <form onSubmit={onSubmit} className="mt-4 rounded-lg border border-line p-4">
-      <h3 className="font-semibold">{t('manual.newTitle')}</h3>
-      <p className="mt-1 text-xs text-muted">{t('manual.newHint')}</p>
+      <h3 className="font-semibold">{title || t('manual.newTitle')}</h3>
+      <p className="mt-1 text-xs text-muted">{hint || t('manual.newHint')}</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm text-muted">{t('import.col.category')}</span>
@@ -124,17 +130,17 @@ export default function NewProductForm({ initialName, onCreated, onCancel }) {
       )}
       {existing && (
         <div className="mt-4 rounded-md border border-warning-line bg-warning-soft p-3 text-sm">
-          <p className="text-warning">{t('manual.exists')}</p>
+          <p className="text-warning">{t(submit ? 'cabinet.card.exists' : 'manual.exists')}</p>
           <p className="mt-1 font-medium">{existing.name}</p>
           <p className="text-xs text-muted">
             {t(`categories.${existing.category}`)}{existing.specs.length > 0 && ` · ${specsLine(existing.specs)}`}
           </p>
-          <Button size="sm" className="mt-2" onClick={() => onCreated(existing)}>{t('manual.useExisting')}</Button>
+          <Button size="sm" className="mt-2" onClick={() => onCreated(existing, true)}>{t(submit ? 'cabinet.card.merge' : 'manual.useExisting')}</Button>
         </div>
       )}
       <div className="mt-3"><ErrorText>{error}</ErrorText></div>
       <div className="flex gap-3">
-        <Button type="submit" disabled={busy}>{busy ? t('auth.loading') : t('manual.create')}</Button>
+        <Button type="submit" disabled={busy}>{busy ? t('auth.loading') : submitLabel || t('manual.create')}</Button>
         <Button variant="text" onClick={onCancel}>{t('manual.cancel')}</Button>
       </div>
     </form>

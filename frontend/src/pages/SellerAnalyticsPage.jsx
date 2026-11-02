@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Card, Skeleton } from '../components/ui'
 import { DemoNote, IndexSection, MarketLabel, ProductLink } from '../components/Market'
@@ -29,8 +28,7 @@ export default function SellerAnalyticsPage() {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div>
-        <Link to="/seller" className="text-sm text-muted hover:underline">← {t('nav.seller')}</Link>
-        <h1 className="mt-2 text-h2 md:text-h1">{t('market.analyticsTitle')}</h1>
+        <h1 className="text-h2 md:text-h1">{t('market.analyticsTitle')}</h1>
         <p className="mt-1 text-muted">{t('market.analyticsHint')}</p>
       </div>
 

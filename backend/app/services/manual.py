@@ -108,6 +108,22 @@ def create_product(db: Session, store: Store, category: Category, brand: str | N
                    name: str | None, given_specs: dict) -> tuple[Product, bool]:
     """A new reference card from the form. Returns (card, created): an existing card with the same key is
     returned instead of a duplicate, so the seller can use it."""
+    brand, name, specs, key = card_fields(category, brand, model, name, given_specs)
+    existing = db.scalar(select(Product).where(Product.match_key == key))
+    if existing is not None:
+        return existing, False
+    product = Product(
+        category=category, brand=brand, model=model, normalized_name=name, match_key=key, specs_json=specs,
+        manual_store_id=store.id,
+    )
+    db.add(product)
+    db.commit()
+    return product, True
+
+
+def card_fields(category: Category, brand: str | None, model: str | None, name: str | None,
+                given_specs: dict) -> tuple[str | None, str, dict, str]:
+    """A card from the form through the dictionary and the normalizer: (brand, name, specs, match key)."""
     brand = canonical_brand(brand or "") or None
     name = (name or " ".join(filter(None, [brand, model]))).strip()
     written, name = name, strip_modifiers(category.slug, name)[0] or name  # "LHR" stays a characteristic
@@ -125,14 +141,4 @@ def create_product(db: Session, store: Store, category: Category, brand: str | N
         specs[INFERRED] = inferred
     if suspect:
         specs[SUSPECT] = suspect
-    key = make_match_key(category.slug, name, brand, specs)
-    existing = db.scalar(select(Product).where(Product.match_key == key))
-    if existing is not None:
-        return existing, False
-    product = Product(
-        category=category, brand=brand, model=model, normalized_name=name, match_key=key, specs_json=specs,
-        manual_store_id=store.id,
-    )
-    db.add(product)
-    db.commit()
-    return product, True
+    return brand, name, specs, make_match_key(category.slug, name, brand, specs)

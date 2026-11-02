@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { Link, NavLink, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { ChartLine, CirclePlus, History, LayoutDashboard, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
@@ -176,9 +176,9 @@ function TextBox({ defaultCurrency }) {
 const METHODS = ['file', 'text', 'catalog']
 
 // Three ways to add goods side by side, with a hint when each one is handy
-function AddGoods({ defaultCurrency, onAdded }) {
+function AddGoods({ defaultCurrency, onAdded, initialMethod }) {
   const { t } = useTranslation()
-  const [method, setMethod] = useState('file')
+  const [method, setMethod] = useState(METHODS.includes(initialMethod) ? initialMethod : 'file')
   return (
     <Card>
       <h2 className="text-h2">{t('manual.title')}</h2>
@@ -217,7 +217,7 @@ function ImportHistory({ items }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
             </span>
           </li>
         ))}
@@ -226,7 +226,36 @@ function ImportHistory({ items }) {
   )
 }
 
-export default function SellerPage() {
+const SECTIONS = [
+  { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true },
+  { to: '/seller/goods', key: 'goods', icon: Package },
+  { to: '/seller/add', key: 'add', icon: CirclePlus },
+  { to: '/seller/imports', key: 'imports', icon: History },
+  { to: '/seller/analytics', key: 'analytics', icon: ChartLine },
+  { to: '/seller/profile', key: 'profile', icon: Store },
+]
+
+// Cabinet menu: a column on the left on a computer, scrolling tabs on top on a phone
+function CabinetNav() {
+  const { t } = useTranslation()
+  return (
+    <nav aria-label={t('cabinet.menu')} className="-mx-4 min-w-0 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
+      <ul className="flex gap-1 border-b border-line md:sticky md:top-24 md:flex-col md:border-b-0">
+        {SECTIONS.map(({ to, key, icon: Icon, end }) => (
+          <li key={key} className="shrink-0">
+            <NavLink to={to} end={end} className={({ isActive }) => `flex min-h-11 items-center gap-2.5 px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:rounded-md ${
+              isActive ? 'border-b-2 border-primary text-primary md:border-b-0 md:bg-primary-soft' : 'border-b-2 border-transparent text-muted hover:text-ink md:border-b-0 md:hover:bg-surface-2'}`}>
+              <Icon className="size-4 shrink-0" aria-hidden />{t(`cabinet.nav.${key}`)}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+// Seller cabinet: the store profile first; then the menu and the chosen section
+export default function SellerLayout() {
   const { t } = useTranslation()
   const [store, setStore] = useState(undefined)
   const [imports, setImports] = useState(null)
@@ -243,17 +272,35 @@ export default function SellerPage() {
   if (store === undefined) return <Skeleton className="h-64 w-full rounded-xl" />
   // Without a store profile goods can't be added in any way
   if (!store) return <StoreForm store={store} onSaved={setStore} />
-  if (imports === null) return <Skeleton className="h-64 w-full rounded-xl" />
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <Link to="/seller/analytics" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-4 shadow-card transition-shadow hover:shadow-hover md:px-6">
-        <span><span className="block font-semibold md:inline">{t('market.analyticsTitle')}</span><span className="text-sm text-muted md:ml-3">{t('market.analyticsHint')}</span></span>
-        <ArrowRight className="size-5 shrink-0 text-muted" aria-hidden />
-      </Link>
-      {/* The currency the seller chose last time is the default everywhere */}
-      <AddGoods defaultCurrency={imports[0]?.currency || 'USD'} onAdded={loadImports} />
-      <ImportHistory items={imports} />
-      <StoreForm store={store} onSaved={setStore} />
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-8">
+      <div className="min-w-0">
+        <p className="mb-2 hidden truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase md:block">{store.name}</p>
+        <CabinetNav />
+      </div>
+      <div className="min-w-0">
+        {imports === null
+          ? <Skeleton className="h-64 w-full rounded-xl" />
+          // The currency the seller chose last time is the default everywhere
+          : <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />}
+      </div>
+      <span className="sr-only">{t('cabinet.title')}</span>
     </div>
   )
+}
+
+export function AddSection() {
+  const { defaultCurrency, loadImports } = useOutletContext()
+  const [params] = useSearchParams()
+  return <AddGoods defaultCurrency={defaultCurrency} onAdded={loadImports} initialMethod={params.get('method')} />
+}
+
+export function ImportsSection() {
+  const { imports } = useOutletContext()
+  return <ImportHistory items={imports} />
+}
+
+export function ProfileSection() {
+  const { store, setStore } = useOutletContext()
+  return <StoreForm store={store} onSaved={setStore} />
 }

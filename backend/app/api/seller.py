@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_role
 from app.core.limits import spend_import
 from app.db.database import get_db
-from app.db.models import Category, Condition, Currency, ImportStatus, PriceImport, Product, Store, User
+from app.db.models import Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
 from app.schemas.seller import (
-    CheckResult, ImportDetail, ImportOut, OfferIn, PreviewRow, ProductIn, PublishRequest, PublishResult, StoreIn,
-    StoreOut, TextImportIn,
+    BulkIn, CheckResult, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
+    PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
+from app.services import cabinet
+from app.services.cabinet import EditError
 from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
 )
@@ -224,3 +226,85 @@ def market_analytics(period: str = Query("quarter", pattern=f"^({'|'.join(PERIOD
     md = market_data(db)
     return {"indices": index_table(md, period), "position": seller_position(db, md, store.id),
             "missing": missing_popular(db, md, store.id), "includes_demo": bool(md.demo_stores), **usd_rate_info(db)}
+
+
+# --- Seller cabinet (phase B3): the store's own offers after publishing ---
+
+def _my_offer(db: Session, store: Store, offer_id: int) -> Offer:
+    offer = db.get(Offer, offer_id)
+    if offer is None or offer.store_id != store.id or offer.removed_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Offer not found")
+    return offer
+
+
+def _edit(fn, *args):
+    try:
+        return fn(*args)
+    except EditError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT if str(e) == "offer_exists" else status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            {"code": str(e)})
+
+
+@router.get("/seller/overview")
+def seller_overview(user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    return cabinet.overview(db, _require_store(db, user))
+
+
+@router.get("/seller/offers")
+def my_offers(f: OfferFilter = Depends(), sort: str = Query("updated", pattern=f"^({'|'.join(cabinet.SORTS)})$"),
+              desc: bool = True, page: int = Query(1, ge=1), user: User = Depends(seller_only),
+              db: Session = Depends(get_db)):
+    """"My goods": the store's offers with search, filters and sorting, 50 a page."""
+    return cabinet.list_offers(db, _require_store(db, user), f.model_dump(), sort, desc, page)
+
+
+@router.get("/seller/offers/{offer_id}")
+def my_offer(offer_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    return cabinet.offer_detail(db, store, _my_offer(db, store, offer_id))
+
+
+@router.patch("/seller/offers/{offer_id}")
+def edit_offer(offer_id: int, data: OfferPatch, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Price, stock, condition, the seller's line, note: at once, with price history and Anti-Fraud."""
+    store = _require_store(db, user)
+    return _edit(cabinet.update_offer, db, store, _my_offer(db, store, offer_id), data.model_dump(exclude_unset=True))
+
+
+@router.delete("/seller/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_offer(offer_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Only the store's offer: the card and the price history stay."""
+    store = _require_store(db, user)
+    cabinet.remove_offer(db, _my_offer(db, store, offer_id))
+
+
+@router.put("/seller/offers/{offer_id}/card")
+def edit_offer_card(offer_id: int, data: ProductIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """The shared card: changed at once if only this store sells it, otherwise a suggestion for the admin."""
+    store = _require_store(db, user)
+    return _edit(cabinet.edit_card, db, store, _my_offer(db, store, offer_id), data.model_dump())
+
+
+@router.post("/seller/offers/{offer_id}/relink")
+def relink_offer(offer_id: int, data: RelinkIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """"Not this product": the offer moves to another card."""
+    store = _require_store(db, user)
+    offer = _my_offer(db, store, offer_id)
+    product = db.get(Product, data.product_id)
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
+    return _edit(cabinet.relink, db, store, offer, product)
+
+
+@router.post("/seller/offers/bulk")
+def bulk_offers(data: BulkIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Bulk actions over chosen rows or all rows by the filter; apply=False returns the preview."""
+    store = _require_store(db, user)
+    if data.action == "price" and not data.percent:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "percent_required"})
+    if data.ids is not None:
+        wanted = set(data.ids)
+        offers = [o for o in cabinet.store_offers(db, store) if o.id in wanted]
+    else:
+        offers = [o for o, _ in cabinet.filtered_offers(db, store, (data.filter or OfferFilter()).model_dump())]
+    return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply)

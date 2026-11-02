@@ -12,7 +12,9 @@ import ProductPage from './pages/ProductPage'
 import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
-import SellerPage from './pages/SellerPage'
+import CabinetOverview from './pages/CabinetOverview'
+import GoodsPage from './pages/GoodsPage'
+import SellerLayout, { AddSection, ImportsSection, ProfileSection } from './pages/SellerPage'
 import { useAuth } from './services/auth.jsx'
 
 // Pages for guests only: logged-in users are sent home
@@ -70,8 +72,15 @@ export default function App() {
           <Route path="/market" element={<MarketPage />} />
           <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
-          <Route path="/seller" element={<RoleOnly role="seller"><SellerPage /></RoleOnly>} />
-          <Route path="/seller/analytics" element={<RoleOnly role="seller"><SellerAnalyticsPage /></RoleOnly>} />
+          {/* Seller cabinet: the menu on the left (tabs on top on a phone), sections inside */}
+          <Route path="/seller" element={<RoleOnly role="seller"><SellerLayout /></RoleOnly>}>
+            <Route index element={<CabinetOverview />} />
+            <Route path="goods" element={<GoodsPage />} />
+            <Route path="add" element={<AddSection />} />
+            <Route path="imports" element={<ImportsSection />} />
+            <Route path="analytics" element={<SellerAnalyticsPage />} />
+            <Route path="profile" element={<ProfileSection />} />
+          </Route>
           <Route path="/seller/imports/:id" element={<RoleOnly role="seller"><ImportPage /></RoleOnly>} />
           <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
           {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}

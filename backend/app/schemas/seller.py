@@ -146,6 +146,45 @@ class ProductIn(BaseModel):
     specs: dict[str, bool | int | float | str | None] = {}
 
 
+CONDITIONS = Literal["new", "new_openbox", "used", "refurbished", "unknown"]
+
+
+class OfferPatch(BaseModel):
+    """The seller's own fields of an offer; only the given ones change."""
+
+    price: float | None = Field(default=None, gt=0)
+    currency: Literal["USD", "UZS"] | None = None
+    is_in_stock: bool | None = None
+    condition: CONDITIONS | None = None
+    raw_name: str | None = Field(default=None, max_length=1000)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class OfferFilter(BaseModel):
+    """Filters of "My goods" (also "all by the filter" of bulk actions)."""
+
+    q: str = Field(default="", max_length=200)
+    category: str | None = None
+    stock: Literal["in", "out"] | None = None
+    flagged: bool = False
+    condition: CONDITIONS | None = None
+    stale: bool = False
+    market: Literal["above", "below", "at"] | None = None
+
+
+class BulkIn(BaseModel):
+    # Chosen rows, or every row by the filter when ids is None
+    ids: list[int] | None = Field(default=None, max_length=5000)
+    filter: OfferFilter | None = None
+    action: Literal["off", "on", "price"]
+    percent: float | None = Field(default=None, ge=-50, le=100)
+    apply: bool = False  # False: only the preview "N goods will change"
+
+
+class RelinkIn(BaseModel):
+    product_id: int
+
+
 class PublishResult(BaseModel):
     created: int
     updated: int

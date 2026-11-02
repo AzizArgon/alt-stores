@@ -12,7 +12,7 @@ import Price from './Price'
 const CURRENCIES = ['USD', 'UZS']
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished']
 
-function ProductLine({ product, rate }) {
+export function ProductLine({ product, rate }) {
   const { t } = useTranslation()
   return (
     <div className="min-w-0">

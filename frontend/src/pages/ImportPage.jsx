@@ -308,7 +308,7 @@ export default function ImportPage() {
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link to="/seller" className="text-sm text-muted hover:underline">← {t('import.back')}</Link>
+          <Link to="/seller/imports" className="text-sm text-muted hover:underline">← {t('import.back')}</Link>
           <h1 className="mt-1 text-h2 break-words md:text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
         {imp?.status === 'ready' && (
