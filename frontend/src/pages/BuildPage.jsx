@@ -83,6 +83,10 @@ export default function BuildPage() {
               </p>
               <h1 className="mt-1.5 text-h2 break-words md:text-h1">{build.name}</h1>
               <p className="mt-1 text-sm text-muted">{t('builds.updated', { date: formatDate(build.updated_at) })}</p>
+              {/* A phone sees the price at once; the store card with "Contact" is under the parts there */}
+              <div className="mt-2 lg:hidden">
+                <Price price={build.price} currency={build.currency} usdRate={build.usd_rate} rateDate={build.usd_rate_date} size="text-h2" />
+              </div>
             </div>
           </div>
 

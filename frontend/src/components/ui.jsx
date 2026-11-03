@@ -133,15 +133,18 @@ export function Badge({ tone = 'neutral', className = '', children, ...props }) 
 
 // Segmented switch: tabs = [{ value, label }]
 export function Tabs({ tabs, value, onChange, label, className = '' }) {
+  // className goes on a wrapper: "hidden sm:block" must not fight the tablist's own inline-flex
   return (
-    <div role="tablist" aria-label={label} className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1 ${className}`}>
-      {tabs.map((tab) => (
-        <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)}
-          className={`min-h-9 shrink-0 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-            value === tab.value ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
-          {tab.label}
-        </button>
-      ))}
+    <div className={className}>
+      <div role="tablist" aria-label={label} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1">
+        {tabs.map((tab) => (
+          <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)}
+            className={`min-h-9 shrink-0 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+              value === tab.value ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

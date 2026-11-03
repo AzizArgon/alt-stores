@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { CategoryIcon } from '../components/CategoryIcon'
 import { CityMenu } from '../components/Header'
 import { DemoNote, PctText } from '../components/Market'
+import BuildTile from '../components/BuildTile'
 import ProductTile from '../components/ProductTile'
 import { Button, Card, EmptyState, Skeleton, SkeletonCards, inputClass } from '../components/ui'
 import { cityParam } from '../config/cities'
@@ -13,10 +14,12 @@ import api from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 import { useCity } from '../services/city.jsx'
 import { formatPrice, roundSum } from '../services/format'
+import { useSpecDictionary } from '../services/specs'
 
 const BIG_TILES = 2 // the most popular sections are drawn bigger
 const PHONE_TILES = 8 // a phone shows the first sections, the rest after "Все разделы"
 const POPULAR_COUNT = 10
+const BUILDS_COUNT = 4
 const MARKET_CATEGORIES = ['ram', 'ssd', 'gpu', 'cpu']
 const WHY = [
   { key: 'standard', icon: Layers },
@@ -87,6 +90,24 @@ function SectionHead({ title, hint, demo, link }) {
   )
 }
 
+// Ready PCs: a tile of their own, apart from the component sections (a build is not a component)
+function BuildsTile({ total }) {
+  const { t } = useTranslation()
+  return (
+    <Link to="/builds"
+      className="group mt-3 flex items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:mt-4 md:p-5">
+      <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-primary-soft/60 text-primary md:size-14">
+        <CategoryIcon category="desktop" className="size-7 md:size-8" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold group-hover:text-primary md:text-lg">{t('builds.homeTile')}</span>
+        <span className="block text-xs text-muted md:text-sm">{t('builds.homeTileHint')}{total != null && ` · ${t('builds.found', { count: total })}`}</span>
+      </span>
+      <ArrowRight className="size-5 shrink-0 text-primary" aria-hidden />
+    </Link>
+  )
+}
+
 const MoreLink = ({ to, children }) => (
   <Link to={to} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary hover:underline">
     {children}<ArrowRight className="size-4" aria-hidden />
@@ -128,11 +149,15 @@ export default function HomePage() {
   const [sections, setSections] = useState(null)
   const [popular, setPopular] = useState(null)
   const [allSections, setAllSections] = useState(false)
+  const [builds, setBuilds] = useState(null)
+  const dictionary = useSpecDictionary()
 
   useEffect(() => {
     setSections(null)
     setPopular(null)
+    setBuilds(null)
     const params = { city: cityParam(city) }
+    api.get('/builds', { params: { ...params, page_size: BUILDS_COUNT } }).then((res) => setBuilds(res.data)).catch(() => setBuilds({ items: [], total: 0 }))
     api.get('/catalog/categories', { params }).then((res) => setSections(res.data)).catch(() => setSections({ items: [] }))
     api.get('/catalog/products', { params: { ...params, page_size: POPULAR_COUNT } })
       .then((res) => setPopular(res.data)).catch(() => setPopular({ items: [] }))
@@ -171,6 +196,7 @@ export default function HomePage() {
             {t('home.allSections', { count: tiles.length })}
           </Button>
         )}
+        <BuildsTile total={builds?.total} />
       </section>
 
       {!cityEmpty && (
@@ -186,6 +212,19 @@ export default function HomePage() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {builds?.items.length > 0 && (
+        <section className="min-w-0">
+          <SectionHead title={t('builds.homeTitle')} hint={t('builds.homeHint')} demo={builds.includes_demo}
+            link={<MoreLink to="/builds">{t('builds.homeAll')}</MoreLink>} />
+          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:px-0 lg:grid-cols-4">
+            {builds.items.map((item) => (
+              <BuildTile key={item.id} item={item} dictionary={dictionary} usdRate={builds.usd_rate} rateDate={builds.usd_rate_date}
+                className="w-64 shrink-0 snap-start md:w-auto" />
+            ))}
+          </div>
         </section>
       )}
 

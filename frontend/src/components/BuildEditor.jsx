@@ -101,10 +101,11 @@ function SpecFields({ part, dictionary, onChange }) {
 
 function PartRow({ part, dictionary, onChange, onRemove }) {
   const { t } = useTranslation()
+  const modes = MODES.filter((m) => m !== 'specs' || part.slot !== 'other')
   return (
-    <li className="grid gap-3 rounded-lg border border-line p-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <Select className="min-w-40 flex-1" label={t('sellerBuilds.slot')} value={part.slot}
+    <li className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border border-line p-3">
+      <div className="flex items-end gap-2">
+        <Select className="min-w-0 flex-1" label={t('sellerBuilds.slot')} value={part.slot}
           onChange={(e) => onChange({ slot: e.target.value, category: SLOT_CATEGORIES[e.target.value]?.[0] || null, specs: {}, product: null,
             mode: e.target.value === 'other' && part.mode === 'specs' ? 'none' : part.mode })}>
           {SLOTS.map((s) => <option key={s} value={s}>{t(`builds.slot.${s}`)}</option>)}
@@ -115,8 +116,14 @@ function PartRow({ part, dictionary, onChange, onRemove }) {
           <Trash2 className="size-4" aria-hidden />
         </Button>
       </div>
-      <Tabs label={t('sellerBuilds.parts')} value={part.mode} onChange={(mode) => onChange({ mode })}
-        tabs={MODES.filter((m) => m !== 'specs' || part.slot !== 'other').map((m) => ({ value: m, label: t(`sellerBuilds.mode.${m}`) }))} />
+      {/* Three tabs don't fit a phone: there it is a list */}
+      <div className="hidden sm:block">
+        <Tabs label={t('sellerBuilds.modeLabel')} value={part.mode} onChange={(mode) => onChange({ mode })}
+          tabs={modes.map((m) => ({ value: m, label: t(`sellerBuilds.mode.${m}`) }))} />
+      </div>
+      <Select className="sm:hidden" aria-label={t('sellerBuilds.modeLabel')} value={part.mode} onChange={(e) => onChange({ mode: e.target.value })}>
+        {modes.map((m) => <option key={m} value={m}>{t(`sellerBuilds.mode.${m}`)}</option>)}
+      </Select>
       {part.mode === 'exact' && (part.product ? (
         <div className="flex items-start justify-between gap-3 rounded-md bg-surface-2 p-2.5">
           <ProductLine product={part.product} />
@@ -173,8 +180,8 @@ export default function BuildEditor({ initial, buildId, defaultCurrency, onSaved
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4">
-      <Card className="grid gap-4">
+    <form onSubmit={onSubmit} className="grid grid-cols-[minmax(0,1fr)] gap-4">
+      <Card className="grid grid-cols-[minmax(0,1fr)] gap-4">
         <Input label={t('sellerBuilds.name')} placeholder={t('sellerBuilds.namePlaceholder')} required minLength={2} value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -200,12 +207,12 @@ export default function BuildEditor({ initial, buildId, defaultCurrency, onSaved
         <Checkbox label={t('sellerBuilds.inStock')} checked={form.is_in_stock} onChange={(e) => setForm({ ...form, is_in_stock: e.target.checked })} />
       </Card>
 
-      <Card className="grid gap-3">
+      <Card className="grid grid-cols-[minmax(0,1fr)] gap-3">
         <div>
           <h2 className="text-h3">{t('sellerBuilds.parts')}</h2>
           <p className="mt-1 text-sm text-muted">{t('sellerBuilds.partsHint')}</p>
         </div>
-        <ul className="grid gap-3">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
           {parts.map((p) => (
             <PartRow key={p.key} part={p} dictionary={dictionary} onChange={(patch) => change(p.key, patch)}
               onRemove={() => setParts((list) => list.filter((x) => x.key !== p.key))} />
