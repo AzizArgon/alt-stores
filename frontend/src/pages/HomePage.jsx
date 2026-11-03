@@ -8,6 +8,7 @@ import { DemoNote, PctText } from '../components/Market'
 import ProductTile from '../components/ProductTile'
 import { Button, Card, EmptyState, Skeleton, SkeletonCards, inputClass } from '../components/ui'
 import { cityParam } from '../config/cities'
+import { linkProps, sellerUrl } from '../config/sites'
 import api from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 import { useCity } from '../services/city.jsx'
@@ -208,8 +209,8 @@ export default function HomePage() {
           <h2 className="text-h2">{t('home.sellerTitle')}</h2>
           <p className="mt-1 text-sm text-muted md:text-base">{t('home.sellerText')}</p>
         </div>
-        <Button to={user?.role === 'seller' ? '/seller' : '/register?role=seller'} size="lg" className="w-full shrink-0 md:w-auto">
-          {user?.role === 'seller' ? t('nav.seller') : t('home.sellerCta')}<ArrowRight className="size-4" aria-hidden />
+        <Button {...linkProps(user?.role === 'seller' ? sellerUrl() : sellerUrl('/register'))} size="lg" className="w-full shrink-0 md:w-auto">
+          {user?.role === 'seller' ? t('nav.myCabinet') : t('home.sellerCta')}<ArrowRight className="size-4" aria-hidden />
         </Button>
       </section>
     </div>

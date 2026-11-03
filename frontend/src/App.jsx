@@ -1,8 +1,7 @@
-import { Suspense, lazy } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Suspense, lazy, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import Footer from './components/Footer'
-import Header from './components/Header'
+import { isExternal } from './config/sites'
+import StoreLayout from './layouts/StoreLayout'
 import CatalogPage from './pages/CatalogPage'
 import HomePage from './pages/HomePage'
 import ImportPage from './pages/ImportPage'
@@ -14,21 +13,33 @@ import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
 import CabinetOverview from './pages/CabinetOverview'
 import GoodsPage from './pages/GoodsPage'
-import SellerLayout, { AddSection, ImportsSection, ProfileSection } from './pages/SellerPage'
+import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import { useAuth } from './services/auth.jsx'
+import { homeFor, sellerGate } from './services/roles'
 
-// Pages for guests only: logged-in users are sent home
+// Goes to an address of this site, or reloads to another one (the cabinet on its own subdomain later)
+function Redirect({ to }) {
+  const external = isExternal(to)
+  useEffect(() => { if (external) window.location.replace(to) }, [external, to])
+  return external ? null : <Navigate to={to} replace />
+}
+
+// Pages for guests only: a logged-in user goes to his own interface (a seller to the cabinet)
 function GuestOnly({ children }) {
   const { user, loading } = useAuth()
   if (loading) return null
-  return user ? <Navigate to="/" replace /> : children
+  return user ? <Redirect to={homeFor(user)} /> : children
 }
 
-// Pages for one role only: others are sent home
-function RoleOnly({ role, children }) {
+// The seller cabinet: a guest goes to the seller login, a buyer sees "this section is for sellers"
+function SellerOnly({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return null
-  return user?.role === role ? children : <Navigate to="/" replace />
+  const gate = sellerGate(user)
+  if (gate === 'login') return <Navigate to="/seller/login" replace state={{ from: location.pathname + location.search }} />
+  if (gate === 'notSeller') return <NotSellerPage />
+  return children
 }
 
 // Any logged-in user; guests go to the login page
@@ -47,47 +58,37 @@ function HomeOrOldCatalog() {
 // The components page exists only in development: the public build does not contain it
 const UiPage = import.meta.env.DEV ? lazy(() => import('./pages/UiPage')) : null
 
-// Set only for the public server build (deploy.bat)
-const PUBLIC_DEMO = import.meta.env.VITE_PUBLIC_DEMO === '1'
-
-function DemoBanner() {
-  const { t } = useTranslation()
-  return (
-    <div className="bg-ink px-4 py-1.5 text-center text-xs text-white/85">
-      {t('demo.banner')}
-    </div>
-  )
-}
-
+// Two interfaces on one site and one database: the storefront and the seller cabinet (/seller).
+// Phase 12 adds the admin (/admin) as the third one on the same Workspace frame.
 export default function App() {
   return (
-    <div className="flex min-h-screen flex-col">
-      {PUBLIC_DEMO && <DemoBanner />}
-      <Header />
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
-        <Routes>
-          <Route path="/" element={<HomeOrOldCatalog />} />
-          <Route path="/catalog" element={<CatalogPage />} />
-          <Route path="/products/:id" element={<ProductPage />} />
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
-          <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
-          {/* Seller cabinet: the menu on the left (tabs on top on a phone), sections inside */}
-          <Route path="/seller" element={<RoleOnly role="seller"><SellerLayout /></RoleOnly>}>
-            <Route index element={<CabinetOverview />} />
-            <Route path="goods" element={<GoodsPage />} />
-            <Route path="add" element={<AddSection />} />
-            <Route path="imports" element={<ImportsSection />} />
-            <Route path="analytics" element={<SellerAnalyticsPage />} />
-            <Route path="profile" element={<ProfileSection />} />
-          </Route>
-          <Route path="/seller/imports/:id" element={<RoleOnly role="seller"><ImportPage /></RoleOnly>} />
-          <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
-          {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-      <Footer />
-    </div>
+    <Routes>
+      <Route element={<StoreLayout />}>
+        <Route path="/" element={<HomeOrOldCatalog />} />
+        <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/products/:id" element={<ProductPage />} />
+        <Route path="/market" element={<MarketPage />} />
+        <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
+        <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
+        <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
+        {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+
+      <Route element={<SellerAuthLayout />}>
+        <Route path="/seller/login" element={<GuestOnly><LoginPage seller /></GuestOnly>} />
+        <Route path="/seller/register" element={<GuestOnly><RegisterPage seller /></GuestOnly>} />
+      </Route>
+      <Route path="/seller" element={<SellerOnly><SellerLayout /></SellerOnly>}>
+        <Route index element={<CabinetOverview />} />
+        <Route path="goods" element={<GoodsPage />} />
+        <Route path="add" element={<AddSection />} />
+        <Route path="imports" element={<ImportsSection />} />
+        <Route path="imports/:id" element={<ImportPage />} />
+        <Route path="analytics" element={<SellerAnalyticsPage />} />
+        <Route path="profile" element={<ProfileSection />} />
+        <Route path="*" element={<Navigate to="/seller" replace />} />
+      </Route>
+    </Routes>
   )
 }

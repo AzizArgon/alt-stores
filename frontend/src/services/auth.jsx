@@ -19,16 +19,17 @@ export function AuthProvider({ children }) {
   const saveSession = (data) => {
     localStorage.setItem(TOKEN_KEY, data.access_token)
     setUser(data.user)
+    return data.user
   }
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password })
-    saveSession(res.data)
+    return saveSession(res.data)
   }
 
   const register = async (email, password, role, inviteCode = '') => {
     const res = await api.post('/auth/register', { email, password, role, invite_code: inviteCode })
-    saveSession(res.data)
+    return saveSession(res.data)
   }
 
   const logout = () => {

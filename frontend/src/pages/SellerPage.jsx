@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ChartLine, CirclePlus, History, LayoutDashboard, Package, Store } from 'lucide-react'
+import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
-import { useToast } from '../components/overlays'
+import { Avatar } from '../components/Header'
+import { Dropdown, DropdownItem, useToast } from '../components/overlays'
 import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
+import { linkProps, storeUrl } from '../config/sites'
+import Workspace from '../layouts/Workspace'
 import api, { errorKey } from '../services/api'
+import { useAuth } from '../services/auth.jsx'
 import { importTitle } from '../services/format'
 
 const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address']
@@ -227,36 +231,90 @@ function ImportHistory({ items }) {
 }
 
 const SECTIONS = [
-  { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true },
-  { to: '/seller/goods', key: 'goods', icon: Package },
-  { to: '/seller/add', key: 'add', icon: CirclePlus },
-  { to: '/seller/imports', key: 'imports', icon: History },
-  { to: '/seller/analytics', key: 'analytics', icon: ChartLine },
+  { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
+  { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
+  { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
+  { to: '/seller/imports', key: 'imports', icon: History, tab: true },
+  { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
   { to: '/seller/profile', key: 'profile', icon: Store },
 ]
 
-// Cabinet menu: a column on the left on a computer, scrolling tabs on top on a phone
-function CabinetNav() {
+// The storefront always opens in a new tab: the cabinet stays where the seller left it
+function OpenStoreButton() {
   const { t } = useTranslation()
   return (
-    <nav aria-label={t('cabinet.menu')} className="-mx-4 min-w-0 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
-      <ul className="flex gap-1 border-b border-line md:sticky md:top-24 md:flex-col md:border-b-0">
-        {SECTIONS.map(({ to, key, icon: Icon, end }) => (
-          <li key={key} className="shrink-0">
-            <NavLink to={to} end={end} className={({ isActive }) => `flex min-h-11 items-center gap-2.5 px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:rounded-md ${
-              isActive ? 'border-b-2 border-primary text-primary md:border-b-0 md:bg-primary-soft' : 'border-b-2 border-transparent text-muted hover:text-ink md:border-b-0 md:hover:bg-surface-2'}`}>
-              <Icon className="size-4 shrink-0" aria-hidden />{t(`cabinet.nav.${key}`)}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <Button href={storeUrl('/')} target="_blank" rel="noreferrer" variant="secondary" size="sm"
+      aria-label={t('seller.openStore')} title={t('seller.openStore')} className="shrink-0 max-sm:!px-2.5">
+      <ExternalLink className="size-4" aria-hidden /><span className="hidden sm:inline">{t('seller.openStore')}</span>
+    </Button>
+  )
+}
+
+function AccountMenu({ store }) {
+  const { t } = useTranslation()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  return (
+    <Dropdown trigger={({ open, toggle }) => (
+      <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.account')} title={user.email}
+        className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        <Avatar email={user.email} className="size-9 text-sm" />
+      </button>
+    )}>
+      <div className="mb-1.5 border-b border-line p-2.5 pb-3">
+        {store && <p className="truncate text-sm font-semibold" title={store.name}>{store.name}</p>}
+        <p className="truncate text-xs text-muted" title={user.email}>{user.email}</p>
+      </div>
+      {store && <DropdownItem as={Link} to="/seller/profile" icon={Store}>{t('cabinet.nav.profile')}</DropdownItem>}
+      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
+    </Dropdown>
+  )
+}
+
+// The frame of every seller page apart from the storefront; `sections` only for a logged-in seller with a store
+function SellerFrame({ store, sections, children }) {
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  return (
+    <Workspace home="/seller" subtitle={t('seller.subtitle')} sections={sections} navKey="cabinet.nav" tabKey="cabinet.tab"
+      menuLabel={t('cabinet.menu')} sideTitle={store?.name}
+      actions={<>
+        {store && <span className="hidden max-w-56 truncate text-sm font-semibold lg:block" title={store.name}>{store.name}</span>}
+        <OpenStoreButton />
+        {user?.role === 'seller' && <AccountMenu store={store} />}
+      </>}>
+      {children}
+    </Workspace>
+  )
+}
+
+// Login and register of sellers: the cabinet frame without the menu
+export function SellerAuthLayout() {
+  return <SellerFrame><Outlet /></SellerFrame>
+}
+
+// A buyer (or anyone but a seller) opened /seller/...
+export function NotSellerPage() {
+  const { t } = useTranslation()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  return (
+    <SellerFrame>
+      <Card className="mx-auto max-w-md text-center md:mt-4 md:!p-8">
+        <Store className="mx-auto size-10 text-primary" aria-hidden />
+        <h1 className="mt-4 text-h1">{t('seller.notSellerTitle')}</h1>
+        <p className="mt-2 text-sm text-muted">{t('seller.notSellerText')}</p>
+        <div className="mt-6 grid gap-2">
+          <Button size="lg" onClick={() => { logout(); navigate('/seller/login') }}>{t('seller.loginAsSeller')}</Button>
+          <Button size="lg" variant="secondary" {...linkProps(storeUrl('/'))}>{t('seller.backToStore')}</Button>
+        </div>
+      </Card>
+    </SellerFrame>
   )
 }
 
 // Seller cabinet: the store profile first; then the menu and the chosen section
 export default function SellerLayout() {
-  const { t } = useTranslation()
   const [store, setStore] = useState(undefined)
   const [imports, setImports] = useState(null)
 
@@ -269,24 +327,13 @@ export default function SellerLayout() {
     if (store) loadImports()
   }, [store?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (store === undefined) return <Skeleton className="h-64 w-full rounded-xl" />
+  let content
+  if (store === undefined || (store && imports === null)) content = <Skeleton className="h-64 w-full rounded-xl" />
   // Without a store profile goods can't be added in any way
-  if (!store) return <StoreForm store={store} onSaved={setStore} />
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-8">
-      <div className="min-w-0">
-        <p className="mb-2 hidden truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase md:block">{store.name}</p>
-        <CabinetNav />
-      </div>
-      <div className="min-w-0">
-        {imports === null
-          ? <Skeleton className="h-64 w-full rounded-xl" />
-          // The currency the seller chose last time is the default everywhere
-          : <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />}
-      </div>
-      <span className="sr-only">{t('cabinet.title')}</span>
-    </div>
-  )
+  else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
+  // The currency the seller chose last time is the default everywhere
+  else content = <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />
+  return <SellerFrame store={store} sections={store ? SECTIONS : null}>{content}</SellerFrame>
 }
 
 export function AddSection() {

@@ -1,12 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { BRAND } from '../config/brand'
-import { useAuth } from '../services/auth.jsx'
+import { sellerUrl } from '../config/sites'
+import { SiteLink } from './ui'
 import { BrandName } from './Logo'
 
 export default function Footer() {
   const { t } = useTranslation()
-  const { user } = useAuth()
   const link = 'text-muted hover:text-ink'
   return (
     <footer className="mt-10 border-t border-line bg-surface">
@@ -18,7 +18,7 @@ export default function Footer() {
         <nav className="flex flex-wrap gap-x-6 gap-y-2 md:grid md:content-start md:gap-2">
           <Link to="/catalog" className={link}>{t('nav.catalog')}</Link>
           <Link to="/market" className={link}>{t('nav.market')}</Link>
-          <Link to={user?.role === 'seller' ? '/seller' : '/register?role=seller'} className={link}>{t('footer.forSellers')}</Link>
+          <SiteLink url={sellerUrl('/login')} className={link}>{t('footer.forSellers')}</SiteLink>
           <a href={BRAND.githubUrl} target="_blank" rel="noreferrer" className={link}>{t('footer.github')}</a>
         </nav>
         <p className="text-xs text-faint md:col-span-2">{t('footer.thesis')}</p>

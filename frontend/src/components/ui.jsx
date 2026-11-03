@@ -17,10 +17,16 @@ const BUTTON_SIZE = {
 }
 
 // Button; with `to` it is a router link that looks the same
-export function Button({ variant = 'primary', size = 'md', to, className = '', children, ...props }) {
+export function Button({ variant = 'primary', size = 'md', to, href, className = '', children, ...props }) {
   const style = `inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${BUTTON_VARIANT[variant]} ${BUTTON_SIZE[size]} ${className}`
   if (to) return <Link to={to} className={style} {...props}>{children}</Link>
+  if (href) return <a href={href} className={style} {...props}>{children}</a>
   return <button type="button" className={style} {...props}>{children}</button>
+}
+
+// A link that may lead to the other interface (config/sites.js): in-app on the same site, a plain link otherwise
+export function SiteLink({ url, ...props }) {
+  return /^https?:\/\//.test(url) ? <a href={url} {...props} /> : <Link to={url} {...props} />
 }
 
 export const inputClass = 'w-full min-h-11 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-faint hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft disabled:bg-surface-2 disabled:text-faint'

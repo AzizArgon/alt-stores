@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CITIES } from '../config/cities'
+import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
@@ -78,7 +79,7 @@ export function CityMenu({ className = 'max-w-48 px-2 hover:bg-surface-2' }) {
   )
 }
 
-function Avatar({ email, className = 'size-10 text-base' }) {
+export function Avatar({ email, className = 'size-10 text-base' }) {
   const code = [...email].reduce((sum, ch) => sum + ch.codePointAt(0), 0)
   return (
     <span aria-hidden style={{ background: AVATAR_COLORS[code % AVATAR_COLORS.length] }}
@@ -88,11 +89,10 @@ function Avatar({ email, className = 'size-10 text-base' }) {
   )
 }
 
-function UserLinks({ user, logout, Item }) {
+function UserLinks({ logout, Item }) {
   const { t } = useTranslation()
   return (
     <>
-      {user.role === 'seller' && <Item as={Link} to="/seller" icon={LayoutDashboard}>{t('nav.seller')}</Item>}
       <Item as={Link} to="/profile" icon={UserCog}>{t('nav.profile')}</Item>
       <Item icon={LogOut} onClick={logout}>{t('nav.logout')}</Item>
     </>
@@ -115,7 +115,7 @@ function UserMenu({ user, logout }) {
           <p className="text-xs text-muted">{t(`roles.${user.role}`)}</p>
         </div>
       </div>
-      <UserLinks user={user} logout={logout} Item={DropdownItem} />
+      <UserLinks logout={logout} Item={DropdownItem} />
     </Dropdown>
   )
 }
@@ -139,7 +139,9 @@ function MobileMenu({ open, onClose, user, logout }) {
       <nav onClick={(e) => e.target.closest('a,button') && onClose()} className="grid gap-0.5">
         {NAV_LINKS.map((link) => <Link key={link.to} to={link.to} className={row}>{t(link.label)}</Link>)}
         {user && <div className="my-2 border-t border-line" />}
-        {user && <UserLinks user={user} logout={logout} Item={DropdownItem} />}
+        {user?.role === 'seller'
+          ? <Button {...linkProps(sellerUrl())} className="mt-1 w-full"><LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}</Button>
+          : user && <UserLinks logout={logout} Item={DropdownItem} />}
       </nav>
       <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
         {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
@@ -180,7 +182,12 @@ export default function Header() {
               </NavLink>
             ))}
           </nav>
-          {user ? <UserMenu user={user} logout={logout} /> : (
+          {/* A seller works in the cabinet: on the storefront he has only the way back there */}
+          {user?.role === 'seller' ? (
+            <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">
+              <LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}
+            </Button>
+          ) : user ? <UserMenu user={user} logout={logout} /> : (
             <div className="flex shrink-0 items-center gap-2">
               <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
               <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>

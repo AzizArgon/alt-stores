@@ -22,9 +22,9 @@ export function BrandName({ className = '' }) {
   )
 }
 
-export default function Logo({ onClick }) {
+export default function Logo({ onClick, to = '/' }) {
   return (
-    <Link to="/" onClick={onClick} className="flex shrink-0 items-center gap-2 text-lg text-ink" aria-label={BRAND.name}>
+    <Link to={to} onClick={onClick} className="flex shrink-0 items-center gap-2 text-lg text-ink" aria-label={BRAND.name}>
       <LogoMark />
       <BrandName />
     </Link>
