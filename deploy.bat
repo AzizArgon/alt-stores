@@ -1,7 +1,7 @@
 @echo off
 rem Updates the public site pcmarket.khudoberdi.uz: push, Docker images built here, loaded on the server, start, check.
 rem Works only from the alpha branch (deploy/deploy.sh refuses any other).
-rem Details - docs/deploy.md. Needs Git for Windows (bash, ssh), Docker Desktop and the SSH key of the server.
+rem Details - docs/deploy.md. Needs Git for Windows (bash, ssh), Docker Engine in WSL (Ubuntu) and the SSH key of the server.
 cd /d "%~dp0"
 set BASH=%ProgramFiles%\Git\usr\bin\bash.exe
 if not exist "%BASH%" set BASH=%ProgramFiles%\Git\bin\bash.exe
