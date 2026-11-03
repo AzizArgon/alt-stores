@@ -35,3 +35,31 @@ export function partText(part, dictionary) {
 }
 
 export const allPrecise = (precision) => precision.total > 0 && precision.exact === precision.total
+
+// The same minimum as the server: a CPU at least by its model ("Ryzen 5 5600", "i5-12400F"),
+// a GPU at least by its chip ("RTX 3060") or integrated graphics. Parts as the editor keeps them.
+export const CPU_MODEL = /\b(?:core\s*)?(?:i[3579]|ryzen\s*(?:ai\s*)?[3579]|ultra\s*[579]|pentium|celeron|athlon|xeon|threadripper)\b[\s-]*[\w-]*?\d{3,5}/i
+
+export function missingRequired(parts) {
+  const has = (slot, test) => parts.some((p) => p.slot === slot && test(p))
+  const card = (p, category) => p.mode === 'exact' && p.product?.category === category
+  const specs = (p) => (p.mode === 'specs' ? p.specs || {} : {})
+  const missing = []
+  if (!has('cpu', (p) => card(p, 'cpu') || CPU_MODEL.test(String(specs(p).model || '')))) missing.push('cpu')
+  if (!has('gpu', (p) => card(p, 'gpu') || specs(p).chip || specs(p).integrated)) missing.push('gpu')
+  return missing
+}
+
+// A part of the server (with its level) -> the editor's part; and back to what the server takes
+export function toEditorPart(c, key) {
+  const mode = c.level === 'exact' ? 'exact' : c.level === 'none' ? 'none' : 'specs'
+  return { key, slot: c.slot, mode, product: c.product, category: c.category || SLOT_CATEGORIES[c.slot]?.[0] || null,
+    specs: c.specs || {}, raw_text: c.raw_text || '', quantity: c.quantity || 1 }
+}
+
+export function toPayloadPart(p) {
+  const base = { slot: p.slot, quantity: Number(p.quantity) || 1, raw_text: p.raw_text || '' }
+  if (p.mode === 'exact' && p.product) return { ...base, product_id: p.product.id }
+  if (p.mode === 'specs') return { ...base, category: p.category, specs: p.specs }
+  return base
+}

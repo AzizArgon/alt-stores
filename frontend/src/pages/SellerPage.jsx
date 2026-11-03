@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, Package, Store } from 'lucide-react'
+import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
@@ -233,6 +233,7 @@ function ImportHistory({ items }) {
 const SECTIONS = [
   { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
   { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
+  { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
   { to: '/seller/imports', key: 'imports', icon: History, tab: true },
   { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },

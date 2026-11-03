@@ -15,6 +15,7 @@ import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
 import CabinetOverview from './pages/CabinetOverview'
 import GoodsPage from './pages/GoodsPage'
+import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import { useAuth } from './services/auth.jsx'
 import { homeFor, sellerGate } from './services/roles'
@@ -86,6 +87,9 @@ export default function App() {
       <Route path="/seller" element={<SellerOnly><SellerLayout /></SellerOnly>}>
         <Route index element={<CabinetOverview />} />
         <Route path="goods" element={<GoodsPage />} />
+        <Route path="builds" element={<SellerBuildsPage />} />
+        <Route path="builds/new" element={<SellerBuildEditPage />} />
+        <Route path="builds/:id" element={<SellerBuildEditPage />} />
         <Route path="add" element={<AddSection />} />
         <Route path="imports" element={<ImportsSection />} />
         <Route path="imports/:id" element={<ImportPage />} />
