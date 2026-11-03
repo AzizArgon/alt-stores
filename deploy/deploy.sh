@@ -1,78 +1,81 @@
 #!/bin/bash
 # Updates the public site with one command (run through deploy.bat on the laptop). Only from the alpha branch.
-# push -> backup of the server DB -> git pull -> dependencies -> frontend built here and uploaded -> restart -> check.
-# The server database is never replaced: only code and built files change.
+# push -> images built here -> loaded on the server -> backup of the DB -> "current" becomes "previous" -> up -> check.
+# The server database (data/database.db) is never replaced: only images and docker-compose.yml change.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SITE=https://pcmarket.khudoberdi.uz
 SSH_HOST=pcmarket   # alias from ~/.ssh/config (docs/deploy.md)
+DIR=/opt/alt-stores
+PLATFORM=linux/amd64  # the server CPU (uname -m = x86_64)
+IMAGES="alt-stores-backend alt-stores-web"
 
 step() { echo; echo "=== $*"; }
 
-# The server is the alpha branch. The beta in main stays local until the author decides otherwise
+# The server is the alpha branch. Development goes on in main and reaches the server only on the author's word
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != alpha ]; then
     echo "REFUSED: the server gets only the alpha branch, this is '$branch'. Nothing was changed."
     exit 1
 fi
-# The frontend is built from these files: uncommitted changes would reach the site without being in alpha
+# The images are built from these files: uncommitted changes would reach the site without being in alpha
 if [ -n "$(git status --porcelain)" ]; then
     echo "REFUSED: uncommitted changes. Commit or remove them first. Nothing was changed."
     git status --short
     exit 1
 fi
+docker info >/dev/null 2>&1 || { echo "REFUSED: Docker is not running - start Docker Desktop. Nothing was changed."; exit 1; }
+tag=$(git rev-parse --short HEAD)
 
 step "1/6 git push"
 git push origin alpha
 
-step "2/6 build frontend"
-# Settings in frontend/.env.public: Git Bash would turn "/api" on the command line into a Windows path
-(cd frontend && npm run build --silent -- --mode public)
-tar czf "${TMPDIR:-/tmp}/pcm_dist.tgz" -C frontend/dist .
-scp -q "${TMPDIR:-/tmp}/pcm_dist.tgz" "$SSH_HOST:/tmp/pcm_dist.tgz"
-rm -f "${TMPDIR:-/tmp}/pcm_dist.tgz"
+step "2/6 build images $tag ($PLATFORM)"
+docker build --platform "$PLATFORM" -t "alt-stores-backend:$tag" ./backend
+docker build --platform "$PLATFORM" -t "alt-stores-web:$tag" ./frontend
 
-step "3/6 server: backup, code, dependencies, files"
-ssh "$SSH_HOST" 'chmod 644 /tmp/pcm_dist.tgz && cd /tmp && sudo -u pcmarket -H bash -s' <<'EOF'
+step "3/6 upload images and docker-compose.yml"
+docker save "alt-stores-backend:$tag" "alt-stores-web:$tag" | gzip -1 | ssh "$SSH_HOST" 'gunzip | docker load'
+scp -q docker-compose.yml "$SSH_HOST:$DIR/docker-compose.yml.new"
+
+step "4/6 server: backup, switch images, start"
+ssh "$SSH_HOST" "TAG=$tag DIR=$DIR IMAGES='$IMAGES' bash -s" <<'EOF'
 set -euo pipefail
-/opt/pcmarket/app/deploy/backup.sh before_deploy 5
-cd /opt/pcmarket/app
-git fetch -q origin
-git checkout -q alpha
-git pull -q --ff-only origin alpha
-git log --oneline -1
-backend/.venv/bin/pip install -q -r backend/requirements.txt
-rm -rf /opt/pcmarket/dist_new && mkdir /opt/pcmarket/dist_new
-tar xmzf /tmp/pcm_dist.tgz -C /opt/pcmarket/dist_new
-# New files first, then old assets are removed: the site never misses a file during the update
-cp -r /opt/pcmarket/dist_new/. /var/www/pcmarket/
-for f in /var/www/pcmarket/assets/*; do
-    [ -e "/opt/pcmarket/dist_new/assets/$(basename "$f")" ] || rm -f "$f"
+cd "$DIR"
+if [ -n "$(docker compose ps -q backend 2>/dev/null)" ]; then
+    docker compose exec -T backend python scripts/backup_db.py before_deploy 5
+fi
+mv docker-compose.yml.new docker-compose.yml
+# current -> previous (kept for a rollback), the new one -> current; the version before previous is removed
+for img in $IMAGES; do
+    old=$(docker image inspect -f '{{.Id}}' "$img:previous" 2>/dev/null || true)
+    if docker image inspect "$img:current" >/dev/null 2>&1; then docker tag "$img:current" "$img:previous"; fi
+    docker tag "$img:$TAG" "$img:current"
+    docker rmi "$img:$TAG" >/dev/null
+    if [ -n "$old" ] && [ "$old" != "$(docker image inspect -f '{{.Id}}' "$img:previous")" ]; then
+        docker rmi "$old" >/dev/null 2>&1 || true
+    fi
 done
-chmod -R a+rX /var/www/pcmarket
-rm -rf /opt/pcmarket/dist_new
+docker compose up -d
 EOF
-ssh "$SSH_HOST" 'rm -f /tmp/pcm_dist.tgz'
 
-step "4/6 restart backend, CBU rate"
-ssh "$SSH_HOST" 'sudo systemctl restart pcmarket'
+step "5/6 wait for the site, CBU rate"
+for i in $(seq 1 30); do
+    if ssh "$SSH_HOST" 'curl -sf http://127.0.0.1:8095/api/health >/dev/null'; then echo "site is up"; break; fi
+    [ "$i" = 30 ] && { echo "The site did not start, logs:"; ssh "$SSH_HOST" "cd $DIR && docker compose logs --tail 40"; exit 1; }
+    sleep 2
+done
 # cbu.uz answers only Uzbek addresses: the laptop fetches the rate and hands it to the server
 if usd=$(curl -sf -m 15 https://cbu.uz/ru/arkhiv-kursov-valyut/json/USD/); then
-    echo "$usd" | ssh "$SSH_HOST" 'cd /tmp && sudo -u pcmarket bash -c "cd /opt/pcmarket/app/backend && .venv/bin/python scripts/set_rate.py"'
+    echo "$usd" | ssh "$SSH_HOST" "cd $DIR && docker compose exec -T backend python scripts/set_rate.py"
 else
     echo "cbu.uz did not answer: the server keeps the last known rate"
 fi
-
-step "5/6 wait for the backend"
-for i in $(seq 1 30); do
-    if ssh "$SSH_HOST" 'curl -sf http://127.0.0.1:8020/api/health >/dev/null'; then echo "backend is up"; break; fi
-    [ "$i" = 30 ] && { echo "Backend did not start, logs:"; ssh "$SSH_HOST" 'sudo journalctl -u pcmarket --no-pager -n 200' | tail -30; exit 1; }
-    sleep 2
-done
 
 step "6/6 check $SITE"
 api=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$SITE/api/health")
 page=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$SITE/")
 echo "site: $page, api: $api"
-[ "$api" = 200 ] && [ "$page" = 200 ] || { echo "DEPLOY CHECK FAILED"; exit 1; }
+[ "$api" = 200 ] && [ "$page" = 200 ] || { echo "DEPLOY CHECK FAILED (rollback: rollback.bat)"; exit 1; }
+docker rmi "alt-stores-backend:$tag" "alt-stores-web:$tag" >/dev/null 2>&1 || true
 echo "DEPLOY OK"
