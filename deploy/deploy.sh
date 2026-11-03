@@ -43,11 +43,12 @@ docker save "alt-stores-backend:$tag" "alt-stores-web:$tag" | gzip -1 | ssh "$SS
 scp -q docker-compose.yml "$SSH_HOST:$DIR/docker-compose.yml.new"
 
 step "4/6 server: backup, switch images, start"
-ssh "$SSH_HOST" "TAG=$tag DIR=$DIR IMAGES='$IMAGES' bash -s" <<'EOF'
+# The script goes over stdin: every command inside that reads stdin gets </dev/null, or it would eat the rest
+switched=$(ssh "$SSH_HOST" "TAG=$tag DIR=$DIR IMAGES='$IMAGES' bash -s" <<'EOF'
 set -euo pipefail
 cd "$DIR"
-if [ -n "$(docker compose ps -q backend 2>/dev/null)" ]; then
-    docker compose exec -T backend python scripts/backup_db.py before_deploy 5
+if [ -n "$(docker compose ps -q backend 2>/dev/null </dev/null)" ]; then
+    docker compose exec -T backend python scripts/backup_db.py before_deploy 5 </dev/null
 fi
 mv docker-compose.yml.new docker-compose.yml
 # current -> previous (kept for a rollback), the new one -> current; the version before previous is removed
@@ -60,8 +61,18 @@ for img in $IMAGES; do
         docker rmi "$old" >/dev/null 2>&1 || true
     fi
 done
-docker compose up -d
+docker compose up -d </dev/null
+# The running containers must be the new images
+for svc in backend web; do
+    [ "$(docker inspect -f '{{.Image}}' "$(docker compose ps -q "$svc" </dev/null)")" = \
+      "$(docker image inspect -f '{{.Id}}' "alt-stores-$svc:current")" ] || { echo "$svc is not on the new image"; exit 1; }
+done
+echo "SWITCHED $TAG"
 EOF
+) || { echo "$switched"; echo "DEPLOY FAILED on the server (rollback: rollback.bat)"; exit 1; }
+echo "$switched"
+# A step that silently cut the script short must not end in "DEPLOY OK"
+echo "$switched" | grep -qx "SWITCHED $tag" || { echo "DEPLOY FAILED: the server did not switch to $tag"; exit 1; }
 
 step "5/6 wait for the site, CBU rate"
 for i in $(seq 1 30); do
