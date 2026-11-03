@@ -195,7 +195,7 @@
 
 ```
 cd backend
-.venv/Scripts/python.exe tests/benchmark/make_dataset.py              # синтетика (нужен F:\claudy\samples)
+.venv/Scripts/python.exe tests/benchmark/make_dataset.py              # синтетика (нужен _local\samples)
 .venv/Scripts/python.exe scripts/benchmark_parser.py suite --config rules --tag after
 .venv/Scripts/python.exe scripts/benchmark_parser.py suite --config gemini --tag after          # по записанным ответам
 .venv/Scripts/python.exe scripts/benchmark_parser.py suite --config gemini --live --tag after   # недостающие строки — живой ИИ

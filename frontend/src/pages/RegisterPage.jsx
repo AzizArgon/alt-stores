@@ -1,24 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthCard, ErrorText, SocialButtons, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
-import { Input, PasswordInput } from '../components/ui'
+import { Input, PasswordInput, SiteLink } from '../components/ui'
+import { goTo, sellerUrl, storeUrl } from '../config/sites'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
+import { homeFor } from '../services/roles'
 
-const ROLES = [
-  { value: 'buyer', hint: 'auth.roleBuyerHint' },
-  { value: 'seller', hint: 'auth.roleSellerHint' },
-]
-
-export default function RegisterPage() {
+// The storefront registers buyers, the cabinet (/seller/register) registers stores
+export default function RegisterPage({ seller = false }) {
   const { t } = useTranslation()
   const { register } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [role, setRole] = useState('buyer')
+  const role = seller ? 'seller' : 'buyer'
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState('')
@@ -42,8 +41,8 @@ export default function RegisterPage() {
     if (Object.keys(found).length) return
     setBusy(true)
     try {
-      await register(email, password, role, invite)
-      navigate('/')
+      const user = await register(email, password, role, invite)
+      goTo(navigate, homeFor(user))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })
@@ -52,8 +51,16 @@ export default function RegisterPage() {
     }
   }
 
+  // The old address of seller registration ("/register?role=seller") leads to the cabinet's own page
+  if (!seller && new URLSearchParams(location.search).get('role') === 'seller') {
+    const url = sellerUrl('/register')
+    if (url.startsWith('/')) return <Navigate to={url} replace />
+    window.location.replace(url)
+    return null
+  }
+
   return (
-    <AuthCard title={t('auth.registerTitle')} hint={t('auth.registerHint')}>
+    <AuthCard title={t(seller ? 'seller.registerTitle' : 'auth.registerTitle')} hint={t(seller ? 'seller.registerHint' : 'auth.registerHint')}>
       <SocialButtons />
       <form onSubmit={onSubmit} noValidate className="grid gap-4">
         <Input label={t('auth.email')} type="email" autoComplete="email" error={errors.email}
@@ -62,20 +69,6 @@ export default function RegisterPage() {
           value={password} onChange={(e) => setPassword(e.target.value)} />
         <PasswordInput label={t('auth.passwordConfirm')} autoComplete="new-password" error={errors.confirm}
           value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-
-        <div>
-          <span className="mb-1.5 block text-sm font-medium">{t('auth.role')}</span>
-          <div className="grid grid-cols-2 gap-2">
-            {ROLES.map((r) => (
-              <button key={r.value} type="button" onClick={() => setRole(r.value)} aria-pressed={role === r.value}
-                className={`rounded-md border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-                  role === r.value ? 'border-primary bg-primary-soft' : 'border-line-strong hover:bg-surface-2'}`}>
-                <span className={`block text-sm font-semibold ${role === r.value ? 'text-primary' : ''}`}>{t(`roles.${r.value}`)}</span>
-                <span className="block text-xs text-muted">{t(r.hint)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {role === 'seller' && inviteRequired && (
           <Input label={t('auth.inviteCode')} autoComplete="off" error={errors.invite} hint={t('auth.inviteHint')}
@@ -89,7 +82,13 @@ export default function RegisterPage() {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         {t('auth.haveAccount')}{' '}
-        <Link to="/login" className="font-semibold text-primary hover:underline">{t('nav.login')}</Link>
+        <Link to={seller ? '/seller/login' : '/login'} className="font-semibold text-primary hover:underline">{t('nav.login')}</Link>
+      </p>
+      <p className="mt-2 text-center text-sm text-muted">
+        {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}
+        <SiteLink url={seller ? storeUrl('/register') : sellerUrl('/register')} className="font-semibold text-primary hover:underline">
+          {t(seller ? 'seller.buyerRegister' : 'seller.sellerRegister')}
+        </SiteLink>
       </p>
     </AuthCard>
   )

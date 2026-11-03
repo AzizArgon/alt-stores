@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthCard, ErrorText, SocialButtons, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
-import { Input, PasswordInput } from '../components/ui'
+import { Input, PasswordInput, SiteLink } from '../components/ui'
+import { goTo, sellerUrl, storeUrl } from '../config/sites'
 import { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
+import { homeFor } from '../services/roles'
 
-export default function LoginPage() {
+// `seller`: the cabinet's own login (/seller/login); after any login each role goes to its own interface
+export default function LoginPage({ seller = false }) {
   const { t } = useTranslation()
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({})
@@ -25,8 +29,10 @@ export default function LoginPage() {
     if (Object.keys(found).length) return
     setBusy(true)
     try {
-      await login(email, password)
-      navigate('/')
+      const user = await login(email, password)
+      // A guest sent from a cabinet page returns to it
+      const from = location.state?.from
+      goTo(navigate, user.role === 'seller' && from?.startsWith('/seller') ? from : homeFor(user))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })
@@ -36,7 +42,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard title={t('auth.loginTitle')} hint={t('auth.loginHint')}>
+    <AuthCard title={t(seller ? 'seller.loginTitle' : 'auth.loginTitle')} hint={t(seller ? 'seller.loginHint' : 'auth.loginHint')}>
       <SocialButtons />
       <form onSubmit={onSubmit} noValidate className="grid gap-4">
         <Input label={t('auth.email')} type="email" autoComplete="email" error={errors.email}
@@ -50,7 +56,13 @@ export default function LoginPage() {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         {t('auth.noAccount')}{' '}
-        <Link to="/register" className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
+        <Link to={seller ? '/seller/register' : '/register'} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
+      </p>
+      <p className="mt-2 text-center text-sm text-muted">
+        {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}
+        <SiteLink url={seller ? storeUrl('/login') : sellerUrl('/login')} className="font-semibold text-primary hover:underline">
+          {t(seller ? 'seller.buyerLogin' : 'seller.sellerLogin')}
+        </SiteLink>
       </p>
     </AuthCard>
   )

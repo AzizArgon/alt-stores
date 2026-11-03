@@ -17,10 +17,16 @@ const BUTTON_SIZE = {
 }
 
 // Button; with `to` it is a router link that looks the same
-export function Button({ variant = 'primary', size = 'md', to, className = '', children, ...props }) {
+export function Button({ variant = 'primary', size = 'md', to, href, className = '', children, ...props }) {
   const style = `inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${BUTTON_VARIANT[variant]} ${BUTTON_SIZE[size]} ${className}`
   if (to) return <Link to={to} className={style} {...props}>{children}</Link>
+  if (href) return <a href={href} className={style} {...props}>{children}</a>
   return <button type="button" className={style} {...props}>{children}</button>
+}
+
+// A link that may lead to the other interface (config/sites.js): in-app on the same site, a plain link otherwise
+export function SiteLink({ url, ...props }) {
+  return /^https?:\/\//.test(url) ? <a href={url} {...props} /> : <Link to={url} {...props} />
 }
 
 export const inputClass = 'w-full min-h-11 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-faint hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft disabled:bg-surface-2 disabled:text-faint'
@@ -127,15 +133,18 @@ export function Badge({ tone = 'neutral', className = '', children, ...props }) 
 
 // Segmented switch: tabs = [{ value, label }]
 export function Tabs({ tabs, value, onChange, label, className = '' }) {
+  // className goes on a wrapper: "hidden sm:block" must not fight the tablist's own inline-flex
   return (
-    <div role="tablist" aria-label={label} className={`inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1 ${className}`}>
-      {tabs.map((tab) => (
-        <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)}
-          className={`min-h-9 shrink-0 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-            value === tab.value ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
-          {tab.label}
-        </button>
-      ))}
+    <div className={className}>
+      <div role="tablist" aria-label={label} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1">
+        {tabs.map((tab) => (
+          <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)}
+            className={`min-h-9 shrink-0 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+              value === tab.value ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -168,6 +177,24 @@ export function EmptyState({ icon: Icon = SearchX, title, hint, children }) {
       {hint && <p className="mt-1 max-w-md text-sm text-muted">{hint}</p>}
       {children && <div className="mt-4">{children}</div>}
     </div>
+  )
+}
+
+// "Главная › Процессоры": items = [{ to, label }], the last one is the current page (no link)
+export function Breadcrumbs({ items, className = '' }) {
+  return (
+    <nav aria-label="breadcrumbs" className={`text-sm text-muted ${className}`}>
+      <ol className="flex flex-wrap items-center gap-1">
+        {items.map((item, i) => (
+          <li key={item.label} className="flex min-w-0 items-center gap-1">
+            {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-faint" aria-hidden />}
+            {item.to && i < items.length - 1
+              ? <Link to={item.to} className="hover:text-primary hover:underline">{item.label}</Link>
+              : <span aria-current="page" className="truncate text-ink">{item.label}</span>}
+          </li>
+        ))}
+      </ol>
+    </nav>
   )
 }
 

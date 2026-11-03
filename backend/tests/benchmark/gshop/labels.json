@@ -1,5 +1,5 @@
 {
- "note": "70 random priced items (seed 70) of F:/claudy/samples/old_store_2023.xlsx (Gshop, December 2022; the file is outside git). Labelled by hand from the source row: category slug, brand, model, price in USD, condition, the key characteristics (dictionary values), expected Anti-Fraud flags. text = the source cell, sheet = sheet title. Only characteristics written in the row are labelled (no \"mechanical\" for \"Gateron Red\").",
+ "note": "70 random priced items (seed 70) of _local/samples/old_store_2023.xlsx (Gshop, December 2022; the file is outside git). Labelled by hand from the source row: category slug, brand, model, price in USD, condition, the key characteristics (dictionary values), expected Anti-Fraud flags. text = the source cell, sheet = sheet title. Only characteristics written in the row are labelled (no \"mechanical\" for \"Gateron Red\").",
  "currency": "USD",
  "items": [
   {

@@ -58,6 +58,7 @@ const SHEET_SIDE = {
   left: 'inset-y-0 left-0 w-[85vw] max-w-80 animate-[slide-left_200ms_ease-out]',
   right: 'inset-y-0 right-0 w-[85vw] max-w-96 animate-[slide-right_200ms_ease-out]',
   bottom: 'inset-x-0 bottom-0 max-h-[85dvh] animate-[slide-up_200ms_ease-out] rounded-t-xl',
+  wide: 'inset-y-0 right-0 w-full max-w-2xl animate-[slide-right_200ms_ease-out]', // the offer editor
 }
 
 // Sliding panel: the menu on a phone (left), the catalog filters (bottom)

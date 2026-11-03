@@ -17,9 +17,10 @@ export default function Flags({ flags, className = 'mt-1 grid gap-1 px-1.5' }) {
       {flags.map((f) => {
         const Icon = FLAG_ICON[f.level]
         return (
-          <p key={`${f.type}-${f.reason_key}`} className={`flex gap-1.5 rounded-md border px-2 py-1 text-xs ${FLAG_STYLE[f.level]}`}>
+          <p key={`${f.type}-${f.reason_key}-${f.params?.component || ''}`} className={`flex gap-1.5 rounded-md border px-2 py-1 text-xs ${FLAG_STYLE[f.level]}`}>
             <Icon className="mt-px size-3.5 shrink-0" aria-hidden />
             <span>
+              {f.params?.component && <span className="break-words">{f.params.component}: </span>}
               <span className="font-semibold">{t(`flags.type.${f.type}`)}</span>
               {f.source === 'ai' && <span className="opacity-70"> ({t('flags.ai')})</span>}
               {' — '}{t(`flags.reason.${f.reason_key}`, f.params)}

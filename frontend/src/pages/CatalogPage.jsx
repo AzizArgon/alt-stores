@@ -1,36 +1,22 @@
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Sheet } from '../components/overlays'
-import { Button, Card, Checkbox, EmptyState, Input, Pagination, Select, SkeletonCards } from '../components/ui'
+import ProductTile from '../components/ProductTile'
+import { Breadcrumbs, Button, Card, Checkbox, EmptyState, Input, Pagination, Select, SkeletonCards, Tabs } from '../components/ui'
+import { cityParam } from '../config/cities'
 import api, { errorKey } from '../services/api'
-import Price from '../components/Price'
+import { useCity } from '../services/city.jsx'
 import { formatDayMonth, formatPrice } from '../services/format'
-import { formatSpec, fromUrlValue, specLabel, specsLine, urlValue } from '../services/specs'
+import { formatSpec, fromUrlValue, specLabel, urlValue } from '../services/specs'
 
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
+const SORTS = ['popular', 'price_asc', 'price_desc']
 
 const VISIBLE_VALUES = 8
 const SPEC_PREFIX = 'f_' // spec filters in the address: ?category=ram&f_type=DDR5,DDR4&f_form_factor=SODIMM
-
-function ProductTile({ item, usdRate, rateDate }) {
-  const { t } = useTranslation()
-  return (
-    <Link to={`/products/${item.id}`}
-      className="flex min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow hover:shadow-hover md:p-4">
-      <span className="text-xs text-muted">{t(`categories.${item.category}`)}</span>
-      <span className="mt-1 line-clamp-3 text-sm font-semibold leading-snug break-words md:text-base">{item.name}</span>
-      {item.specs?.length > 0 && <span className="mt-1 line-clamp-3 text-xs break-words text-muted md:text-sm">{specsLine(item.specs)}</span>}
-      <div className="mt-auto pt-3">
-        <Price price={item.min_price} currency={item.min_currency} usdRate={usdRate} rateDate={rateDate}
-          prefix={`${t('catalog.from')} `} size="text-base md:text-lg" />
-        <span className="mt-1 block text-xs text-muted">{t('catalog.offers', { count: item.offers })}</span>
-      </div>
-    </Link>
-  )
-}
 
 // One filter of the category: ticks with counts ("DDR5 (124)"), or "from N" for refresh rate and power
 function Facet({ facet, category, selected, onToggle, onAtLeast }) {
@@ -109,7 +95,10 @@ export default function CatalogPage() {
   const [categories, setCategories] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const { city, setCity } = useCity()
   const category = params.get('category') || ''
+  const sort = params.get('sort') || 'popular'
 
   // Ticks add a history step (browser "back" undoes them); typing in a field replaces the current one
   const update = (change, push = false) => {
@@ -136,6 +125,7 @@ export default function CatalogPage() {
     if (values.length) next.set(SPEC_PREFIX + key, values.join(','))
     else next.delete(SPEC_PREFIX + key)
   }, true)
+  const changeSort = (value) => setParam('sort', value === 'popular' ? '' : value, true)
   const resetFilters = () => update((next) => {
     specKeys.forEach((k) => next.delete(k))
     next.delete('price_min')
@@ -149,11 +139,14 @@ export default function CatalogPage() {
   useEffect(() => {
     const req = Object.fromEntries(params)
     req.in_stock = params.get('all') ? 'false' : 'true'
+    req.city = cityParam(city)
     delete req.all
+    setLoading(true)
     api.get('/catalog/products', { params: req })
       .then((res) => { setData(res.data); setError('') })
       .catch((err) => setError(t(errorKey(err))))
-  }, [params, t])
+      .finally(() => setLoading(false))
+  }, [params, city, t])
 
   const page = data?.page || 1
   const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
@@ -185,16 +178,25 @@ export default function CatalogPage() {
       facets={facets} selectedOf={selectedOf} toggleValue={toggleValue} />
   )
 
+  const cityName = t(`cities.${city}`)
+  // A search or filters can be why nothing is found; a category alone is not
+  const narrowed = chips.length > 0 || ['q', 'condition', 'all'].some((k) => params.get(k))
+  const crumbs = [{ to: '/', label: t('catalog.home') }, { to: '/catalog', label: t('catalog.title') }]
+  if (category) crumbs.push({ label: t(`categories.${category}`) })
+
   return (
     <section>
-      <h1 className="text-h2 md:text-h1">{t('app.tagline')}</h1>
+      <Breadcrumbs items={crumbs} />
+      <h1 className="mt-2 text-h2 md:text-h1">{category ? t(`categories.${category}`) : t('catalog.title')}</h1>
+      {city !== 'all' && <p className="mt-1 text-sm text-muted">{t('catalog.inCity', { city: cityName })}</p>}
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
       <div className="flex items-start gap-6">
         <aside className="hidden w-64 shrink-0 lg:block" aria-label={t('catalog.filters')}>
           <Card padded={false} className="p-4">{filters}</Card>
         </aside>
         <div className="min-w-0 flex-1">
-          <Button variant="secondary" className="mb-3 w-full lg:hidden" onClick={() => setFiltersOpen(true)}>
+          {/* Phone and tablet: the filters button floats at the bottom of the screen, the panel slides up */}
+          <Button className="fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-pop lg:hidden" onClick={() => setFiltersOpen(true)}>
             <SlidersHorizontal className="size-4" aria-hidden />
             {activeFilters ? t('catalog.filtersActive', { count: activeFilters }) : t('catalog.filters')}
           </Button>
@@ -216,14 +218,26 @@ export default function CatalogPage() {
           {!data && !error && <SkeletonCards count={9} />}
           {data && (
             <>
-              <p className="text-sm text-muted">
-                {t('catalog.found', { count: data.total })}
-                {data.usd_rate && <> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</>}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted">
+                  {t('catalog.found', { count: data.total })}
+                  {data.usd_rate && <span className="hidden sm:inline"> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</span>}
+                </p>
+                {/* Three tabs don't fit a phone: there it is a list */}
+                <Tabs className="hidden sm:inline-flex" label={t('catalog.sortLabel')} value={sort} onChange={changeSort}
+                  tabs={SORTS.map((s) => ({ value: s, label: t(`catalog.sort.${s}`) }))} />
+                <Select className="w-full sm:hidden" aria-label={t('catalog.sortLabel')} value={sort} onChange={(e) => changeSort(e.target.value)}>
+                  {SORTS.map((s) => <option key={s} value={s}>{t('catalog.sortLabel')}: {t(`catalog.sort.${s}`)}</option>)}
+                </Select>
+              </div>
               {data.items.length === 0 ? (
-                <EmptyState title={t('catalog.empty')} hint={t('catalog.emptyHint')} />
+                <EmptyState
+                  title={city !== 'all' && !narrowed ? t('catalog.cityEmpty', { city: cityName }) : t('catalog.empty')}
+                  hint={city !== 'all' && !narrowed ? t('catalog.cityEmptyHint') : t('catalog.emptyHint')}>
+                  {city !== 'all' && <Button onClick={() => setCity('all')}>{t('catalog.showCountry')}</Button>}
+                </EmptyState>
               ) : (
-                <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+                <div aria-busy={loading} className={`mt-4 grid grid-cols-2 gap-3 transition-opacity md:grid-cols-3 md:gap-4 xl:grid-cols-4 ${loading ? 'opacity-50' : ''}`}>
                   {data.items.map((item) => <ProductTile key={item.id} item={item} usdRate={data.usd_rate} rateDate={data.usd_rate_date} />)}
                 </div>
               )}

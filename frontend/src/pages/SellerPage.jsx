@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
+import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
-import { useToast } from '../components/overlays'
-import { Badge, Button, Card, Input, Skeleton, inputClass } from '../components/ui'
+import { Avatar } from '../components/Header'
+import { Dropdown, DropdownItem, useToast } from '../components/overlays'
+import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { STORE_CITIES } from '../config/cities'
+import { linkProps, storeUrl } from '../config/sites'
+import Workspace from '../layouts/Workspace'
 import api, { errorKey } from '../services/api'
+import { useAuth } from '../services/auth.jsx'
 import { importTitle } from '../services/format'
 
-const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'address', 'district']
+const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address']
 const FIELD_LABELS = { inn_stir: 'innStir' }
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
@@ -45,11 +51,17 @@ function StoreForm({ store, onSaved }) {
         </p>
       )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {STORE_FIELDS.map((f) => (
+        {STORE_FIELDS.map((f) => (f === 'city' ? (
+          <Select key={f} label={t('store.city')} value={form.city} required hint={t('store.cityHint')}
+            onChange={(e) => setForm({ ...form, city: e.target.value })}>
+            <option value="" disabled>{t('store.cityChoose')}</option>
+            {STORE_CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
+          </Select>
+        ) : (
           <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
             value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
             onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
-        ))}
+        )))}
       </div>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
       <Button type="submit">{t('store.save')}</Button>
@@ -78,6 +90,7 @@ function UploadBox({ defaultCurrency }) {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
   const [currency, setCurrency] = useState(defaultCurrency)
+  const [mode, setMode] = useState(null) // "full" / "append": the seller always chooses
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -94,6 +107,7 @@ function UploadBox({ defaultCurrency }) {
     const body = new FormData()
     body.append('file', file)
     body.append('currency', currency)
+    body.append('mode', mode)
     try {
       const res = await api.post('/imports', body)
       navigate(`/seller/imports/${res.data.id}`)
@@ -119,8 +133,10 @@ function UploadBox({ defaultCurrency }) {
           onChange={(e) => e.target.files[0] && setFile(e.target.files[0])} />
       </div>
       <CurrencyChoice currency={currency} onChange={setCurrency} label="upload.currency" />
+      <ModeChoice mode={mode} onChange={setMode} />
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
-      <Button onClick={onSubmit} disabled={!file || busy}>
+      {file && !mode && <p className="mb-2 text-sm text-warning">{t('upload.modeRequired')}</p>}
+      <Button onClick={onSubmit} disabled={!file || !mode || busy}>
         {busy ? t('auth.loading') : t('upload.submit')}
       </Button>
     </div>
@@ -164,9 +180,9 @@ function TextBox({ defaultCurrency }) {
 const METHODS = ['file', 'text', 'catalog']
 
 // Three ways to add goods side by side, with a hint when each one is handy
-function AddGoods({ defaultCurrency, onAdded }) {
+function AddGoods({ defaultCurrency, onAdded, initialMethod }) {
   const { t } = useTranslation()
-  const [method, setMethod] = useState('file')
+  const [method, setMethod] = useState(METHODS.includes(initialMethod) ? initialMethod : 'file')
   return (
     <Card>
       <h2 className="text-h2">{t('manual.title')}</h2>
@@ -205,7 +221,7 @@ function ImportHistory({ items }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
             </span>
           </li>
         ))}
@@ -214,8 +230,92 @@ function ImportHistory({ items }) {
   )
 }
 
-export default function SellerPage() {
+const SECTIONS = [
+  { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
+  { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
+  { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
+  { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
+  { to: '/seller/imports', key: 'imports', icon: History, tab: true },
+  { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
+  { to: '/seller/profile', key: 'profile', icon: Store },
+]
+
+// The storefront always opens in a new tab: the cabinet stays where the seller left it
+function OpenStoreButton() {
   const { t } = useTranslation()
+  return (
+    <Button href={storeUrl('/')} target="_blank" rel="noreferrer" variant="secondary" size="sm"
+      aria-label={t('seller.openStore')} title={t('seller.openStore')} className="shrink-0 max-sm:!px-2.5">
+      <ExternalLink className="size-4" aria-hidden /><span className="hidden sm:inline">{t('seller.openStore')}</span>
+    </Button>
+  )
+}
+
+function AccountMenu({ store }) {
+  const { t } = useTranslation()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  return (
+    <Dropdown trigger={({ open, toggle }) => (
+      <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.account')} title={user.email}
+        className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        <Avatar email={user.email} className="size-9 text-sm" />
+      </button>
+    )}>
+      <div className="mb-1.5 border-b border-line p-2.5 pb-3">
+        {store && <p className="truncate text-sm font-semibold" title={store.name}>{store.name}</p>}
+        <p className="truncate text-xs text-muted" title={user.email}>{user.email}</p>
+      </div>
+      {store && <DropdownItem as={Link} to="/seller/profile" icon={Store}>{t('cabinet.nav.profile')}</DropdownItem>}
+      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
+    </Dropdown>
+  )
+}
+
+// The frame of every seller page apart from the storefront; `sections` only for a logged-in seller with a store
+function SellerFrame({ store, sections, children }) {
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  return (
+    <Workspace home="/seller" subtitle={t('seller.subtitle')} sections={sections} navKey="cabinet.nav" tabKey="cabinet.tab"
+      menuLabel={t('cabinet.menu')} sideTitle={store?.name}
+      actions={<>
+        {store && <span className="hidden max-w-56 truncate text-sm font-semibold lg:block" title={store.name}>{store.name}</span>}
+        <OpenStoreButton />
+        {user?.role === 'seller' && <AccountMenu store={store} />}
+      </>}>
+      {children}
+    </Workspace>
+  )
+}
+
+// Login and register of sellers: the cabinet frame without the menu
+export function SellerAuthLayout() {
+  return <SellerFrame><Outlet /></SellerFrame>
+}
+
+// A buyer (or anyone but a seller) opened /seller/...
+export function NotSellerPage() {
+  const { t } = useTranslation()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  return (
+    <SellerFrame>
+      <Card className="mx-auto max-w-md text-center md:mt-4 md:!p-8">
+        <Store className="mx-auto size-10 text-primary" aria-hidden />
+        <h1 className="mt-4 text-h1">{t('seller.notSellerTitle')}</h1>
+        <p className="mt-2 text-sm text-muted">{t('seller.notSellerText')}</p>
+        <div className="mt-6 grid gap-2">
+          <Button size="lg" onClick={() => { logout(); navigate('/seller/login') }}>{t('seller.loginAsSeller')}</Button>
+          <Button size="lg" variant="secondary" {...linkProps(storeUrl('/'))}>{t('seller.backToStore')}</Button>
+        </div>
+      </Card>
+    </SellerFrame>
+  )
+}
+
+// Seller cabinet: the store profile first; then the menu and the chosen section
+export default function SellerLayout() {
   const [store, setStore] = useState(undefined)
   const [imports, setImports] = useState(null)
 
@@ -228,20 +328,27 @@ export default function SellerPage() {
     if (store) loadImports()
   }, [store?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (store === undefined) return <Skeleton className="h-64 w-full rounded-xl" />
+  let content
+  if (store === undefined || (store && imports === null)) content = <Skeleton className="h-64 w-full rounded-xl" />
   // Without a store profile goods can't be added in any way
-  if (!store) return <StoreForm store={store} onSaved={setStore} />
-  if (imports === null) return <Skeleton className="h-64 w-full rounded-xl" />
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-      <Link to="/seller/analytics" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-4 shadow-card transition-shadow hover:shadow-hover md:px-6">
-        <span><span className="block font-semibold md:inline">{t('market.analyticsTitle')}</span><span className="text-sm text-muted md:ml-3">{t('market.analyticsHint')}</span></span>
-        <ArrowRight className="size-5 shrink-0 text-muted" aria-hidden />
-      </Link>
-      {/* The currency the seller chose last time is the default everywhere */}
-      <AddGoods defaultCurrency={imports[0]?.currency || 'USD'} onAdded={loadImports} />
-      <ImportHistory items={imports} />
-      <StoreForm store={store} onSaved={setStore} />
-    </div>
-  )
+  else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
+  // The currency the seller chose last time is the default everywhere
+  else content = <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />
+  return <SellerFrame store={store} sections={store ? SECTIONS : null}>{content}</SellerFrame>
+}
+
+export function AddSection() {
+  const { defaultCurrency, loadImports } = useOutletContext()
+  const [params] = useSearchParams()
+  return <AddGoods defaultCurrency={defaultCurrency} onAdded={loadImports} initialMethod={params.get('method')} />
+}
+
+export function ImportsSection() {
+  const { imports } = useOutletContext()
+  return <ImportHistory items={imports} />
+}
+
+export function ProfileSection() {
+  const { store, setStore } = useOutletContext()
+  return <StoreForm store={store} onSaved={setStore} />
 }

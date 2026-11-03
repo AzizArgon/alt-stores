@@ -1,4 +1,4 @@
-"""Builds the synthetic part of the Phase 7 benchmark (run once; needs F:/claudy/samples, which is outside git).
+"""Builds the synthetic part of the Phase 7 benchmark (run once; needs _local/samples, which is outside git).
 
 Every synthetic row starts from a clean row of the real store price list that the rule parser reads
 completely (CPU, RAM, SSD, HDD, boards, video cards, monitors). The rule result of the clean row is the right answer;
@@ -22,13 +22,14 @@ import openpyxl  # noqa: E402
 from fpdf import FPDF  # noqa: E402
 from openpyxl.styles import Alignment, Font  # noqa: E402
 
+from app.core.config import LOCAL_DIR  # noqa: E402
 from app.services.antifraud import check_offer  # noqa: E402
 from app.services.catalog import make_match_key  # noqa: E402
 from app.services.importer import file_to_markdown  # noqa: E402
 from app.services.price_cleaner import clean_markdown  # noqa: E402
 from app.services.rule_parser import parse_by_rules  # noqa: E402
 
-AGE = Path(r"F:\claudy\samples\Price of Age Computers (9).xlsx")
+AGE = LOCAL_DIR / "samples" / "Price of Age Computers (9).xlsx"
 OUT = Path(__file__).parent / "synthetic"
 RATE = 11_850  # fixed UZS per USD for the whole benchmark
 ROWS_PER_FILE = 150

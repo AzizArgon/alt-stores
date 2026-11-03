@@ -1,74 +1,151 @@
-import { ArrowLeft, BadgeCheck, Phone, Send } from 'lucide-react'
+import { BadgeCheck, MapPin, Phone, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
+import { ProductVisual } from '../components/CategoryIcon'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
-import { Badge, Button, Card, Skeleton, Tabs } from '../components/ui'
+import { Badge, Breadcrumbs, Button, Card, Skeleton, Tabs } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
-import { formatDate, formatDayMonth, formatPrice, telegramUrl } from '../services/format'
-import { formatSpec, specLabel } from '../services/specs'
+import { useCity } from '../services/city.jsx'
+import { formatDate, formatDayMonth, formatPrice, roundSum, telegramUrl } from '../services/format'
+import { formatSpec, specLabel, specsLine } from '../services/specs'
 
 const SORTS = ['recommended', 'price']
 
-function Contacts({ store }) {
+export function Contacts({ store }) {
   const { t } = useTranslation()
   if (!store.phone && !store.telegram) return <p className="text-sm text-muted">{t('product.noContacts')}</p>
+  // Big buttons: easy to hit with a finger on a phone
+  const link = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-6 text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary'
   return (
-    <div className="flex flex-col gap-1 text-sm md:items-end">
-      {store.phone && <a href={`tel:${store.phone}`} className="font-medium hover:underline"><Phone className="mr-1 inline size-4" aria-hidden />{store.phone}</a>}
+    <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
+      {store.phone && (
+        <a href={`tel:${store.phone}`} className={`${link} border border-line-strong bg-surface hover:bg-surface-2`}>
+          <Phone className="size-4" aria-hidden />{store.phone}
+        </a>
+      )}
       {store.telegram && (
-        <a href={telegramUrl(store.telegram)} target="_blank" rel="noreferrer" className="font-medium text-info hover:underline">
-          <Send className="mr-1 inline size-4" aria-hidden />{t('product.telegram')}
+        <a href={telegramUrl(store.telegram)} target="_blank" rel="noreferrer" className={`${link} bg-info text-white hover:opacity-90`}>
+          <Send className="size-4" aria-hidden />{t('product.telegram')}
         </a>
       )}
     </div>
   )
 }
 
-function OfferRow({ offer, usdRate, rateDate, market }) {
+function OfferCard({ offer, usdRate, rateDate, market }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { store } = offer
+  const place = [t(`cities.${store.city}`), store.district, store.address].filter(Boolean).join(', ')
 
   return (
     <Card as="li" padded={false} className={`min-w-0 p-4 ${offer.is_in_stock ? '' : 'opacity-60'}`}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-6">
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
             {store.name}
             {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
           </p>
-          <p className="text-sm text-muted">{[store.district, store.address].filter(Boolean).join(', ')}</p>
-          <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
-          {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
-          <p className="mt-1 text-sm">
-            <span className={offer.is_in_stock ? 'text-success' : 'text-muted'}>
+          <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
+          <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-sm">
+            <span className={offer.is_in_stock ? 'font-medium text-success' : 'text-muted'}>
               {t(offer.is_in_stock ? 'product.inStock' : 'product.outOfStock')}
             </span>
-            {' · '}{t(`condition.${offer.condition}`)}
-            {' · '}<span className="text-muted">{t('product.updated', { date: formatDate(offer.updated_at) })}</span>
+            <span className="text-faint">·</span>{t(`condition.${offer.condition}`)}
+            <span className="text-faint">·</span><span className="text-muted">{t('product.updated', { date: formatDate(offer.updated_at) })}</span>
           </p>
+          {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
+          <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
         </div>
-        <div className="shrink-0 md:text-right">
+        <div className="shrink-0 sm:text-right">
           <Price price={offer.price} currency={offer.currency} usdRate={usdRate} rateDate={rateDate} />
           {offer.is_in_stock && <div className="mt-1"><MarketLabel info={market} /></div>}
         </div>
-        <div className="shrink-0 md:w-44 md:text-right">
-          {open ? <Contacts store={store} /> : <Button className="w-full md:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
-        </div>
       </div>
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
+      <div className="mt-3">
+        {open ? <Contacts store={store} />
+          : <Button size="lg" className="w-full sm:float-right sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
+      </div>
     </Card>
   )
+}
+
+function OfferList({ offers, product }) {
+  return (
+    <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
+      {offers.map((o) => (
+        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} />
+      ))}
+    </ul>
+  )
+}
+
+// Characteristics by groups: the key ones (as on the catalog tile), the rest, the classification
+function SpecsTable({ product }) {
+  const { t } = useTranslation()
+  const specs = product.specs.filter((s) => s.key !== 'brand')
+  const value = (s) => (s.inferred ? (
+    // Not written by the seller: inferred by a rule, the reason is in the hover hint
+    <span title={t(`specs.inferred.${s.inferred}`)} className="cursor-help border-b border-dotted border-faint">
+      {formatSpec(s)}<sup className="text-faint">*</sup>
+    </span>
+  ) : formatSpec(s))
+  const groups = [
+    { title: t('product.specsMain'), rows: [
+      ...(product.brand ? [{ key: 'brand', label: t('product.brand'), value: product.brand }] : []),
+      ...specs.filter((s) => s.main).map((s) => ({ key: s.key, label: specLabel(s.key, product.category), value: value(s) })),
+    ] },
+    { title: t('product.specsOther'), rows: specs.filter((s) => !s.main).map((s) => ({ key: s.key, label: specLabel(s.key, product.category), value: value(s) })) },
+    { title: t('product.specsCatalog'), rows: [
+      { key: 'category', label: t('product.category'), value: t(`categories.${product.category}`) },
+      ...(product.mxik_code ? [{ key: 'mxik', label: t('product.mxik'), value: product.mxik_code }] : []),
+    ] },
+  ].filter((g) => g.rows.length)
+
+  return (
+    <Card as="section" className="min-w-0">
+      <h2 className="text-h2">{t('product.specsTitle')}</h2>
+      {groups.map((g) => (
+        <div key={g.title} className="mt-4">
+          <h3 className="text-sm font-semibold text-muted">{g.title}</h3>
+          <dl className="mt-1 text-sm">
+            {g.rows.map((r) => (
+              <div key={r.key} className="grid grid-cols-2 gap-4 border-b border-line py-2 last:border-0">
+                <dt className="text-muted">{r.label}</dt>
+                <dd className="break-words">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+      {specs.some((s) => s.inferred) && <p className="mt-3 text-xs text-faint">{t('product.inferredNote')}</p>}
+      {product.suspect?.length > 0 && (
+        <p className="mt-3 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
+          title={product.suspect.map((s) => `${specLabel(s.key, product.category)}: ${formatSpec(s)}`).join(', ')}>
+          {t('product.specsNeedCheck')}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+// Sums of the offers in stock: "от … до …" (the seller's currency converted by the CBU rate)
+function priceRange(offers, usdRate) {
+  const sums = offers.filter((o) => o.is_in_stock && o.price_uzs != null).map((o) => o.price_uzs)
+  if (!sums.length) return null
+  const [min, max] = [Math.min(...sums), Math.max(...sums)].map((v) => (usdRate ? roundSum(v) : v))
+  return { min, max, stores: new Set(offers.filter((o) => o.is_in_stock).map((o) => o.store.id)).size }
 }
 
 export default function ProductPage() {
   const { t } = useTranslation()
   const { id } = useParams()
-  const navigate = useNavigate()
+  const { city, setCity } = useCity()
   const [sort, setSort] = useState('recommended')
   const [product, setProduct] = useState(null)
   const [error, setError] = useState('')
@@ -83,67 +160,86 @@ export default function ProductPage() {
   if (!product) {
     return (
       <div className="grid gap-4">
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-56 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-xl" />
       </div>
     )
   }
-  const specs = product.specs.filter((s) => s.key !== 'brand') // the brand has its own line
+  const byCity = city !== 'all'
+  const here = byCity ? product.offers.filter((o) => o.store.city === city) : product.offers
+  const elsewhere = byCity ? product.offers.filter((o) => o.store.city !== city) : []
+  const range = priceRange(here, product.usd_rate)
+  const cityName = t(`cities.${city}`)
+  const keySpecs = product.specs.filter((s) => s.main)
+  const market = product.market?.conditions?.new
 
   return (
     <section>
-      <button onClick={() => navigate(-1)} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-muted hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden />{t('product.back')}
-      </button>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2 lg:gap-6">
-      <Card>
-      <p className="text-sm break-words text-muted">
-        {t(`categories.${product.category}`)}
-        {product.mxik_code && <span> · {t('product.mxik')}: {product.mxik_code}</span>}
-      </p>
-      <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>
-      {product.brand && <p className="mt-1 text-muted">{t('product.brand')}: {product.brand}</p>}
-      {specs.length > 0 && (
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-          {specs.map((s) => (
-            <div key={s.key} className="contents">
-              <dt className="text-muted">{specLabel(s.key, product.category)}</dt>
-              {/* Not written by the seller: inferred by a rule, the reason is in the hover hint */}
-              <dd>
-                {s.inferred ? (
-                  <span title={t(`specs.inferred.${s.inferred}`)} className="cursor-help border-b border-dotted border-faint">
-                    {formatSpec(s)}<sup className="text-faint">*</sup>
-                  </span>
-                ) : formatSpec(s)}
-              </dd>
+      <Breadcrumbs items={[
+        { to: '/', label: t('catalog.home') },
+        { to: `/catalog?category=${product.category}`, label: t(`categories.${product.category}`) },
+        { label: product.name },
+      ]} />
+
+      <Card className="mt-3 flex flex-col gap-4 sm:flex-row sm:gap-6">
+        <ProductVisual category={product.category} image={product.image} alt={product.name}
+          className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-muted">{t(`categories.${product.category}`)}{product.brand && ` · ${product.brand}`}</p>
+          <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>
+          {keySpecs.length > 0 && <p className="mt-1 text-sm break-words text-muted">{specsLine(keySpecs)}</p>}
+          <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <p className="text-xs text-muted">{byCity ? t('product.priceIn', { city: cityName }) : t('product.priceAll')}</p>
+              {range ? (
+                <p className="text-h2 md:text-h1">
+                  {range.min === range.max ? formatPrice(range.min, 'UZS')
+                    : t('product.priceRange', { from: formatPrice(range.min, 'UZS'), to: formatPrice(range.max, 'UZS') })}
+                </p>
+              ) : <p className="text-h3 text-muted">{byCity ? t('product.noneInCity', { city: cityName }) : '—'}</p>}
+              {range && <p className="text-sm text-muted">{t('catalog.stores', { count: range.stores })}</p>}
             </div>
-          ))}
-        </dl>
-      )}
-      {specs.some((s) => s.inferred) && <p className="mt-1 text-xs text-faint">{t('product.inferredNote')}</p>}
-      {product.suspect?.length > 0 && (
-        <p className="mt-3 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm text-warning"
-          title={product.suspect.map((s) => `${specLabel(s.key, product.category)}: ${formatSpec(s)}`).join(', ')}>
-          {t('product.specsNeedCheck')}
-        </p>
-      )}
-
+            {market?.market_usd != null && product.usd_rate && (
+              <div className="text-sm">
+                <p className="text-xs text-muted">{t('market.productTitle')} · {t('market.scope')}</p>
+                <p className="font-semibold" title={t('market.scopeHint')}>≈ {formatPrice(roundSum(market.market_usd * product.usd_rate), 'UZS')}</p>
+              </div>
+            )}
+          </div>
+        </div>
       </Card>
-      <ProductMarket market={product.market} usdRate={product.usd_rate} />
-      </div>
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-h2">{t('product.offers', { count: product.offers.length })}</h2>
-        <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-h2">{byCity ? t('product.inCityTitle', { city: cityName }) : t('product.allTitle')}</h2>
+            <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />
+          </div>
+          {sort === 'recommended' && <p className="mt-1 text-sm text-muted">{t('product.recommendedHint')}</p>}
+          {product.usd_rate && (
+            <p className="mt-1 text-sm text-muted">{t('price.rateNote', { date: formatDayMonth(product.usd_rate_date), rate: formatPrice(product.usd_rate, 'UZS') })}</p>
+          )}
+          <div className="mt-4">
+            {here.length > 0 ? <OfferList offers={here} product={product} /> : (
+              <Card className="text-center">
+                <p className="text-h3">{t('product.noneInCity', { city: cityName })}</p>
+                <Button variant="secondary" className="mt-3" onClick={() => setCity('all')}>{t('catalog.showCountry')}</Button>
+              </Card>
+            )}
+          </div>
+          {elsewhere.length > 0 && (
+            <>
+              <h2 className="mt-8 mb-4 text-h2">{t('product.otherCities')} <span className="text-muted">({elsewhere.length})</span></h2>
+              <OfferList offers={elsewhere} product={product} />
+            </>
+          )}
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+          <ProductMarket market={product.market} usdRate={product.usd_rate} />
+          <SpecsTable product={product} />
+        </div>
       </div>
-      {sort === 'recommended' && <p className="mt-1 text-sm text-muted">{t('product.recommendedHint')}</p>}
-      {product.usd_rate && (
-        <p className="mt-1 text-sm text-muted">{t('price.rateNote', { date: formatDayMonth(product.usd_rate_date), rate: formatPrice(product.usd_rate, 'UZS') })}</p>
-      )}
-      <ul className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3">
-        {product.offers.map((o) => <OfferRow key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} />)}
-      </ul>
     </section>
   )
 }

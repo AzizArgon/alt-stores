@@ -83,6 +83,8 @@ class Store(Base):
     telegram: Mapped[str | None] = mapped_column(String(64))
     address: Mapped[str | None] = mapped_column(String(255))
     district: Mapped[str | None] = mapped_column(String(128))
+    # City slug from app.db.seed.CITIES (the same list as the city choice of the site header)
+    city: Mapped[str] = mapped_column(String(32), default="tashkent", server_default="tashkent", index=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     # Archive source (an old price list of a shop, e.g. Gshop, Dec 2022): its prices go only to the price history
     is_archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
@@ -139,11 +141,46 @@ class Offer(Base):
     # The seller's own words next to the price: "Подписчикам 13$", "(только в сборках)"
     note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    # "Delete my offer": the row stays (its price history is kept), without a price it is out of the catalog.
+    # The next price list with the same item brings it back
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     product: Mapped[Product] = relationship(back_populates="offers")
     store: Mapped[Store] = relationship(back_populates="offers")
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     fraud_flags: Mapped[list["FraudFlag"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
+    events: Mapped[list["OfferEvent"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
+
+
+class OfferEvent(Base):
+    """A change of an offer other than its price (prices are in price_history): stock, condition, removal."""
+
+    __tablename__ = "offer_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), index=True)
+    field: Mapped[str] = mapped_column(String(16))  # stock / condition / removed / product
+    value: Mapped[str] = mapped_column(String(64))
+    # import (a price list), edit (the seller in the cabinet), bulk (a bulk action)
+    source: Mapped[str] = mapped_column(String(16))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    offer: Mapped[Offer] = relationship(back_populates="events")
+
+
+class ProductFix(Base):
+    """A seller's correction of a card that other stores sell too: waits for the admin (phase 12)."""
+
+    __tablename__ = "product_fixes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    # The card as it was and as the seller wants it: {name, brand, model, category, specs}
+    before: Mapped[dict] = mapped_column(JSON)
+    after: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending / accepted / rejected
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class PriceHistory(Base):
@@ -210,6 +247,9 @@ class PriceImport(Base):
     # Where the rows came from: a price list file, a pasted text (Telegram post) or one offer added by hand.
     # Only a file is the full price list: missing items become "out of stock" only after a file
     source: Mapped[str] = mapped_column(String(16), default="file", server_default="file")
+    # A file is "full" (missing items become out of stock) or "append" (only the listed items change);
+    # pasted text and manual adding are always "append"
+    mode: Mapped[str] = mapped_column(String(8), default="full", server_default="full")
     # Pasted text as the seller sent it: to see later why a post was parsed the way it was
     text: Mapped[str | None] = mapped_column(Text)
     currency: Mapped[Currency] = mapped_column(str_enum(Currency))
@@ -260,3 +300,89 @@ class UsageCounter(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class BuildPurpose(str, enum.Enum):
+    gaming = "gaming"
+    office = "office"
+    work = "work"  # video editing, design, work
+    other = "other"
+
+
+class BuildSlot(str, enum.Enum):
+    cpu = "cpu"
+    motherboard = "motherboard"
+    ram = "ram"
+    gpu = "gpu"
+    storage = "storage"
+    psu = "psu"
+    case = "case"
+    cooling = "cooling"
+    other = "other"
+
+
+class Build(Base):
+    """A ready PC of a store (phase B4): not a component, so it lives apart from cards and offers.
+
+    Its price is the store's own; builds of different stores are never compared, and a build never counts in the
+    market price, the indexes or the component catalog."""
+
+    __tablename__ = "builds"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[Currency] = mapped_column(str_enum(Currency), default=Currency.USD)
+    condition: Mapped[Condition] = mapped_column(str_enum(Condition), default=Condition.new)
+    is_in_stock: Mapped[bool] = mapped_column(Boolean, default=True)  # False = taken off sale by the seller
+    purpose: Mapped[BuildPurpose] = mapped_column(str_enum(BuildPurpose), default=BuildPurpose.other)
+    description: Mapped[str | None] = mapped_column(Text)
+    # Pasted post as the seller sent it ("Paste as text"): to see later why it was parsed the way it was
+    text: Mapped[str | None] = mapped_column(Text)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    store: Mapped[Store] = relationship()
+    components: Mapped[list["BuildComponent"]] = relationship(
+        back_populates="build", cascade="all, delete-orphan", order_by="BuildComponent.position")
+    price_history: Mapped[list["BuildPriceHistory"]] = relationship(
+        back_populates="build", cascade="all, delete-orphan")
+
+
+class BuildComponent(Base):
+    """One part of a build at one of the precision levels the buyer sees:
+    - "exact model": a reference card (product_id);
+    - "only specs": no card, values by the category dictionary ("RTX 3060, 12 GB", the maker not said);
+      a GPU may be {"integrated": true} — integrated graphics of an office PC;
+    - "not specified": only the seller's text, or nothing."""
+
+    __tablename__ = "build_components"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    build_id: Mapped[int] = mapped_column(ForeignKey("builds.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    slot: Mapped[BuildSlot] = mapped_column(str_enum(BuildSlot))
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    raw_text: Mapped[str] = mapped_column(Text, default="")
+    # "Only specs": the dictionary category (a storage slot is ssd or hdd) and its values; a CPU adds "model"
+    category: Mapped[str | None] = mapped_column(String(32))
+    specs: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    build: Mapped[Build] = relationship(back_populates="components")
+    product: Mapped[Product | None] = relationship()
+
+
+class BuildPriceHistory(Base):
+    __tablename__ = "build_price_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    build_id: Mapped[int] = mapped_column(ForeignKey("builds.id", ondelete="CASCADE"), index=True)
+    price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[Currency] = mapped_column(str_enum(Currency), default=Currency.USD)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+
+    build: Mapped[Build] = relationship(back_populates="price_history")

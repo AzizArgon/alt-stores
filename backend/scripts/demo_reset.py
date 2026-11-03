@@ -6,7 +6,7 @@ the DB is deleted and restored after; only on a DB without one is the real price
 An empty store (live@example.com) is made for uploading the demo files during the show.
 No live AI requests: the full price list is parsed from the parse cache (rows the cache doesn't know fail and are
 reported, not sent to the AI). The cache and CBU rates are kept in a snapshot outside the repo
-(F:/claudy/samples/demo_cache.json), so the demo works without the internet and AI limits.
+(_local/samples/demo_cache.json), so the demo works without the internet and AI limits.
 The cache of the live demo files (samples/demo/cache.json) is loaded too, unless --live is given:
 then those files go through the rules and the real AI during the show.
 Usage (from backend/, servers stopped):
@@ -29,21 +29,23 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
+from app.core.config import LOCAL_DIR  # noqa: E402
+
 DB_FILE = BACKEND / "database.db"
 # On the server the samples and backups live in other folders (docs/deploy.md)
-BACKUPS = Path(os.environ.get("PC_MARKET_BACKUPS", "F:/claudy/backups"))
-SAMPLES = Path(os.environ.get("PC_MARKET_SAMPLES", "F:/claudy/samples"))
+BACKUPS = Path(os.environ.get("PC_MARKET_BACKUPS", LOCAL_DIR / "backups"))
+SAMPLES = Path(os.environ.get("PC_MARKET_SAMPLES", LOCAL_DIR / "samples"))
 SNAPSHOT = SAMPLES / "demo_cache.json"
 DEMO_CACHE = BACKEND.parent / "samples" / "demo" / "cache.json"
 PRICE_FILE = SAMPLES / "Price of Age Computers (9).xlsx"
 ARCHIVE_FILE = SAMPLES / "old_store_2023.xlsx"
 SELLER = {"email": "seller1@example.com", "password": secrets.token_urlsafe(24), "name": "Age Computers",
-          "phone": "+998901234567", "district": "Чиланзар"}
+          "phone": "+998901234567", "city": "tashkent", "district": "Чиланзар"}
 # An empty store for the live upload: a file published by a store marks its other goods "out of stock",
 # so the demo files must not go to a store with a full price list
 LIVE_SELLER = {"email": "live@example.com", "password": "demo12345", "name": "Tech Point",
-               "phone": "+998900000404", "district": "Шайхантахур", "is_demo": True}
-STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "district", "is_verified")
+               "phone": "+998900000404", "city": "fergana", "district": "Центр", "is_demo": True}
+STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "city", "district", "is_verified")
 RESTORED_FILENAME = "restored_after_demo_reset"
 
 
@@ -148,7 +150,8 @@ def restore_real_store(db, data: dict) -> dict:
     u = data["user"]
     user = User(email=u["email"], password_hash=u["password_hash"], role=UserRole(u["role"]),
                 created_at=datetime.fromisoformat(u["created_at"]))
-    store = Store(owner=user, **data["store"])
+    # A copy made before stores had a city: the real store is in Tashkent
+    store = Store(owner=user, **{**data["store"], "city": data["store"].get("city") or "tashkent"})
     db.add(store)
     db.flush()
     imp = PriceImport(store_id=store.id, filename=RESTORED_FILENAME, currency=Currency.USD)
@@ -176,7 +179,7 @@ def add_seller(db, spec: dict):
     from app.db.models import Store, User, UserRole
 
     user = User(email=spec["email"], password_hash=hash_password(spec["password"]), role=UserRole.seller)
-    store = Store(owner=user, name=spec["name"], phone=spec["phone"], district=spec["district"],
+    store = Store(owner=user, name=spec["name"], phone=spec["phone"], city=spec["city"], district=spec["district"],
                   is_demo=spec.get("is_demo", False))
     db.add_all([user, store])
     db.flush()

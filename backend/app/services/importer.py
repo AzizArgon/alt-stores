@@ -11,12 +11,13 @@ from pathlib import Path
 import pdfplumber
 from markitdown import MarkItDown, StreamInfo
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.db.models import (
-    Category, Condition, Currency, ImportStatus, Offer, ParseCache, PriceHistory, PriceImport, Product, Store, utcnow,
+    Category, Condition, Currency, ImportStatus, Offer, OfferEvent, ParseCache, PriceHistory, PriceImport, Product,
+    Store, utcnow,
 )
 from app.services.catalog import completion_index, make_match_key, unique_completion
 from app.services.antifraud import check_offer, market_prices, save_offer_flags
@@ -379,35 +380,133 @@ def _seller_cache(parsed: list[dict], published: list[dict]) -> dict[str, dict]:
     return entries
 
 
-def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]) -> dict:
-    """Creates/updates offers. Store offers missing from a file become "out of stock" (not after pasted text)."""
-    categories = {c.slug: c for c in db.scalars(select(Category))}
+LARGE_DROP_SHARE = 0.3  # a "full" file taking off sale more than this share of the store's goods looks incomplete
+IMPORT_MODES = ("full", "append")
+
+
+def import_mode(imp: PriceImport, mode: str | None = None) -> str:
+    """Only a file can be a full price list; pasted text and manual adding always append."""
+    if imp.source != "file":
+        return "append"
+    return mode or imp.mode or "full"
+
+
+def _rows_to_save(rows: list[dict]) -> list[dict]:
+    # The same item listed twice in one file: a row without a price must not overwrite a priced one
+    priced = {r["raw_name"] for r in rows if r.get("price") is not None}
+    return [r for r in rows if r.get("price") is not None or r["raw_name"] not in priced]
+
+
+class _Matcher:
+    """Finds the reference card of a preview row: by its key, then by a unique completion of the key."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.categories = {c.slug: c for c in db.scalars(select(Category))}
+        self.products: dict[str, Product] = {}
+        self.completions: dict[str, dict] = {}  # category -> cards by key without identity values, built when needed
+
+    def match(self, r: dict) -> tuple[Category, dict, str, Product | None]:
+        db = self.db
+        category = self.categories.get(r["category"]) or self.categories["other"]
+        # The seller may have changed the category in the preview: specs are normalized again for it
+        specs = normalize_specs(category.slug, source_text(r["raw_name"], r.get("article")), r.get("specs"), r.get("brand"))
+        key = make_match_key(category.slug, r["name"], r.get("brand"), specs)
+        product = self.products.get(key) or db.scalar(select(Product).where(Product.match_key == key))
+        if product is None:
+            if category.slug not in self.completions:
+                self.completions[category.slug] = completion_index(
+                    db.scalars(select(Product.match_key).where(Product.category_id == category.id)))
+            done = unique_completion(key, self.completions[category.slug])
+            product = db.scalar(select(Product).where(Product.match_key == done)) if done else None
+        return category, specs, key, product
+
+
+def _usd(price: float | None, currency: Currency, usd_rate: float | None) -> float | None:
+    if price is None:
+        return None
+    return price if currency == Currency.USD else (price / usd_rate if usd_rate else None)
+
+
+def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None) -> dict:
+    """"What will change" before publishing: the same matching as publish_import, nothing is written.
+
+    Groups: new goods, prices up / down, back on sale, taken off sale (a missing item only in the "full" mode,
+    a row without a price in any mode), unchanged. large_drop: a full file takes off sale over 30% of the goods.
+    """
+    mode = import_mode(imp, mode)
+    rate = get_usd_rate(db)
+    usd_rate = rate.rate if rate else None
+    store_offers = db.scalars(
+        select(Offer).where(Offer.store_id == store.id).options(selectinload(Offer.product))).all()
+    offers_by_raw = {o.raw_name: o for o in store_offers}
+    offers_by_product = {o.product_id: o for o in store_offers}
+    matcher = _Matcher(db)
+    groups = {k: [] for k in ("new", "price_up", "price_down", "back_in_stock", "out_of_stock")}
+    unchanged = 0
+    seen: set[int] = set()
+    new_keys: set[str] = set()
+    for r in _rows_to_save(rows):
+        _, _, key, product = matcher.match(r)
+        offer = offers_by_raw.get(r["raw_name"]) or (offers_by_product.get(product.id) if product else None)
+        price = r.get("price")
+        currency = Currency(r["currency"]) if r.get("currency") else imp.currency
+        item = {"name": r["name"], "raw_name": r["raw_name"], "price": price, "currency": currency.value}
+        if offer is None:
+            if key not in new_keys:  # the same new card twice in one file is one new offer
+                new_keys.add(key)
+                groups["new"].append(item)
+            continue
+        if offer.id in seen:
+            continue
+        seen.add(offer.id)
+        item.update(old_price=offer.price, old_currency=offer.currency.value, offer_id=offer.id)
+        in_stock = price is not None and r.get("is_in_stock", True)
+        was_on_sale = offer.is_in_stock and offer.removed_at is None
+        if not in_stock:
+            if was_on_sale:
+                groups["out_of_stock"].append(item)
+            else:
+                unchanged += 1
+        elif not was_on_sale:
+            groups["back_in_stock"].append(item)
+        elif offer.price == price and offer.currency == currency:
+            unchanged += 1
+        else:
+            old, new = _usd(offer.price, offer.currency, usd_rate), _usd(price, currency, usd_rate)
+            groups["price_down" if old is not None and new is not None and new < old else "price_up"].append(item)
+    if mode == "full":
+        for offer in store_offers:
+            if offer.id not in seen and offer.is_in_stock and offer.removed_at is None:
+                groups["out_of_stock"].append({
+                    "name": offer.product.normalized_name, "raw_name": offer.raw_name, "price": None,
+                    "currency": offer.currency.value, "old_price": offer.price, "old_currency": offer.currency.value,
+                    "offer_id": offer.id})
+    on_sale = sum(o.is_in_stock and o.removed_at is None for o in store_offers)
+    dropped = len(groups["out_of_stock"])
+    return {
+        "mode": mode, **groups, "unchanged": unchanged, "on_sale": on_sale,
+        "large_drop": mode == "full" and on_sale > 0 and dropped / on_sale > LARGE_DROP_SHARE,
+    }
+
+
+def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None) -> dict:
+    """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock"."""
+    mode = import_mode(imp, mode)
     store_offers = db.scalars(select(Offer).where(Offer.store_id == store.id)).all()
     offers_by_raw = {o.raw_name: o for o in store_offers}
     # One offer per card per store: a new name of a product the store already sells updates that offer
     offers_by_product = {o.product_id: o for o in store_offers}
-    products: dict[str, Product] = {}
-    completions: dict[str, dict] = {}  # category -> cards by key without identity values, built when needed
+    matcher = _Matcher(db)
+    products = matcher.products
     seen: set[int] = set()
     stats = {"created": 0, "updated": 0, "out_of_stock": 0}
 
-    # The same item listed twice in one file: a row without a price must not overwrite a priced one
-    priced = {r["raw_name"] for r in rows if r.get("price") is not None}
-    rows_to_save = [r for r in rows if r.get("price") is not None or r["raw_name"] not in priced]
+    rows_to_save = _rows_to_save(rows)
     # Flags are checked again: the seller may have changed category, condition or price
     flag_rows(db, rows, store.id, imp.currency)
     for r in rows_to_save:
-        category = categories.get(r["category"]) or categories["other"]
-        # The seller may have changed the category in the preview: specs are normalized again for it
-        specs = normalize_specs(category.slug, source_text(r["raw_name"], r.get("article")), r.get("specs"), r.get("brand"))
-        key = make_match_key(category.slug, r["name"], r.get("brand"), specs)
-        product = products.get(key) or db.scalar(select(Product).where(Product.match_key == key))
-        if product is None:
-            if category.slug not in completions:
-                completions[category.slug] = completion_index(
-                    db.scalars(select(Product.match_key).where(Product.category_id == category.id)))
-            done = unique_completion(key, completions[category.slug])
-            product = db.scalar(select(Product).where(Product.match_key == done)) if done else None
+        category, specs, key, product = matcher.match(r)
         if product is None:
             product = Product(
                 category=category, brand=r.get("brand"), model=r.get("model"),
@@ -434,12 +533,15 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
         else:
             price_changed = offer.price != price or offer.currency != currency
             stats["updated"] += 1
+        if offer.id is not None and (offer.is_in_stock != in_stock or offer.removed_at is not None):
+            offer.events.append(OfferEvent(field="stock", value=str(int(in_stock)), source="import"))
         offer.product = product
         offer.price = price
         offer.currency = currency
         offer.condition = Condition(r.get("condition") or "new")
         offer.note = r.get("note")
         offer.is_in_stock = in_stock
+        offer.removed_at = None  # a deleted offer listed again is back
         offer.updated_at = utcnow()  # the price list confirmed this offer: freshness for "recommended"
         save_offer_flags(offer, r["flags"])
         if price is not None and price_changed:
@@ -448,13 +550,15 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
         seen.add(offer.id)
         offers_by_product.setdefault(product.id, offer)
 
-    # Only a full price list file says "everything else is sold out"; a pasted post lists just a few goods
-    for offer in offers_by_raw.values() if imp.source == "file" else ():
+    # Only a full price list file says "everything else is sold out"; an addition or a post lists just a few goods
+    for offer in offers_by_raw.values() if mode == "full" else ():
         if offer.id not in seen and offer.is_in_stock:
             offer.is_in_stock = False
+            offer.events.append(OfferEvent(field="stock", value="0", source="import"))
             stats["out_of_stock"] += 1
 
     parsed_rows = imp.rows_json or []
+    imp.mode = mode
     imp.status = ImportStatus.published
     imp.rows_json = rows
     db.commit()

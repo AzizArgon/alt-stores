@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { CategoryIcon } from './CategoryIcon'
 import LineChart, { SERIES_COLORS } from './LineChart'
 import { Badge, Card, Tabs } from './ui'
 import { formatDayMonth, formatMonthYear, formatPrice, roundSum } from '../services/format'
@@ -74,13 +75,14 @@ export function ProductMarket({ market, usdRate }) {
   return (
     <Card className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="flex items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
-        {info?.market_usd != null && (
-          <p className="text-sm text-muted">
-            {t('market.marketNow', { stores: info.stores })}: <b>≈ {formatValue(toSum(info.market_usd))}</b>
-          </p>
-        )}
+        <h2 className="flex flex-wrap items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
+        <Badge title={t('market.scopeHint')}>{t('market.scope')}</Badge>
       </div>
+      {info?.market_usd != null && (
+        <p className="mt-1 text-sm text-muted">
+          {t('market.marketNow', { stores: info.stores })}: <b className="text-ink">≈ {formatValue(toSum(info.market_usd))}</b>
+        </p>
+      )}
       {info?.market_usd == null ? (
         <p className="mt-2 text-sm text-muted">{t('market.notEnoughStores')}</p>
       ) : (
@@ -134,7 +136,11 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
         <tbody>
           {indices.rows.map((r) => (
             <tr key={r.category} className="border-t border-line">
-              <td className="py-1.5">{t(`categories.${r.category}`)}</td>
+              <td className="py-1.5">
+                <Link to={`/catalog?category=${r.category}`} className="inline-flex items-center gap-2 hover:text-primary">
+                  <CategoryIcon category={r.category} className="size-5 shrink-0 text-primary" />{t(`categories.${r.category}`)}
+                </Link>
+              </td>
               <td data-label={t('market.table.products')} className="py-1.5 text-right text-muted">{r.products}</td>
               {PERIODS.map((p) => <td key={p} data-label={t(`market.periodShort.${p}`)} className="py-1.5 text-right"><PctText value={r[p]} /></td>)}
             </tr>
