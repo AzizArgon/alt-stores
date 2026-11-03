@@ -15,10 +15,10 @@ for img in alt-stores-backend alt-stores-web; do
     docker tag "$img:swap" "$img:previous"
     docker rmi "$img:swap" >/dev/null
 done
-docker compose up -d
+docker compose up -d </dev/null
 for i in $(seq 1 30); do
     curl -sf http://127.0.0.1:8095/api/health >/dev/null && { echo "ROLLBACK OK"; exit 0; }
     sleep 2
 done
-echo "The site did not start:"; docker compose logs --tail 40; exit 1
+echo "The site did not start:"; docker compose logs --tail 40 </dev/null; exit 1
 EOF
