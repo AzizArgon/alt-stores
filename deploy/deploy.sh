@@ -11,6 +11,8 @@ PLATFORM=linux/amd64  # the server CPU (uname -m = x86_64)
 IMAGES="alt-stores-backend alt-stores-web"
 
 step() { echo; echo "=== $*"; }
+# Docker on the laptop = Docker Engine inside WSL (Ubuntu in F:\wsl\ubuntu, docs/deploy.md); the repo is /mnt/f/... there
+docker() { MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --exec docker "$@"; }
 
 # The server is the alpha branch. Development goes on in main and reaches the server only on the author's word
 branch=$(git rev-parse --abbrev-ref HEAD)
@@ -24,7 +26,9 @@ if [ -n "$(git status --porcelain)" ]; then
     git status --short
     exit 1
 fi
-docker info >/dev/null 2>&1 || { echo "REFUSED: Docker is not running - start Docker Desktop. Nothing was changed."; exit 1; }
+# WSL starts on the first call; the Docker service needs a few seconds after that
+for i in $(seq 1 15); do docker info >/dev/null 2>&1 && break; sleep 2; done
+docker info >/dev/null 2>&1 || { echo "REFUSED: Docker in WSL does not answer (wsl -d Ubuntu docker info). Nothing was changed."; exit 1; }
 tag=$(git rev-parse --short HEAD)
 
 step "1/6 git push"
