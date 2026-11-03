@@ -5,6 +5,7 @@ Daily copies keep the last 14, copies before a deploy - the last 5 (docs/deploy.
 """
 
 import gzip
+import os
 import shutil
 import sqlite3
 import sys
@@ -13,7 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.config import LOCAL_DIR, settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
+
+# Files outside git (docs/deploy.md); in Docker ALT_LOCAL_DIR=/data
+LOCAL_DIR = Path(os.environ.get("ALT_LOCAL_DIR", Path(__file__).resolve().parents[2] / "_local"))
 
 
 def backup(label: str = "daily", keep: int = 14, backups: Path | None = None) -> Path:
