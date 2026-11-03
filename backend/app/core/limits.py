@@ -1,5 +1,6 @@
 """Limits of the public server: login attempts and registrations per IP (in memory), daily usage (in the DB)."""
 
+import ipaddress
 import time
 from collections import defaultdict, deque
 from datetime import date
@@ -15,10 +16,15 @@ from app.db.models import UsageCounter
 def client_ip(request: Request) -> str:
     """nginx puts the visitor's IP (taken from Cloudflare's CF-Connecting-IP) into X-Real-IP.
 
-    The header is trusted only from nginx on the same machine, otherwise anyone could send a fake one.
+    The header is trusted only from nginx (same machine, or the web container in Docker: TRUSTED_PROXIES),
+    otherwise anyone could send a fake one.
     """
     host = request.client.host if request.client else ""
-    if host in ("127.0.0.1", "::1"):
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if any(addr in ipaddress.ip_network(net) for net in settings.trusted_proxies):
         return request.headers.get("x-real-ip", host)
     return host
 

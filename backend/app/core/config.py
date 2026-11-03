@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     login_max_failures: int = 0  # failed logins per IP per window, then 429
     login_window_minutes: int = 15
     register_per_hour: int = 0  # new accounts per IP per hour
+    # X-Real-IP is believed only from these addresses (nginx); in Docker - the project network (docker-compose.yml)
+    trusted_proxies: list[str] = ["127.0.0.1/32", "::1/128"]
 
 
 settings = Settings()

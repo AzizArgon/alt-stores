@@ -74,6 +74,20 @@ def test_client_ip_from_nginx_only():
 
     assert limits.client_ip(Req("127.0.0.1", {"x-real-ip": "203.0.113.7"})) == "203.0.113.7"
     assert limits.client_ip(Req("198.51.100.1", {"x-real-ip": "203.0.113.7"})) == "198.51.100.1"
+    assert limits.client_ip(Req("testclient", {"x-real-ip": "203.0.113.7"})) == "testclient"
+
+
+def test_client_ip_from_docker_web_container(monkeypatch):
+    class Req:
+        def __init__(self, host, headers):
+            self.client = type("C", (), {"host": host})
+            self.headers = headers
+
+    monkeypatch.setattr(limits.settings, "trusted_proxies", ["172.31.250.0/24"])
+    assert limits.client_ip(Req("172.31.250.3", {"x-real-ip": "203.0.113.7"})) == "203.0.113.7"
+    # Another container or a direct request is not believed
+    assert limits.client_ip(Req("172.18.0.5", {"x-real-ip": "203.0.113.7"})) == "172.18.0.5"
+    assert limits.client_ip(Req("127.0.0.1", {"x-real-ip": "203.0.113.7"})) == "127.0.0.1"
 
 
 def test_daily_import_limits(Session, monkeypatch):

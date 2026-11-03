@@ -1,0 +1,73 @@
+# ALT STORES in Docker (docs/deploy.md). On the server: /opt/alt-stores/ = this file + .env + data/.
+# Images are built on the laptop (deploy/deploy.sh) and loaded on the server: tag "current" runs, "previous" is for rollback.
+# Outside, only the web container is open and only on 127.0.0.1: nginx of the host forwards pcmarket.khudoberdi.uz here.
+name: alt-stores
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 5m
+    max-file: "2"
+
+services:
+  backend:
+    image: alt-stores-backend:current
+    build: ./backend
+    pull_policy: never
+    env_file: .env
+    environment:
+      ALT_LOCAL_DIR: /data
+      DATABASE_URL: sqlite:////data/database.db
+      # X-Real-IP is believed only from the web container (the network below)
+      TRUSTED_PROXIES: '["172.31.250.0/24"]'
+    # Owner of data/ on the server (user azi), so backups can be read without sudo; not root
+    user: "1001:1001"
+    volumes:
+      - ./data:/data
+    networks: [alt-stores]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=256m
+    mem_limit: 700m
+    cpus: 1.5
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    logging: *logging
+
+  web:
+    image: alt-stores-web:current
+    build: ./frontend
+    pull_policy: never
+    ports:
+      - "127.0.0.1:8095:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [alt-stores]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=32m
+    mem_limit: 64m
+    cpus: 0.5
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+    logging: *logging
+
+networks:
+  alt-stores:
+    name: alt-stores
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
