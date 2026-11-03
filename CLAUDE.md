@@ -44,6 +44,7 @@
 - Тесты: `cd backend` → `.\.venv\Scripts\python.exe -m pytest` (без живых запросов к ИИ и cbu.uz); frontend — `cd frontend` → `npm test`.
 - Реальный магазин «Age Computers» (полный реальный прайс; флаг `stores.is_demo = 0`, значок «Проверенный»): логин и пароль задал владелец — `scripts/set_account.py` (пароль вводится только в терминале). `demo_reset.py` и `seed_demo.py` его не сбрасывают (экспорт → восстановление). Демо-магазины: `scripts/seed_demo.py` (повторный запуск без дублей), `demo1..3@example.com` / `demo12345`; пустой магазин для живой загрузки — `live@example.com` / `demo12345`; покупатель для проверки — `buyer1@example.com` / `demo12345` (создан вручную в Б3.1) (файл снимает с продажи остальные товары магазина). Для тестовых email — `@example.com` (`.test` отклоняется).
 - Реальный прайс: `_local\samples\Price of Age Computers (9).xlsx` (вне репозитория, в git не класть).
+- Docker на ПК — Docker Engine в WSL (не Docker Desktop), Ubuntu в `F:\wsl\ubuntu`; команды — `wsl docker …`, остановить — `wsl --shutdown`, место — `wsl docker system prune` (`docs/deploy.md`).
 - ⚠ `--reload` перезапускает сервер при изменении любого `.py` в `backend/` — во время импорта код не править.
 
 ## Дорожная карта
