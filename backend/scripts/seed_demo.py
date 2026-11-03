@@ -8,6 +8,7 @@ Demo price history for the last 3 months (price_history.is_demo): small moves, R
 Demo ready PCs (phase B4): 8 builds of the demo stores in three cities, every precision level, each check shown once.
 Re-running updates the same stores and offers and recreates the demo builds, no duplicates. Usage (from backend/):
   .venv/Scripts/python.exe scripts/seed_demo.py
+  .venv/Scripts/python.exe scripts/seed_demo.py --builds-only   # only store details and demo builds (server update)
 """
 
 import random
@@ -160,6 +161,24 @@ def seed_history(db: Session, store_ids: list[int], fetch_rates: bool = False) -
     return added
 
 
+def _live_store(db: Session) -> None:
+    for store in db.scalars(select(Store).join(Store.owner).where(User.email == LIVE_EMAIL)):
+        store.is_demo = True
+        store.city, store.district = LIVE_CITY, LIVE_DISTRICT
+    db.commit()
+
+
+def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]:
+    """--builds-only: demo stores get their details (city, address...) and the demo builds are recreated.
+
+    Offers, price history and passwords are not touched (the server has its own demo passwords and live data).
+    """
+    for spec in STORES:
+        _store(db, spec)
+    _live_store(db)
+    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}]
+
+
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
     from app.services.importer import publish_import
 
@@ -176,10 +195,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
             offer.updated_at = updated
         db.commit()
         report.append({"store": spec["name"], "rows": len(rows), **stats})
-    for store in db.scalars(select(Store).join(Store.owner).where(User.email == LIVE_EMAIL)):
-        store.is_demo = True
-        store.city, store.district = LIVE_CITY, LIVE_DISTRICT
-    db.commit()
+    _live_store(db)
     store_ids = [db.scalar(select(Store.id).join(Store.owner).where(User.email == s["email"])) for s in STORES]
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
     report.append({"demo_builds": seed_builds(db, usd_rate)})
@@ -322,5 +338,9 @@ if __name__ == "__main__":
     init_db()
     with SessionLocal() as db:
         rate = get_usd_rate(db)
-        for line in seed_demo(db, rate.rate if rate else None, fetch_rates=True):
+        if "--builds-only" in sys.argv:
+            report = refresh_stores_and_builds(db, rate.rate if rate else None)
+        else:
+            report = seed_demo(db, rate.rate if rate else None, fetch_rates=True)
+        for line in report:
             print(line)
