@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { isExternal } from './config/sites'
 import StoreLayout from './layouts/StoreLayout'
+import BuildPage from './pages/BuildPage'
+import BuildsPage from './pages/BuildsPage'
 import CatalogPage from './pages/CatalogPage'
 import HomePage from './pages/HomePage'
 import ImportPage from './pages/ImportPage'
@@ -68,6 +70,8 @@ export default function App() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/products/:id" element={<ProductPage />} />
         <Route path="/market" element={<MarketPage />} />
+        <Route path="/builds" element={<BuildsPage />} />
+        <Route path="/builds/:id" element={<BuildPage />} />
         <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
         <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />

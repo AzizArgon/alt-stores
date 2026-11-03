@@ -15,7 +15,7 @@ import { formatSpec, specLabel, specsLine } from '../services/specs'
 
 const SORTS = ['recommended', 'price']
 
-function Contacts({ store }) {
+export function Contacts({ store }) {
   const { t } = useTranslation()
   if (!store.phone && !store.telegram) return <p className="text-sm text-muted">{t('product.noContacts')}</p>
   // Big buttons: easy to hit with a finger on a phone

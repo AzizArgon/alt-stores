@@ -13,6 +13,7 @@ import { Button, Select, inputClass } from './ui'
 const SEARCH_DELAY_MS = 300
 const NAV_LINKS = [
   { to: '/catalog', label: 'nav.catalog' },
+  { to: '/builds', label: 'nav.builds' },
   { to: '/market', label: 'nav.market' },
 ]
 const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
