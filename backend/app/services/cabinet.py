@@ -15,6 +15,7 @@ from app.db.models import (
     Category, Condition, Currency, FlagLevel, FlagStatus, Offer, OfferEvent, PriceHistory, PriceImport, Product,
     ProductFix, Store, utcnow,
 )
+from app.services.builds import counts as build_counts
 from app.services.antifraud import check_offer, market_prices, save_offer_flags
 from app.services.exchange import get_usd_rate
 from app.services.manual import card_fields, product_brief
@@ -147,6 +148,7 @@ def overview(db: Session, store: Store) -> dict:
         "stale": sum(_aware(o.updated_at) < stale_before for o in offers),
         "last_upload": {"id": last.id, "filename": last.filename, "created_at": _aware(last.created_at)} if last else None,
         "categories": sorted({o.product.category.slug for o in offers if o.product.category}),
+        "builds": build_counts(db, store),  # ready PCs live apart from the goods (phase B4)
     }
 
 
