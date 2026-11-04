@@ -99,6 +99,7 @@ ssh pcmarket "cd /opt/alt-stores && docker compose logs --tail 200 backend"
 - **Копия на ноутбук — автоматически:** задание Планировщика Windows `ALT STORES server backup` каждый день в 12:00 запускает копию скрипта из `F:\claudy\diplom\_local\tools\` (`get_backup.bat auto` и `deploy\get_backup.sh`, вне git: задание не зависит от открытой ветки; путь к `_local` копия находит сама — это папка над `tools`; после правки `get_backup.bat` или `deploy/get_backup.sh` в `main` скопировать их туда заново); если ПК был выключен, то при следующем входе в Windows. Скачивается самая свежая копия, файлы — в `_local\backups\server\`, хранятся последние 14, журнал — `get_backup.log` там же.
 - **Скачать копию вручную:** `get_backup.bat`.
 - **Сделать копию прямо сейчас:** `ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/backup_db.py manual 5"`.
+- ⏰ **Напоминание: после 04.12.2026 удалить** архив старой установки (до Docker) `data/backups/2026-11-04_0632_old_pcmarket_install.tar.gz` (147 МБ: старая база, прайсы, копии и старый `.env`). Ротация его не трогает: `backup_db.py` удаляет только файлы своей метки (`*_daily.db.gz`, `*_before_deploy.db.gz` …), `get_backup` скачивает только `*.db.gz`. Удалить (без sudo): `ssh pcmarket "rm /opt/alt-stores/data/backups/2026-11-04_0632_old_pcmarket_install.tar.gz"`.
 
 ### Как восстановить базу из копии
 
