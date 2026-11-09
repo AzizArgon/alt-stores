@@ -437,3 +437,83 @@ class TgPost(Base):
     reason: Mapped[str | None] = mapped_column(String(32))
     offer_ids: Mapped[list] = mapped_column(JSON, default=list)
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --- Phase 10: chat of a buyer with a store ---------------------------------------------------------------------------
+
+class TopicKind(str, enum.Enum):
+    """What a conversation is about. Phase 11 adds "reservation" (a booking of an offer)."""
+    offer = "offer"  # an offer of the store (a product card, new or used)
+    build = "build"  # a ready PC of the store
+    store = "store"  # a question to the store without a product
+
+
+class MessageAuthor(str, enum.Enum):
+    buyer = "buyer"
+    store = "store"
+    system = "system"  # status lines of a reservation (phase 11)
+
+
+class Conversation(Base):
+    """One conversation per buyer + store + topic: "Write" again opens the same one."""
+
+    __tablename__ = "conversations"
+    __table_args__ = (UniqueConstraint("buyer_id", "store_id", "topic_kind", "topic_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    topic_kind: Mapped[TopicKind] = mapped_column(str_enum(TopicKind))
+    # offers.id / builds.id; 0 for a question to the store (NULL would not be unique in SQLite)
+    topic_id: Mapped[int] = mapped_column(Integer, default=0)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_message_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    buyer: Mapped[User] = relationship()
+    store: Mapped[Store] = relationship()
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", order_by="Message.id")
+
+
+class Message(Base):
+    """Plain text only (up to 2000 characters), no files; shown as text, never as HTML."""
+
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    author: Mapped[MessageAuthor] = mapped_column(str_enum(MessageAuthor))
+    # Who pressed "Send" (rate limits); empty for system lines
+    sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class ChatReport(Base):
+    """"Report" on a conversation: kept for the admin panel (phase 13)."""
+
+    __tablename__ = "chat_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    reason: Mapped[str] = mapped_column(String(16))  # spam / abuse / fraud / other
+    comment: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="new")  # new / reviewed (phase 13)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class StoreBlock(Base):
+    """A buyer blocked by a store: no messages to this store (and, in phase 11, no reservations)."""
+
+    __tablename__ = "store_blocks"
+    __table_args__ = (UniqueConstraint("store_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
