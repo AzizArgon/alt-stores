@@ -490,7 +490,8 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
     }
 
 
-def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None) -> dict:
+def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None,
+                   touched: list[int] | None = None) -> dict:
     """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock"."""
     mode = import_mode(imp, mode)
     store_offers = db.scalars(select(Offer).where(Offer.store_id == store.id)).all()
@@ -557,6 +558,8 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
             offer.events.append(OfferEvent(field="stock", value="0", source="import"))
             stats["out_of_stock"] += 1
 
+    if touched is not None:
+        touched.extend(sorted(seen))  # the offers this publication listed (a Telegram post links them to itself)
     parsed_rows = imp.rows_json or []
     imp.mode = mode
     imp.status = ImportStatus.published

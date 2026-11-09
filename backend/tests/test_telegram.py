@@ -73,6 +73,14 @@ def test_scrub_removes_phones_nicks_links_and_contact_lines():
     assert not PHONE_OR_NICK.search(clean) and "Jasur" not in clean and "Алишер" not in clean
 
 
+def test_sold_words_and_kits():
+    assert telegram.SOLD.search("Сотилди✅") and telegram.SOLD.search("❌ПРОДАНО❌") and not telegram.SOLD.search("продаю")
+    assert telegram.kit_reason("Asus B550M-K Argb\nR5 2600\n90 y.e", 1) == "bundle"
+    assert telegram.kit_reason("CPU: i5-3470\nRAM: DDR3 8GB\nSSD 512GB\nGPU: GT 730\n104$", 1) == "build"
+    assert telegram.kit_reason("Colorfire ddr5 16*2 6000 cl36\n420 y.e", 1) is None
+    assert telegram.kit_reason("RTX 3060 200$\nRTX 3070 300$\ni5-12400F 100$", 3) is None  # a price list
+
+
 def test_channel_store_is_a_telegram_seller_nobody_logs_in(db, channel):
     store = db.get(Store, channel.store_id)
     assert store.kind == StoreKind.telegram and not store.is_verified and store.city == "tashkent"
@@ -86,6 +94,9 @@ def test_run_publishes_ads_skips_the_rest_and_keeps_no_personal_data(db, channel
     assert (log.fetched, log.new, log.parsed) == (5, 5, 2)
     assert log.skipped == {"image_price": 1, "ad": 1, "sold": 1}
     assert channel.last_post_id == 105
+    # Each ad post points at its own offer only (not at the offers of the posts before it)
+    parsed = db.scalars(select(TgPost).where(TgPost.status == "parsed").order_by(TgPost.post_id)).all()
+    assert [len(p.offer_ids) for p in parsed] == [1, 1] and parsed[0].offer_ids != parsed[1].offer_ids
     offers = {o.product.normalized_name: o for o in db.scalars(select(Offer))}
     gpu, ram = offers["MSI RTX 3060 Ventus 12GB"], offers["Kingston Fury Beast DDR4 16GB 3200MHz"]
     assert gpu.post_url == "https://t.me/test_parts/101" and gpu.condition.value == "used" and gpu.price == 210

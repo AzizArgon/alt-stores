@@ -234,6 +234,7 @@ export default function ProductPage() {
               <div className="text-sm">
                 <p className="text-xs text-muted">{t('market.productTitle')} · {t('market.scope')}</p>
                 <p className="font-semibold" title={t('market.scopeHint')}>≈ {formatPrice(roundSum(market.market_usd * product.usd_rate), 'UZS')}</p>
+                {market.ads > 0 && <p className="text-xs text-muted">{t('used.byAds', { count: market.ads })}</p>}
               </div>
             )}
           </div>

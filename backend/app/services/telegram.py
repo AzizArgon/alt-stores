@@ -38,8 +38,18 @@ MAX_PAGES = 5  # pages back in history for one channel per run
 USER_AGENT = "Mozilla/5.0 (compatible; ALT-STORES-monitor/1.0)"
 CHANNEL_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
 
-SOLD = re.compile(r"(?<![\w])(?:продан[оаы]?|продали|sold(?:\s*out)?|sotildi|sotilgan|sotib\s+bo['’ʻ]?ldi)(?![\w])",
-                  re.IGNORECASE)
+SOLD = re.compile(r"(?<![\w])(?:продан[оаы]?|продали|sold(?:\s*out)?|sotildi|sotilgan|сотилди|сотилган"
+                  r"|sotib\s+bo['’ʻ]?ldi)(?![\w])", re.IGNORECASE)
+# Parts of a PC named in a post: a whole PC or a kit ("B550M + R5 2600, 90$") has one price for several parts,
+# it is not the price of one of them (ready PCs are builds of shops, phase B4)
+KIT_PARTS = {
+    "cpu": re.compile(r"\b(?:i[3579][\s-]?\d{4,5}\w*|ryzen|r[3579]\s?\d{4}\w*|xeon|athlon|pentium|celeron)\b|процессор|\bcpu\b"),
+    "board": re.compile(r"\b[abhzx]\d{3}m?\b|материнск|\bm/b\b|motherboard"),
+    "gpu": re.compile(r"\b(?:rtx|gtx|gt|rx)\s?-?\d{3,4}\b|видеокарт|\bgpu\b"),
+    "ram": re.compile(r"\bddr[345]\b|\bozu\b|\bозу\b|оперативн|\bram\b"),
+    "storage": re.compile(r"\bssd\b|\bnvme\b|\bhdd\b|жёстк|жестк"),
+    "psu": re.compile(r"блок питания|\bpsu\b|\bбп\b"),
+}
 # Privacy: what is cut out of a post before it is stored or parsed
 _URL = re.compile(r"(?:https?://|www\.)\S+|\bt\.me/\S+|\btelegram\.me/\S+", re.IGNORECASE)
 _MENTION = re.compile(r"(?<![\w.])@[A-Za-z0-9_]{3,}")
@@ -234,6 +244,17 @@ def skip_reason(text: str, has_media: bool) -> str | None:
     return None
 
 
+def kit_reason(text: str, rows: int) -> str | None:
+    """A whole PC ("build") or a kit of two parts with one price ("bundle"): not an ad of one part."""
+    low = text.lower()
+    parts = sum(bool(p.search(low)) for p in KIT_PARTS.values())
+    if parts >= 3 and rows < parts:
+        return "build"
+    if parts == 2 and rows == 1:
+        return "bundle"
+    return None
+
+
 def _check_known(db: Session, channel: TgChannel, visible: list[Post], log_: ChannelLog) -> None:
     """Posts seen before: edited to "sold" -> off; gone from the feed (inside the range we see) -> off."""
     if not visible:
@@ -294,6 +315,10 @@ async def _publish_posts(db: Session, channel: TgChannel, items: list[tuple[Post
             record.status, record.reason = "skipped", reason
             log_.skip(record.reason)
             continue
+        if reason := kit_reason(record.text, len(rows)):
+            record.status, record.reason = "skipped", reason
+            log_.skip(reason)
+            continue
         for row in rows:
             row.row = len(all_rows) + 1
             all_rows.append(row)
@@ -318,18 +343,19 @@ async def _publish_posts(db: Session, channel: TgChannel, items: list[tuple[Post
             record.status, record.reason = "failed", "ai_failed"  # tried again next run
             log_.skip("ai_failed")
             continue
-        rows = [r for r in rows if r.get("price") is not None and r.get("category") != "other"]
+        priced = [r for r in rows if r.get("price") is not None]
+        rows = [r for r in priced if r.get("category") != "other"]
         if not rows:
-            record.status, record.reason = "skipped", "no_model"
-            log_.skip("no_model")
+            # Not a computer part the catalog has (a tablet, a phone) or no product found at all
+            record.status, record.reason = "skipped", "other_category" if priced else "no_model"
+            log_.skip(record.reason)
             continue
         for r in rows:
             # Only what the seller wrote: "new" counts in the market of new goods, silence is "not said" (used group)
             r["condition"] = clean[r["row"]].condition or condition_of(record.text)
-        before = {o.id: o.updated_at for o in db.scalars(select(Offer).where(Offer.store_id == store.id))}
-        publish_import(db, imp, store, rows, mode="append")
-        changed = [o for o in db.scalars(select(Offer).where(Offer.store_id == store.id))
-                   if o.id not in before or o.updated_at != before[o.id]]
+        touched: list[int] = []
+        publish_import(db, imp, store, rows, mode="append", touched=touched)
+        changed = db.scalars(select(Offer).where(Offer.id.in_(touched))).all()
         url = post_url(channel, post.id)
         for offer in changed:
             offer.post_url, offer.posted_at = url, post.posted_at or utcnow()

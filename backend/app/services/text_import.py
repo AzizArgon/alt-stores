@@ -282,7 +282,10 @@ def card_row(lines: list[str], max_len: int = 1000) -> CleanRow | None:
     """
     prices = _prices(lines)
     regular = [p for p in prices if not _is_discount(lines[p[3]])] or prices
-    price, currency, check, price_line = regular[0]
+    # A bare number after a colon is a price only if nothing better is there: "CUDA ядролари: 1536" is a spec,
+    # "Нархи: 155" / "Цена: 190" / "190$" is the price
+    said = [p for p in regular if not p[2] or any(w in lines[p[3]].lower() for w in PRICE_WORDS)]
+    price, currency, check, price_line = (said or regular)[0]
     title = _title(lines, price_line)
     if not title:
         return None

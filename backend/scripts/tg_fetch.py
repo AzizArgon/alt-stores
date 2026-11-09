@@ -17,7 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 REASONS = {
     "no_price": "no price in the text", "image_price": "price only on a picture", "no_model": "no product model",
     "ad": "advert, no product", "sold": "already sold", "old": "older than 30 days", "no_text": "no text",
-    "ai_failed": "AI failed (retried next run)",
+    "ai_failed": "AI failed (retried next run)", "build": "a whole PC", "bundle": "a kit, one price",
+    "other_category": "not a catalog category",
 }
 
 

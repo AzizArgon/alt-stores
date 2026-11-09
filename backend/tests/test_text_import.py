@@ -274,3 +274,11 @@ def test_condition_line_with_warranty_is_kept():
     [row] = text_to_rows(post)
     assert row.condition == "new"
     assert "доставка" not in row.ai_text
+
+
+def test_card_post_price_word_wins_over_a_spec_number():
+    # A real channel post (phase 9): the spec line "CUDA ядролари: 1536" is not the price
+    text = ("MAXSUN GEFORCE GTX 1660 Ti iCraft\n\n▪️ GPU: NVIDIA GeForce GTX 1660 Ti\n▪️ Видеохотира: 6GB GDDR6\n"
+            "▪️ CUDA ядролари: 1536\n▪️ Boost частотаси: 1770 MHz\n\n💰Нархи: 155\n")
+    rows = text_to_rows(text)
+    assert len(rows) == 1 and rows[0].price == 155 and rows[0].currency == "USD"
