@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext } from 'react-router-dom'
 import { ArrowRight, CalendarCheck, CircleCheck, CircleSlash, Clock, MessageSquare, Monitor, ShieldAlert } from 'lucide-react'
 import { DemoNote } from '../components/Market'
+import UndoUpload from '../components/UndoUpload'
 import { Button, Card, Skeleton } from '../components/ui'
 import api from '../services/api'
 
@@ -26,10 +27,11 @@ export default function CabinetOverview() {
   const [data, setData] = useState(null)
   const [market, setMarket] = useState(null)
 
+  const loadOverview = () => api.get('/seller/overview').then((res) => setData(res.data)).catch(() => setData({}))
   useEffect(() => {
-    api.get('/seller/overview').then((res) => setData(res.data)).catch(() => setData({}))
+    loadOverview()
     api.get('/seller/analytics', { params: { period: 'quarter' } }).then((res) => setMarket(res.data)).catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
@@ -48,6 +50,16 @@ export default function CabinetOverview() {
           <Button to="/seller/add?method=catalog" variant="secondary" className="flex-1 sm:flex-none">{t('cabinet.overview.addOne')}</Button>
         </div>
       </div>
+
+      {data?.undo && (
+        <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 text-sm break-words">
+            <span className="font-medium">{t('undo.overview', { name: data.undo.filename || t('manual.source.text') })}</span>
+            <span className="block text-muted">{t('undo.deadline', { date: new Date(data.undo.deadline).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) })}</span>
+          </p>
+          <UndoUpload importId={data.undo.id} onDone={loadOverview} className="w-full shrink-0 sm:w-auto" />
+        </div>
+      )}
 
       {!data ? <Skeleton className="h-28 w-full rounded-xl" /> : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">

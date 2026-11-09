@@ -50,6 +50,48 @@ function GroupItem({ item }) {
   )
 }
 
+// The groups of a summary, each opens into a list (old price -> new price): "what will change" and "what will come back"
+function GroupList({ summary, groups, styles, prefix, always }) {
+  const { t } = useTranslation()
+  const count = (g) => summary[g].length
+  return groups.map((g) => (g === always || count(g) > 0) && (
+    <details key={g} className="group py-1" open={false}>
+      <summary className={`flex cursor-pointer list-none items-center gap-2 py-1.5 text-sm ${count(g) ? '' : 'pointer-events-none'}`}>
+        <ChevronRight className={`size-4 shrink-0 text-faint transition-transform group-open:rotate-90 ${count(g) ? '' : 'invisible'}`} aria-hidden />
+        <span className={`font-semibold tabular-nums ${count(g) ? styles[g] : 'text-faint'}`}>{count(g)}</span>
+        <span>{t(`${prefix}.${g}`, { count: count(g) })}</span>
+      </summary>
+      <ul className="mb-2 ml-6 max-h-80 divide-y divide-line overflow-y-auto text-sm">
+        {summary[g].slice(0, LIST_LIMIT).map((item, i) => <GroupItem key={`${item.raw_name}-${i}`} item={item} />)}
+        {count(g) > LIST_LIMIT && <li className="py-1.5 text-muted">{t('importSummary.more', { count: count(g) - LIST_LIMIT })}</li>}
+      </ul>
+    </details>
+  ))
+}
+
+const UNDO_GROUPS = ['prices', 'back_in_stock', 'out_of_stock', 'removed_new', 'kept_new', 'conflicts']
+const UNDO_STYLE = {
+  prices: 'text-primary', back_in_stock: 'text-success', out_of_stock: 'text-warning', removed_new: 'text-danger',
+  kept_new: 'text-warning', conflicts: 'text-muted',
+}
+
+// "What will come back" before undoing an upload (phase 12): the same look as "what will change"
+export function UndoSummary({ summary }) {
+  const { t } = useTranslation()
+  const nothing = UNDO_GROUPS.every((g) => summary[g].length === 0)
+  return (
+    <div>
+      <p className="text-sm text-muted">{t('undo.intro')}</p>
+      <div className="mt-2 divide-y divide-line">
+        {nothing
+          ? <p className="py-2 text-sm text-muted">{t('undo.nothing')}</p>
+          : <GroupList summary={summary} groups={UNDO_GROUPS} styles={UNDO_STYLE} prefix="undo.group" />}
+      </div>
+      {summary.conflicts.length > 0 && <p className="mt-2 text-xs text-muted">{t('undo.conflictsHint')}</p>}
+    </div>
+  )
+}
+
 // "What will change": the groups of the summary, each opens into a list (old price -> new price)
 export default function ImportSummary({ summary, loading }) {
   const { t } = useTranslation()
@@ -69,19 +111,7 @@ export default function ImportSummary({ summary, loading }) {
         </div>
       )}
       <div className="mt-3 divide-y divide-line">
-        {GROUPS.map((g) => (g === 'out_of_stock' || count(g) > 0) && (
-          <details key={g} className="group py-1" open={false}>
-            <summary className={`flex cursor-pointer list-none items-center gap-2 py-1.5 text-sm ${count(g) ? '' : 'pointer-events-none'}`}>
-              <ChevronRight className={`size-4 shrink-0 text-faint transition-transform group-open:rotate-90 ${count(g) ? '' : 'invisible'}`} aria-hidden />
-              <span className={`font-semibold tabular-nums ${count(g) ? GROUP_STYLE[g] : 'text-faint'}`}>{count(g)}</span>
-              <span>{t(`importSummary.group.${g}`, { count: count(g) })}</span>
-            </summary>
-            <ul className="mb-2 ml-6 max-h-80 divide-y divide-line overflow-y-auto text-sm">
-              {summary[g].slice(0, LIST_LIMIT).map((item, i) => <GroupItem key={`${item.raw_name}-${i}`} item={item} />)}
-              {count(g) > LIST_LIMIT && <li className="py-1.5 text-muted">{t('importSummary.more', { count: count(g) - LIST_LIMIT })}</li>}
-            </ul>
-          </details>
-        ))}
+        <GroupList summary={summary} groups={GROUPS} styles={GROUP_STYLE} prefix="importSummary.group" always="out_of_stock" />
         <p className="flex items-center gap-2 py-2.5 pl-6 text-sm">
           <span className="font-semibold tabular-nums text-faint">{summary.unchanged}</span>
           {t('importSummary.unchanged', { count: summary.unchanged })}

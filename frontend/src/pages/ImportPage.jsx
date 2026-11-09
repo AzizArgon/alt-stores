@@ -329,6 +329,9 @@ export default function ImportPage() {
           {stats && <p className="mt-1 text-sm">{t('import.publishedStats', stats)}</p>}
         </div>
       )}
+      {imp?.status === 'undone' && (
+        <div className="rounded-xl border border-warning-line bg-warning-soft p-4 text-sm text-warning">{t('import.undone')}</div>
+      )}
       {imp?.status === 'ready' && (
         <>
           {failedCount && (
@@ -366,7 +369,7 @@ export default function ImportPage() {
         </>}>
         <p className="text-sm">{t('importSummary.confirmText', { count: summary?.out_of_stock.length ?? 0, total: summary?.on_sale ?? 0 })}</p>
       </Modal>
-      {(imp?.status === 'ready' || imp?.status === 'published') && rows.length > 0 && (
+      {['ready', 'published', 'undone'].includes(imp?.status) && rows.length > 0 && (
         <PreviewTable importId={id} rows={rows} setRows={setRows} categories={categories}
           currency={imp.currency} rate={rate} readOnly={imp.status !== 'ready'} />
       )}

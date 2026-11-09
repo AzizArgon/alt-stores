@@ -4,6 +4,7 @@ import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 're
 import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
+import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
@@ -211,7 +212,7 @@ function AddGoods({ defaultCurrency, onAdded, initialMethod }) {
   )
 }
 
-function ImportHistory({ items }) {
+function ImportHistory({ items, onChanged }) {
   const { t } = useTranslation()
   return (
     <Card>
@@ -227,8 +228,10 @@ function ImportHistory({ items }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {t(`import.status.${imp.status}`)}
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {imp.status === 'undone'
+                ? <Badge tone="warning">{t('import.status.undone')}</Badge> : t(`import.status.${imp.status}`)}
             </span>
+            {imp.can_undo && <UndoUpload importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />}
           </li>
         ))}
       </ul>
@@ -356,8 +359,8 @@ export function AddSection() {
 }
 
 export function ImportsSection() {
-  const { imports } = useOutletContext()
-  return <ImportHistory items={imports} />
+  const { imports, loadImports } = useOutletContext()
+  return <ImportHistory items={imports} onChanged={loadImports} />
 }
 
 export function ProfileSection() {
