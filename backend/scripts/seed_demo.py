@@ -6,7 +6,7 @@ one is verified, one has a few items far below the market (Anti-Fraud "price bel
 Goes through publish_import, so flags and price history work as for a real upload.
 Demo price history for the last 3 months (price_history.is_demo): small moves, RAM and SSD grew noticeably.
 Demo ready PCs (phase B4): 8 builds of the demo stores in three cities, every precision level, each check shown once.
-Re-running updates the same stores and offers and recreates the demo builds, no duplicates. Usage (from backend/):
+Re-running updates the same stores, offers and demo builds in place (ids stay), no duplicates. Usage (from backend/):
   .venv/Scripts/python.exe scripts/seed_demo.py
   .venv/Scripts/python.exe scripts/seed_demo.py --builds-only   # only store details and demo builds (server update)
 """
@@ -304,12 +304,12 @@ def _demo_components(db: Session, store: Store, parts: list) -> tuple[list[dict]
 
 
 def seed_builds(db: Session, usd_rate: float) -> int:
-    """Demo builds are recreated on every run (Build.is_demo); a real store's builds are never touched."""
+    """Demo builds are updated in place by a constant key (store + name, Build.is_demo): their ids stay, so
+    conversations and bookings about them survive a re-run. A real store's builds are never touched."""
     from app.services.builds import save_build
 
-    for old in db.scalars(select(Build).where(Build.is_demo.is_(True))):
-        db.delete(old)  # with its parts and price history
-    db.commit()
+    existing = {(b.store_id, b.name): b for b in db.scalars(select(Build).where(Build.is_demo.is_(True)))}
+    kept: set[int] = set()
     made = 0
     for spec in DEMO_BUILDS:
         store = db.scalar(select(Store).join(Store.owner).where(User.email == spec["store"]))
@@ -317,6 +317,7 @@ def seed_builds(db: Session, usd_rate: float) -> int:
         if found is None:
             print(f"Demo build skipped (a card is not in the catalog): {spec['name']}")
             continue
+        old = existing.get((store.id, spec["name"]))
         components, cost = found
         usd = round(cost * spec["markup"], -1) if spec.get("markup") else spec["usd"]
         uzs = next(s["currency"] for s in STORES if s["email"] == spec["store"]) == Currency.UZS
@@ -324,19 +325,24 @@ def seed_builds(db: Session, usd_rate: float) -> int:
         build = save_build(db, store, {
             "name": spec["name"], "price": price, "currency": currency, "condition": spec.get("condition", "new"),
             "purpose": spec["purpose"], "description": spec.get("description"), "components": components,
-        })
+        }, old)
         build.is_demo = True
+        kept.add(build.id)
         for point in build.price_history:
             point.is_demo = True
         db.commit()
         made += 1
+    for build in existing.values():  # a demo build no longer in the list
+        if build.id not in kept:
+            db.delete(build)
+    db.commit()
     return made
 
 
 # --- Demo conversations (phase 10) ----------------------------------------------------------------------------------
 # The buyer of the demo with the demo stores: a product question answered, a build question waiting over a day,
 # a question to the store answered, a fresh one unread. Recreated on every run (Conversation.is_demo), also in
-# --builds-only mode (the demo builds get new ids there); a real store is never touched.
+# --builds-only mode; a real store is never touched.
 DEMO_BUYER = "buyer1@example.com"
 # (store, topic: ("offer", category) / ("build", index in DEMO_BUILDS of that store) / ("store",), [(author, text, hours ago)])
 DEMO_CHATS = [

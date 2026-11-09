@@ -37,7 +37,7 @@ def test_demo_stores_share_cards_flag_cheap_items_and_rerun_without_duplicates(d
     assert [f.offer.store.name for f in cheap] == ["PC Galaxy"]
     assert "990 PRO" in cheap[0].offer.raw_name
 
-    # Demo builds are marked and recreated; the real store gets none
+    # Demo builds are marked and updated in place; the real store gets none
     assert all(b.is_demo and b.store.is_demo for b in db.scalars(select(Build)))
     counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build, Conversation, Message)]
     seed_demo(db, 12_000)
@@ -69,9 +69,44 @@ def test_builds_only_keeps_offers_history_and_passwords(db):
     report = refresh_stores_and_builds(db, 12_000)
 
     assert [_count(db, m) for m in (User, Store, Offer, PriceHistory)] == counts
-    # Demo conversations are recreated with the builds (new ids), without duplicates
+    # Demo conversations are recreated without duplicates
     assert [_count(db, m) for m in (Conversation, Message)] == chats and report[1]["demo_chats"] == chats[0] >= 2
     assert all(c.is_demo and c.store.is_demo for c in db.scalars(select(Conversation)))
     assert demo1.password_hash == "server-own" and demo1_store.city == "tashkent"
     assert report[0]["demo_builds"] == _count(db, Build)
     assert db.get(Store, age.id).is_demo is False
+
+
+def test_builds_only_twice_keeps_build_ids_and_buyer_conversations(db):
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    builds = {b.name: b.id for b in db.scalars(select(Build))}
+    assert builds
+    # A buyer's own conversation about a demo build (not demo: the seed never deletes it)
+    from app.db.models import TopicKind
+    buyer = db.scalar(select(User).where(User.email == "buyer1@example.com"))
+    build_id = max(builds.values())
+    build = db.get(Build, build_id)
+    own = db.scalar(select(Conversation).where(Conversation.topic_kind == TopicKind.build,
+                                                Conversation.topic_id == build_id))
+    if own is None:
+        own = Conversation(buyer_id=buyer.id, store_id=build.store_id, topic_kind=TopicKind.build, topic_id=build_id)
+        db.add(own)
+    own.is_demo = False
+    db.commit()
+
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+
+    assert {b.name: b.id for b in db.scalars(select(Build))} == builds
+    assert db.get(Conversation, own.id).topic_id == build_id and db.get(Build, build_id) is not None
