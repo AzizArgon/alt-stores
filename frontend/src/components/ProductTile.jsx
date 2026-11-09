@@ -1,6 +1,7 @@
 import { Store, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { formatPrice, roundSum } from '../services/format'
 import { specsLine } from '../services/specs'
 import { ProductVisual } from './CategoryIcon'
 import Price from './Price'
@@ -29,6 +30,12 @@ export default function ProductTile({ item, usdRate, rateDate, className = '' })
         <span className="mt-1 flex items-center gap-1 text-xs text-muted">
           <Store className="size-3.5" aria-hidden />{t('catalog.stores', { count: item.offers })}
         </span>
+        {item.used_from && (
+          <span className="mt-0.5 block text-xs text-muted">
+            {t('catalog.usedFrom', { price: item.used_from.price_uzs != null
+              ? formatPrice(roundSum(item.used_from.price_uzs), 'UZS') : formatPrice(item.used_from.price, item.used_from.currency) })}
+          </span>
+        )}
       </div>
     </Link>
   )

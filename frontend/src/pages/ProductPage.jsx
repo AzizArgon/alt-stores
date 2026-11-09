@@ -1,4 +1,4 @@
-import { BadgeCheck, MapPin, Phone, Send } from 'lucide-react'
+import { BadgeCheck, ExternalLink, MapPin, Phone, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
@@ -36,10 +36,29 @@ export function Contacts({ store }) {
   )
 }
 
+// A Telegram ad: not a shop, never verified; the buyer opens the post instead of calling (phase 9)
+export function AdBadge() {
+  const { t } = useTranslation()
+  return <Badge tone="warning"><Send className="size-3.5" aria-hidden />{t('used.adBadge')}</Badge>
+}
+
+export function OpenPost({ url, className = '' }) {
+  const { t } = useTranslation()
+  return (
+    <a href={url} target="_blank" rel="noreferrer nofollow"
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-6 text-base font-semibold outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary ${className}`}>
+      <ExternalLink className="size-4" aria-hidden />{t('used.openPost')}
+    </a>
+  )
+}
+
+export const isAd = (offer) => offer.store.kind === 'telegram'
+
 function OfferCard({ offer, usdRate, rateDate, market }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { store } = offer
+  const ad = isAd(offer)
   const place = [t(`cities.${store.city}`), store.district, store.address].filter(Boolean).join(', ')
 
   return (
@@ -49,6 +68,7 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
             {store.name}
             {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
+            {ad && <AdBadge />}
           </p>
           <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
           <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-sm">
@@ -56,7 +76,9 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
               {t(offer.is_in_stock ? 'product.inStock' : 'product.outOfStock')}
             </span>
             <span className="text-faint">·</span>{t(`condition.${offer.condition}`)}
-            <span className="text-faint">·</span><span className="text-muted">{t('product.updated', { date: formatDate(offer.updated_at) })}</span>
+            <span className="text-faint">·</span><span className="text-muted">
+              {ad ? t('used.posted', { date: formatDate(offer.posted_at) }) : t('product.updated', { date: formatDate(offer.updated_at) })}
+            </span>
           </p>
           {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
           <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
@@ -68,7 +90,8 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
       </div>
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
       <div className="mt-3">
-        {open ? <Contacts store={store} />
+        {ad ? <OpenPost url={offer.post_url} className="w-full sm:float-right sm:w-auto" />
+          : open ? <Contacts store={store} />
           : <Button size="lg" className="w-full sm:float-right sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
       </div>
     </Card>
@@ -147,6 +170,7 @@ export default function ProductPage() {
   const { id } = useParams()
   const { city, setCity } = useCity()
   const [sort, setSort] = useState('recommended')
+  const [tab, setTab] = useState(null) // "new" / "used"; by default "new", or "used" when there are no new ones
   const [product, setProduct] = useState(null)
   const [error, setError] = useState('')
 
@@ -166,13 +190,17 @@ export default function ProductPage() {
       </div>
     )
   }
+  const counts = { new: 0, used: 0 }
+  product.offers.forEach((o) => { counts[o.group] += 1 })
+  const group = tab || (counts.new === 0 && counts.used > 0 ? 'used' : 'new')
+  const offers = product.offers.filter((o) => o.group === group)
   const byCity = city !== 'all'
-  const here = byCity ? product.offers.filter((o) => o.store.city === city) : product.offers
-  const elsewhere = byCity ? product.offers.filter((o) => o.store.city !== city) : []
+  const here = byCity ? offers.filter((o) => o.store.city === city) : offers
+  const elsewhere = byCity ? offers.filter((o) => o.store.city !== city) : []
   const range = priceRange(here, product.usd_rate)
   const cityName = t(`cities.${city}`)
   const keySpecs = product.specs.filter((s) => s.main)
-  const market = product.market?.conditions?.new
+  const market = product.market?.conditions?.[group === 'new' ? 'new' : 'used']
 
   return (
     <section>
@@ -191,7 +219,9 @@ export default function ProductPage() {
           {keySpecs.length > 0 && <p className="mt-1 text-sm break-words text-muted">{specsLine(keySpecs)}</p>}
           <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
-              <p className="text-xs text-muted">{byCity ? t('product.priceIn', { city: cityName }) : t('product.priceAll')}</p>
+              <p className="text-xs text-muted">
+                {byCity ? t('product.priceIn', { city: cityName }) : t('product.priceAll')} · {t(`used.group.${group}`)}
+              </p>
               {range ? (
                 <p className="text-h2 md:text-h1">
                   {range.min === range.max ? formatPrice(range.min, 'UZS')
@@ -212,6 +242,8 @@ export default function ProductPage() {
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0">
+          <Tabs value={group} onChange={setTab} className="mb-4"
+            tabs={['new', 'used'].map((g) => ({ value: g, label: `${t(`used.group.${g}`)} (${counts[g]})` }))} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-h2">{byCity ? t('product.inCityTitle', { city: cityName }) : t('product.allTitle')}</h2>
             <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />

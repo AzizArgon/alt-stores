@@ -1,7 +1,7 @@
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Sheet } from '../components/overlays'
 import ProductTile from '../components/ProductTile'
@@ -12,7 +12,8 @@ import { useCity } from '../services/city.jsx'
 import { formatDayMonth, formatPrice } from '../services/format'
 import { formatSpec, fromUrlValue, specLabel, urlValue } from '../services/specs'
 
-const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
+// The catalog is about new goods (phase 9): used ones live in their own section /used
+const CONDITIONS = ['new', 'new_openbox']
 const SORTS = ['popular', 'price_asc', 'price_desc']
 
 const VISIBLE_VALUES = 8
@@ -78,6 +79,9 @@ function FiltersPanel({ categories, category, setCategory, params, setParam, fac
         <option value="">{t('catalog.anyCondition')}</option>
         {CONDITIONS.map((c) => <option key={c} value={c}>{t(`condition.${c}`)}</option>)}
       </Select>
+      <p className="-mt-2 text-xs text-muted">{t('catalog.onlyNew')}{' '}
+        <Link to="/used" className="font-medium text-primary hover:underline">{t('used.link')}</Link>
+      </p>
       <Checkbox label={t('catalog.inStockOnly')} checked={!params.get('all')} onChange={(e) => setParam('all', e.target.checked ? '' : '1', true)} />
       {facets.map((f) => (
         <Facet key={f.key} facet={f} category={category} selected={selectedOf(f.key)}

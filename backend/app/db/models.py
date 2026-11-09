@@ -31,6 +31,17 @@ class Condition(str, enum.Enum):
     unknown = "unknown"  # a post did not say: the seller is asked to choose
 
 
+# Groups the buyer sees (phase 9): new and used goods are never mixed in one list or price.
+# "Not said" is in the used group: it is more honest not to pass it off as new
+NEW_GROUP = (Condition.new, Condition.new_openbox)
+USED_GROUP = (Condition.used, Condition.refurbished, Condition.unknown)
+
+
+class StoreKind(str, enum.Enum):
+    shop = "shop"
+    telegram = "telegram"  # a public Telegram channel (phase 9): no cabinet, never verified, ads not checked
+
+
 class Currency(str, enum.Enum):
     USD = "USD"
     UZS = "UZS"
@@ -90,6 +101,7 @@ class Store(Base):
     is_archive: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     # Invented store of the demo (scripts/seed_demo.py, live upload store); a real store is kept by demo_reset.py
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    kind: Mapped[StoreKind] = mapped_column(str_enum(StoreKind), default=StoreKind.shop, server_default="shop")
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
@@ -144,6 +156,9 @@ class Offer(Base):
     # "Delete my offer": the row stays (its price history is kept), without a price it is out of the catalog.
     # The next price list with the same item brings it back
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # An ad of a Telegram channel (phase 9): the link to its post and when it was posted (older than 30 days = hidden)
+    post_url: Mapped[str | None] = mapped_column(String(255))
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     product: Mapped[Product] = relationship(back_populates="offers")
     store: Mapped[Store] = relationship(back_populates="offers")
@@ -386,3 +401,39 @@ class BuildPriceHistory(Base):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     build: Mapped[Build] = relationship(back_populates="price_history")
+
+
+class TgChannel(Base):
+    """A public Telegram channel whose posts are collected from t.me/s/<username> (phase 9); added by hand."""
+
+    __tablename__ = "tg_channels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    title: Mapped[str] = mapped_column(String(255))
+    city: Mapped[str] = mapped_column(String(32), default="tashkent")  # its ads have no shop city
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_post_id: Mapped[int] = mapped_column(Integer, default=0)
+    # The seller of its ads: a store of kind "telegram" (no owner can log in)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"))
+
+    store: Mapped[Store] = relationship()
+
+
+class TgPost(Base):
+    """One collected post: only the cleaned text needed to parse it (no phones, @names) and what came of it."""
+
+    __tablename__ = "tg_posts"
+    __table_args__ = (UniqueConstraint("channel_id", "post_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("tg_channels.id", ondelete="CASCADE"), index=True)
+    post_id: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text, default="")
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # parsed / skipped (reason: no_price, no_model, ad, image_price) / sold / gone
+    status: Mapped[str] = mapped_column(String(16))
+    reason: Mapped[str | None] = mapped_column(String(32))
+    offer_ids: Mapped[list] = mapped_column(JSON, default=list)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

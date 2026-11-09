@@ -10,6 +10,7 @@ import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
+import UsedPage from './pages/UsedPage'
 import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/catalog" element={<CatalogPage />} />
         <Route path="/products/:id" element={<ProductPage />} />
         <Route path="/market" element={<MarketPage />} />
+        <Route path="/used" element={<UsedPage />} />
         <Route path="/builds" element={<BuildsPage />} />
         <Route path="/builds/:id" element={<BuildPage />} />
         <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />

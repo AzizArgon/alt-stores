@@ -13,6 +13,7 @@ import { Button, Select, inputClass } from './ui'
 const SEARCH_DELAY_MS = 300
 const NAV_LINKS = [
   { to: '/catalog', label: 'nav.catalog' },
+  { to: '/used', label: 'nav.used' },
   { to: '/builds', label: 'nav.builds' },
   { to: '/market', label: 'nav.market' },
 ]
