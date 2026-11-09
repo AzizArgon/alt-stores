@@ -16,7 +16,7 @@ from app.db.models import (
     ProductFix, Store, utcnow,
 )
 from app.services.builds import counts as build_counts
-from app.services.antifraud import check_offer, market_prices, save_offer_flags
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.exchange import get_usd_rate
 from app.services.manual import card_fields, product_brief
 from app.services.market import diff_pct, label, market_condition, market_data
@@ -168,7 +168,7 @@ def recheck_flags(db: Session, offers: list[Offer], store: Store) -> None:
     usd_rate = _usd_rate(db)
     market = market_prices(db, {o.product.match_key for o in offers}, store.id, usd_rate)
     for offer in offers:
-        save_offer_flags(offer, check_offer(_check_row(offer), market.get(offer.product.match_key), usd_rate))
+        save_offer_flags(offer, check_offer(_check_row(offer), market_for(market, offer.product.match_key, offer.condition.value), usd_rate))
 
 
 class EditError(ValueError):

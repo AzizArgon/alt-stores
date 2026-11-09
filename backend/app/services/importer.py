@@ -20,7 +20,7 @@ from app.db.models import (
     Store, utcnow,
 )
 from app.services.catalog import completion_index, make_match_key, unique_completion
-from app.services.antifraud import check_offer, market_prices, save_offer_flags
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.ai_parser import QuotaExhausted, parse_rows, split_specs
 from app.services.exchange import get_usd_rate
 from app.services.price_cleaner import CleanRow, cache_key, clean_markdown
@@ -237,7 +237,7 @@ def flag_rows(db: Session, rows: list[dict], store_id: int, currency: Currency) 
     market = market_prices(db, keys, store_id, usd_rate)
     for r in rows:
         key = make_match_key(r.get("category") or "other", r["name"], r.get("brand"), r.get("specs"))
-        r["flags"] = check_offer({**r, "currency": r.get("currency") or currency.value}, market.get(key), usd_rate)
+        r["flags"] = check_offer({**r, "currency": r.get("currency") or currency.value}, market_for(market, key, r.get("condition")), usd_rate)
 
 
 def _finish(import_id: int, rows: list[dict], stats: dict) -> None:

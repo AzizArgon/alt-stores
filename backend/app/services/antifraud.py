@@ -200,23 +200,37 @@ def check_offer(row: dict, market_usd: list[float] | None = None, usd_rate: floa
     return sorted(flags, key=lambda f: -LEVEL_ORDER[f["level"]])
 
 
-def market_prices(db: Session, match_keys: set[str], store_id: int | None, usd_rate: float | None) -> dict[str, list[float]]:
-    """USD prices of in-stock offers from other stores, by product match_key."""
+def group_of(condition: str | None) -> str:
+    """Market group of a condition (phase 9): an opened box is new; used, refurbished and "not said" are used."""
+    return "new" if (condition or "new") in NEW else "used"
+
+
+def market_prices(db: Session, match_keys: set[str], store_id: int | None,
+                  usd_rate: float | None) -> dict[str, dict[str, list[float]]]:
+    """USD prices of in-stock offers from other stores: {match_key: {"new": [...], "used": [...]}}.
+
+    Like the monitoring, a price is compared only with its own group: a used card or a Telegram ad
+    is not "below market" just because new ones cost more."""
     if not match_keys:
         return {}
     q = (
-        select(Product.match_key, Offer.price, Offer.currency)
+        select(Product.match_key, Offer.price, Offer.currency, Offer.condition)
         .join(Offer.product)
         .where(Product.match_key.in_(match_keys), Offer.is_in_stock.is_(True), Offer.price.is_not(None))
     )
     if store_id is not None:
         q = q.where(Offer.store_id != store_id)
-    result: dict[str, list[float]] = {}
-    for key, price, currency in db.execute(q):
+    result: dict[str, dict[str, list[float]]] = {}
+    for key, price, currency, condition in db.execute(q):
         usd = to_usd(price, currency, usd_rate)
         if usd:
-            result.setdefault(key, []).append(usd)
+            result.setdefault(key, {}).setdefault(group_of(condition.value), []).append(usd)
     return result
+
+
+def market_for(market: dict, key: str, condition: str | None) -> list[float] | None:
+    """Prices of the offer's own group; too few of them means no market flag at all."""
+    return (market.get(key) or {}).get(group_of(condition))
 
 
 def save_offer_flags(offer: Offer, flags: list[dict]) -> None:

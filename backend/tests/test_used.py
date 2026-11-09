@@ -81,3 +81,23 @@ def test_used_api(db, monkeypatch):
     res = api.list_used(condition="used,unknown", sort="price_asc", price_min=None, price_max=1_500_000, category=None,
                         city=None, source=None, page=1, db=db)
     assert [i["price"] for i in res["items"]] == [90]  # 180 USD = 2 160 000 sum: above the price filter
+
+
+def test_below_market_compares_only_with_own_group(db):
+    """Fix after phase 9: a fair used price is not 'below market' of new ones; too little data - no flag."""
+    from app.db.models import Currency
+    from app.services.importer import flag_rows
+
+    a, b, c, d, e = (_store(db, f"m{x}@example.com") for x in "abcde")
+    publish_import(db, _import(db, a), a, [_gpu(1, 300, "new")])
+    publish_import(db, _import(db, b), b, [_gpu(1, 320, "new")])
+    publish_import(db, _import(db, c), c, [_gpu(1, 180, "used")])
+    publish_import(db, _import(db, d), d, [_gpu(1, 170, "unknown")])
+    rows = [_gpu(1, 140, "used"), _gpu(2, 140, "new")]
+    flag_rows(db, rows, e.id, Currency.USD)
+    assert not [f for f in rows[0]["flags"] if f["type"] == "price_below_market"]  # 140 of used 175: fair
+    assert any(f["type"] == "price_below_market" for f in rows[1]["flags"])  # 140 of new 310: suspicious
+    # Only one used offer of other stores (d is the seller itself): too little data, no flag
+    rows = [_gpu(1, 40, "used")]
+    flag_rows(db, rows, d.id, Currency.USD)
+    assert not [f for f in rows[0]["flags"] if f["type"] == "price_below_market"]

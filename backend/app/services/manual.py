@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.models import (
     Category, Condition, Currency, ImportStatus, Offer, PriceHistory, PriceImport, Product, Store, utcnow,
 )
-from app.services.antifraud import check_offer, market_prices, save_offer_flags
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.catalog import card_specs, make_match_key, search_filter
 from app.services.exchange import get_usd_rate
 from app.services.spec_dictionary import spec_map
@@ -78,7 +78,7 @@ def save_offer(db: Session, store: Store, product: Product, price: float, curren
         "price": price, "currency": currency.value, "condition": condition.value, "is_in_stock": is_in_stock,
     }
     market = market_prices(db, {product.match_key}, store.id, usd_rate)
-    row["flags"] = check_offer(row, market.get(product.match_key), usd_rate)
+    row["flags"] = check_offer(row, market_for(market, product.match_key, condition.value), usd_rate)
     save_offer_flags(offer, row["flags"])
     if price_changed:
         offer.price_history.append(PriceHistory(price=price, currency=currency))
