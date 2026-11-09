@@ -41,17 +41,21 @@ TREND = {"ram": 0.24, "ssd": 0.09, "gpu": -0.04}
 STORES = [
     {"email": "demo1@example.com", "name": "Silicon Plus", "city": "tashkent", "district": "Юнусабад",
      "address": "ул. Амира Темура, 107", "phone": "+998900000101", "telegram": "@silicon_plus_demo", "is_verified": True,
+     "hours": "Пн–Сб 10:00–19:00",
      "currency": Currency.USD, "days_old": 0, "below_market": []},
     {"email": "demo2@example.com", "name": "Byte Market", "city": "samarkand", "district": "Сиаб",
      "address": "ул. Ташкентская, 12", "phone": "+998900000202", "telegram": "@byte_market_demo", "is_verified": False,
+     "hours": "Ежедневно 09:00–20:00",
      "currency": Currency.UZS, "days_old": 4, "below_market": []},
     # Published last: its cheap items are compared with all the other stores
     {"email": "demo3@example.com", "name": "PC Galaxy", "city": "bukhara", "district": "Центр",
      "address": "ул. Бахауддина Накшбанди, 41", "phone": "+998900000303", "telegram": None, "is_verified": False,
+     "hours": "Пн–Пт 09:30–18:30, Сб 10:00–16:00",
      "currency": Currency.USD, "days_old": 25, "below_market": ["Ryzen 5 7500F", "RTX 5060 TWIN EDGE OC", "990 PRO 1TB"]},
 ]
 LIVE_EMAIL = "live@example.com"  # empty demo store for the live upload (scripts/demo_reset.py)
 LIVE_CITY, LIVE_DISTRICT = "fergana", "Центр"
+LIVE_ADDRESS, LIVE_HOURS = "ул. Ал-Фергани, 25, ориентир — ТЦ «Фергана Сити»", "Пн–Сб 10:00–19:00"
 DEMO_EMAILS = [s["email"] for s in STORES] + [LIVE_EMAIL]
 
 
@@ -64,8 +68,10 @@ def _store(db: Session, spec: dict) -> Store:
     if store is None:
         store = Store(owner=user)
         db.add(store)
-    for field in ("name", "city", "district", "address", "phone", "telegram", "is_verified"):
+    for field in ("name", "city", "district", "address", "phone", "telegram", "is_verified", "hours"):
         setattr(store, field, spec[field])
+    # No invented coordinates: "Open in Yandex Maps" searches the address (phase 12)
+    store.map_url = store.map_lat = store.map_lon = None
     store.is_demo = True
     db.commit()
     return store
@@ -166,6 +172,7 @@ def _live_store(db: Session) -> None:
     for store in db.scalars(select(Store).join(Store.owner).where(User.email == LIVE_EMAIL)):
         store.is_demo = True
         store.city, store.district = LIVE_CITY, LIVE_DISTRICT
+        store.address, store.hours = LIVE_ADDRESS, LIVE_HOURS
     db.commit()
 
 
@@ -469,7 +476,7 @@ def seed_reservations(db: Session) -> int:
         r.status, r.created_at, r.updated_at = status, created, created + timedelta(hours=len(path) - 1)
         r.cancelled_by = "store" if reason else None
         r.cancel_reason, r.cancel_text = reason, None
-        if key == "confirmed":  # ends today (Tashkent): the overview shows it
+        if key == "confirmed":  # ends today (Tashkent) of every run, whenever it is: the overview shows it
             r.expires_at = datetime.combine(now.astimezone(TZ).date(), time(23, 59), TZ).astimezone(timezone.utc)
         elif "confirmed" in path:
             r.expires_at = created + timedelta(hours=1, days=store.reservation_days or 2)

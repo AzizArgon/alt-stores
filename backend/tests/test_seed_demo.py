@@ -133,8 +133,21 @@ def test_demo_reservations_survive_builds_only_reruns(db):
     assert set(convs) == {rid for rid, _, _ in first.values()}
     counts = [_count(db, m) for m in (Reservation, Conversation, Message)]
 
+    # A run days ago: the "ends today" reservation has expired since; the next run makes it "today" again
+    from datetime import timedelta
+
+    from app.db.models import ReservationStatus, utcnow
+    from app.services.reservations import TZ
+    ending = db.scalar(select(Reservation).where(Reservation.demo_key == "confirmed"))
+    ending.expires_at, ending.status = utcnow() - timedelta(days=3), ReservationStatus.expired
+    db.commit()
     refresh_stores_and_builds(db, 12_000)
     refresh_stores_and_builds(db, 12_000)
+    db.refresh(ending)
+    assert ending.status == ReservationStatus.confirmed
+    assert ending.expires_at.replace(tzinfo=ending.expires_at.tzinfo or TZ).astimezone(TZ).date() == utcnow().astimezone(TZ).date()         or ending.expires_at.replace(tzinfo=__import__("datetime").timezone.utc).astimezone(TZ).date() == utcnow().astimezone(TZ).date()
+    demo1 = db.scalar(select(Store).join(Store.owner).where(User.email == "demo1@example.com"))
+    assert demo1.address and demo1.hours and demo1.map_url is None
 
     assert {r.demo_key: (r.id, r.status.value, r.build_id) for r in db.scalars(select(Reservation))} == first
     assert {c.topic_id: c.id for c in db.scalars(select(Conversation).where(
