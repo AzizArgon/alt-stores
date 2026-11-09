@@ -19,7 +19,7 @@ from app.services.builds import counts as build_counts
 from app.services.antifraud import check_offer, market_prices, save_offer_flags
 from app.services.exchange import get_usd_rate
 from app.services.manual import card_fields, product_brief
-from app.services.market import diff_pct, label, market_data
+from app.services.market import diff_pct, label, market_condition, market_data
 from app.services.spec_normalizer import INFERRED, SUSPECT
 
 PAGE_SIZE = 50
@@ -64,7 +64,7 @@ def _flag_rank(offer: Offer) -> int:
 
 def _market(md, offer: Offer) -> dict | None:
     """The offer against the market median of its card (in stock, same condition), as on the market pages."""
-    market = md.now((offer.product_id, offer.condition.value))
+    market = md.now((offer.product_id, market_condition(offer.condition.value)))
     usd = md.offer_usd.get(offer.id)
     if market is None or usd is None:
         return None
