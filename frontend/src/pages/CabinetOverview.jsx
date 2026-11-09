@@ -37,8 +37,9 @@ export default function CabinetOverview() {
         <div className="min-w-0">
           <h1 className="text-h2 break-words md:text-h1">{store.name}</h1>
           <p className="mt-1 text-sm text-muted">
+            {/* A link to the upload history: on a phone it is not in the tab bar */}
             {data?.last_upload
-              ? t('cabinet.overview.lastUpload', { date: new Date(data.last_upload.created_at).toLocaleDateString('ru-RU') })
+              ? <Link to="/seller/imports" className="hover:text-primary hover:underline">{t('cabinet.overview.lastUpload', { date: new Date(data.last_upload.created_at).toLocaleDateString('ru-RU') })}</Link>
               : data && t('cabinet.overview.noUpload')}
           </p>
         </div>

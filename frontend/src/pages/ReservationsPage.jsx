@@ -1,6 +1,6 @@
 // Phase 11: "My reservations" of a buyer - active or finished, status, term, store, address, chat, cancel.
 import { CalendarCheck, MapPin, MessageSquare, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
@@ -36,18 +36,18 @@ function itemPath(r) {
   return r.current?.product_id ? `/products/${r.current.product_id}` : null
 }
 
-function ReservationCard({ r, usdRate, highlight, onCancel }) {
+function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
   const { t } = useTranslation()
   const path = itemPath(r)
   const place = [t(`cities.${r.store.city}`), r.store.district, r.store.address].filter(Boolean).join(', ')
   const Title = path ? Link : 'span'
   return (
-    <Card as="li" className={`min-w-0 ${highlight ? 'ring-2 ring-primary' : ''}`}>
+    <Card as="li" id={`reservation-${r.id}`} className={`min-w-0 scroll-mt-24 ${highlight ? 'ring-2 ring-primary' : ''}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
             <StatusBadge status={r.status} />
-            {!r.seen && <Badge tone="danger">{t('reservation.statusChanged')}</Badge>}
+            {unseen && <Badge tone="danger">{t('reservation.statusChanged')}</Badge>}
             <span className="text-xs text-muted">{t('reservation.created', { date: formatDate(r.created_at) })}</span>
           </p>
           <Title {...(path ? { to: path } : {})} className="mt-1.5 block text-h3 break-words hover:text-primary">{r.title}</Title>
@@ -92,9 +92,22 @@ export default function ReservationsPage() {
   const [cancelling, setCancelling] = useState(null)
   const [error, setError] = useState('')
 
+  // Opening the list marks the statuses as seen: a second load (React's development double run) must keep the label
+  const unseen = useRef(new Set())
   const load = () => api.get('/reservations', { params: { done: tab === 'done' } })
-    .then((res) => { setItems(res.data); notifyChanged() }).catch(() => setItems([]))
+    .then((res) => {
+      res.data.forEach((r) => !r.seen && unseen.current.add(r.id))
+      setItems(res.data)
+      notifyChanged()
+    }).catch(() => setItems([]))
   useEffect(() => { setItems(null); load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  // After "Send": to the new reservation, otherwise to the top
+  useEffect(() => {
+    if (!items) return
+    const el = state?.highlight && document.getElementById(`reservation-${state.highlight}`)
+    if (el) el.scrollIntoView({ block: 'start' })
+    else window.scrollTo(0, 0)
+  }, [items === null]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get('/rates/usd').then((res) => setRate(res.data?.rate ?? null)).catch(() => {}) }, [])
 
   const cancel = async () => {
@@ -120,7 +133,7 @@ export default function ReservationsPage() {
         <EmptyState icon={CalendarCheck} title={t('reservation.empty')} hint={t('reservation.emptyBuyer')} />
       ) : (
         <ul className="grid gap-3">
-          {items.map((r) => <ReservationCard key={r.id} r={r} usdRate={rate} highlight={state?.highlight === r.id} onCancel={setCancelling} />)}
+          {items.map((r) => <ReservationCard key={r.id} r={r} usdRate={rate} highlight={state?.highlight === r.id} unseen={unseen.current.has(r.id)} onCancel={setCancelling} />)}
         </ul>
       )}
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title={t('reservation.cancelConfirm')}

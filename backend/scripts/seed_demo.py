@@ -470,7 +470,7 @@ def seed_reservations(db: Session) -> int:
         r.cancelled_by = "store" if reason else None
         r.cancel_reason, r.cancel_text = reason, None
         if key == "confirmed":  # ends today (Tashkent): the overview shows it
-            r.expires_at = datetime.combine(now.astimezone(TZ).date(), time(23, 30), TZ).astimezone(timezone.utc)
+            r.expires_at = datetime.combine(now.astimezone(TZ).date(), time(23, 59), TZ).astimezone(timezone.utc)
         elif "confirmed" in path:
             r.expires_at = created + timedelta(hours=1, days=store.reservation_days or 2)
         else:

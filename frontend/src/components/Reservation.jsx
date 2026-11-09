@@ -67,7 +67,10 @@ export function ReserveForm({ item, store, usdRate, onClose }) {
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }))
+    setErrors((errs) => (errs[field] ? { ...errs, [field]: undefined } : errs)) // fixed: the error goes away
+  }
 
   // Name, phone and Telegram of the last reservation (the buyer may change them)
   useEffect(() => {

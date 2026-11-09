@@ -243,7 +243,8 @@ const SECTIONS = [
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
   { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
   { to: '/seller/reservations', key: 'reservations', icon: CalendarCheck, tab: true },
-  { to: '/seller/imports', key: 'imports', icon: History, tab: true },
+  // Not in the phone bar (8 tabs do not fit 360 px): the history opens from the overview's last upload
+  { to: '/seller/imports', key: 'imports', icon: History },
   { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
   { to: '/seller/profile', key: 'profile', icon: Store },
 ]
