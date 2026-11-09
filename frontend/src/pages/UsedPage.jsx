@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
+import { ReserveButton } from '../components/Reservation'
 import Flags from '../components/Flags'
 import { Sheet } from '../components/overlays'
 import Price from '../components/Price'
@@ -81,6 +82,9 @@ function UsedOffer({ item, usdRate, rateDate }) {
       <Flags flags={item.flags} className="mt-3 grid gap-1" />
       <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-start sm:justify-end">
         {ad ? <OpenPost url={item.post_url} className="w-full sm:w-auto" /> : <>
+          <ReserveButton store={item.store} usdRate={usdRate} className="w-full sm:w-auto" item={{
+            kind: 'offer', id: item.id, title: item.name, condition: item.condition, price: item.price,
+            currency: item.currency, inStock: item.is_in_stock ?? true }} />
           <WriteButton kind="offer" id={item.id} store={item.store} className="w-full sm:w-auto" />
           {open ? <Contacts store={item.store} />
             : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}

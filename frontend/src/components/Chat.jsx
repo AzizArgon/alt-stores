@@ -8,6 +8,8 @@ import {
   MAX_TEXT, THREAD_POLL_MS, UNREAD_POLL_MS, canWrite, chatErrorKey, formatChatTime, notifyChanged, usePolling, writePath,
 } from '../services/chat'
 import { useAuth } from '../services/auth.jsx'
+import { systemText } from '../services/reservations'
+import { StatusBadge } from '../pages/ReservationsPage'
 import { ErrorText } from './AuthForm'
 import { CategoryIcon } from './CategoryIcon'
 import { Dropdown, DropdownItem, Modal, useToast } from './overlays'
@@ -34,7 +36,7 @@ export function WriteButton({ kind, id, store, className = '', size = 'lg' }) {
 function TopicIcon({ topic, className = 'size-10' }) {
   const box = `flex shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted ${className}`
   if (topic.kind === 'store') return <span className={box}><Store className="size-1/2" aria-hidden /></span>
-  return <span className={box}><CategoryIcon category={topic.kind === 'build' ? 'desktop' : topic.category} className="size-1/2" /></span>
+  return <span className={box}><CategoryIcon category={topic.kind === 'build' || topic.category === 'build' ? 'desktop' : topic.category} className="size-1/2" /></span>
 }
 
 // The other side: a store by name; a buyer only by number (the seller never sees the email)
@@ -77,7 +79,7 @@ function ConversationList({ items, base, side, activeId, filter, setFilter }) {
                   <span className="block truncate text-xs text-muted">{topicTitle(t, c.topic)}</span>
                   <span className="flex items-center justify-between gap-2">
                     <span className={`truncate text-sm ${c.unread ? 'font-medium text-ink' : 'text-muted'}`}>
-                      {c.last ? c.last.text : t('chat.noMessages')}
+                      {c.last ? systemText(t, c.last) : t('chat.noMessages')}
                     </span>
                     {c.unread > 0 && (
                       <span aria-label={t('chat.unread', { count: c.unread })}
@@ -100,6 +102,8 @@ function ConversationList({ items, base, side, activeId, filter, setFilter }) {
 function TopicCard({ topic, usdRate, side }) {
   const { t } = useTranslation()
   const path = topic.kind === 'offer' ? `/products/${topic.product_id}` : topic.kind === 'build' ? `/builds/${topic.build_id}` : null
+  // A reservation conversation leads to the reservation: "My reservations" or the cabinet section
+  if (topic.kind === 'reservation' && !topic.missing) return <ReservationTopic topic={topic} usdRate={usdRate} side={side} />
   // The cabinet is apart from the storefront: there the link opens the storefront in a new tab
   const linkProps = side === 'store' ? { href: storeUrl(path), target: '_blank', rel: 'noreferrer' } : { to: path }
   const Title = path && !topic.missing ? (linkProps.to ? Link : 'a') : 'span'
@@ -118,6 +122,23 @@ function TopicCard({ topic, usdRate, side }) {
       {topic.price != null && !topic.missing && (
         <div className="shrink-0 text-right"><Price price={topic.price} currency={topic.currency} usdRate={usdRate} size="text-base" /></div>
       )}
+    </div>
+  )
+}
+
+function ReservationTopic({ topic, usdRate, side }) {
+  const { t } = useTranslation()
+  const to = side === 'store' ? `/seller/reservations?id=${topic.reservation_id}` : '/reservations'
+  return (
+    <div className="flex min-w-0 items-center gap-3 border-b border-line p-3">
+      <TopicIcon topic={topic} className="size-12" />
+      <div className="min-w-0 flex-1">
+        <Link to={to} className="line-clamp-2 text-sm font-semibold break-words hover:text-primary">{topic.title}</Link>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <span>{t('reservation.formTitle')}</span><StatusBadge status={topic.status} />
+        </p>
+      </div>
+      <div className="shrink-0 text-right"><Price price={topic.price} currency={topic.currency} usdRate={usdRate} size="text-base" /></div>
     </div>
   )
 }
@@ -211,7 +232,9 @@ function Composer({ side, disabled, onSend }) {
 // Plain text only: React escapes it, so HTML is shown as text; links and phone numbers are not made clickable
 export function MessageBubble({ message: m, own }) {
   const { t } = useTranslation()
-  if (m.author === 'system') return <li className="text-center text-xs text-muted">{m.text}</li>
+  if (m.author === 'system') {
+    return <li className="mx-auto max-w-[90%] rounded-lg bg-surface-2 px-3 py-1.5 text-center text-xs text-muted">{systemText(t, m)}</li>
+  }
   return (
     <li className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${own ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-2 text-ink'}`}>

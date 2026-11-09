@@ -13,6 +13,8 @@ import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
 import UsedPage from './pages/UsedPage'
 import ProfilePage from './pages/ProfilePage'
+import ReservationsPage from './pages/ReservationsPage'
+import SellerReservationsPage from './pages/SellerReservationsPage'
 import RegisterPage from './pages/RegisterPage'
 import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
 import CabinetOverview from './pages/CabinetOverview'
@@ -93,6 +95,7 @@ export default function App() {
         <Route path="/messages" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
         <Route path="/messages/new" element={<BuyerOnly><OpenConversation /></BuyerOnly>} />
         <Route path="/messages/:id" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
+        <Route path="/reservations" element={<BuyerOnly><ReservationsPage /></BuyerOnly>} />
         <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
         {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -113,6 +116,7 @@ export default function App() {
         <Route path="imports/:id" element={<ImportPage />} />
         <Route path="messages" element={<ChatView base="/seller/messages" side="store" />} />
         <Route path="messages/:id" element={<ChatView base="/seller/messages" side="store" />} />
+        <Route path="reservations" element={<SellerReservationsPage />} />
         <Route path="analytics" element={<SellerAnalyticsPage />} />
         <Route path="profile" element={<ProfileSection />} />
         <Route path="*" element={<Navigate to="/seller" replace />} />

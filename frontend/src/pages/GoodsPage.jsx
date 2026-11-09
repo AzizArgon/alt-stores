@@ -192,7 +192,8 @@ export default function GoodsPage() {
   const [allByFilter, setAllByFilter] = useState(false)
   const [preview, setPreview] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [editing, setEditing] = useState(null)
+  // ?edit=<offer id>: opened from a reservation ("Take it off sale" - the seller decides, the site changes nothing)
+  const [editing, setEditing] = useState(() => Number(params.get('edit')) || null)
   const [reloadKey, setReloadKey] = useState(0)
 
   const sort = params.get('sort') || 'updated'

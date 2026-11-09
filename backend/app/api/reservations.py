@@ -73,6 +73,12 @@ def store_reservations(status: str = Query("all", max_length=16), q: str = Query
     return _do(svc.list_for_store, db, user, _rate(db), status, q)
 
 
+@router.get("/store/counts")
+def store_counts(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The cabinet's counter: new reservations and the ones ending today."""
+    return svc.store_counts(db, _do(svc._store_of, db, user))
+
+
 @router.get("/{res_id}")
 def one(res_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     side, r = _do(svc.get_for, db, user, res_id)

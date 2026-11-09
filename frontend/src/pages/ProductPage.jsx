@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
+import { ReserveButton } from '../components/Reservation'
 import { ProductVisual } from '../components/CategoryIcon'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
@@ -56,7 +57,7 @@ export function OpenPost({ url, className = '' }) {
 
 export const isAd = (offer) => offer.store.kind === 'telegram'
 
-function OfferCard({ offer, usdRate, rateDate, market }) {
+function OfferCard({ offer, usdRate, rateDate, market, title }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { store } = offer
@@ -93,6 +94,9 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
       <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-start sm:justify-end">
         {ad ? <OpenPost url={offer.post_url} className="w-full sm:w-auto" /> : <>
+          <ReserveButton store={store} usdRate={usdRate} className="w-full sm:w-auto" item={{
+            kind: 'offer', id: offer.id, title, condition: offer.condition, price: offer.price, currency: offer.currency,
+            inStock: offer.is_in_stock }} />
           <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
           {open ? <Contacts store={store} />
             : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
@@ -106,7 +110,7 @@ function OfferList({ offers, product }) {
   return (
     <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
       {offers.map((o) => (
-        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} />
+        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} title={product.name} />
       ))}
     </ul>
   )

@@ -13,6 +13,7 @@ import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum } from '../services/format'
 import { useSpecDictionary } from '../services/specs'
 import { WriteButton } from '../components/Chat'
+import { ReserveButton } from '../components/Reservation'
 import { Contacts } from './ProductPage'
 
 // "These parts separately in this store": a neutral line, no percent, no colour, not a warning
@@ -121,6 +122,9 @@ export default function BuildPage() {
             <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
           </div>
           <div className="mt-4 grid gap-2">
+            <ReserveButton store={store} usdRate={build.usd_rate} className="w-full" item={{
+              kind: 'build', id: build.id, title: build.name, condition: build.condition, price: build.price,
+              currency: build.currency, inStock: build.is_in_stock }} />
             <WriteButton kind="build" id={build.id} store={store} className="w-full" />
             {open ? <Contacts store={store} />
               : <Button size="lg" className="w-full" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}

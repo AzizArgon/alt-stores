@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
+import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
@@ -14,9 +14,10 @@ import Workspace from '../layouts/Workspace'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 import { useUnread } from '../services/chat'
+import { useNewReservations } from '../services/reservations'
 import { importTitle } from '../services/format'
 
-const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address']
+const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'reservation_days']
 const FIELD_LABELS = { inn_stir: 'innStir' }
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
@@ -24,7 +25,7 @@ const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 function StoreForm({ store, onSaved }) {
   const { t } = useTranslation()
   const [form, setForm] = useState(() =>
-    Object.fromEntries(STORE_FIELDS.map((f) => [f, store?.[f] ?? ''])))
+    Object.fromEntries(STORE_FIELDS.map((f) => [f, String(store?.[f] ?? (f === 'reservation_days' ? 2 : ''))])))
   const [error, setError] = useState('')
   const toast = useToast()
 
@@ -33,6 +34,7 @@ function StoreForm({ store, onSaved }) {
     setError('')
     // Empty optional fields are sent as null
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim() || null]))
+    payload.reservation_days = Number(payload.reservation_days) || 2
     try {
       const res = await api.put('/stores/me', payload)
       toast(t('store.saved'))
@@ -58,6 +60,9 @@ function StoreForm({ store, onSaved }) {
             <option value="" disabled>{t('store.cityChoose')}</option>
             {STORE_CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
           </Select>
+        ) : f === 'reservation_days' ? (
+          <Input key={f} type="number" min={1} max={7} label={t('store.reservation_days')} hint={t('store.reservationDaysHint')}
+            value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
         ) : (
           <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
             value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
@@ -237,6 +242,7 @@ const SECTIONS = [
   { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
   { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
+  { to: '/seller/reservations', key: 'reservations', icon: CalendarCheck, tab: true },
   { to: '/seller/imports', key: 'imports', icon: History, tab: true },
   { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
   { to: '/seller/profile', key: 'profile', icon: Store },
@@ -321,6 +327,8 @@ export default function SellerLayout() {
   const [store, setStore] = useState(undefined)
   const [imports, setImports] = useState(null)
   const unread = useUnread(!!store)
+  const newReservations = useNewReservations(!!store)
+  const badges = { messages: unread, reservations: newReservations }
 
   useEffect(() => {
     api.get('/stores/me').then((res) => setStore(res.data)).catch(() => setStore(null))
@@ -337,7 +345,7 @@ export default function SellerLayout() {
   else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
   // The currency the seller chose last time is the default everywhere
   else content = <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />
-  return <SellerFrame store={store} sections={store ? SECTIONS.map((s) => (s.key === 'messages' ? { ...s, badge: unread } : s)) : null}>{content}</SellerFrame>
+  return <SellerFrame store={store} sections={store ? SECTIONS.map((s) => (badges[s.key] != null ? { ...s, badge: badges[s.key] } : s)) : null}>{content}</SellerFrame>
 }
 
 export function AddSection() {
