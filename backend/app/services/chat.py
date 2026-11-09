@@ -5,9 +5,10 @@ Only the two sides read and write it. The seller never sees the buyer's email: "
 No WebSocket: the open conversation asks for new messages (after_id) every few seconds.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -96,6 +97,9 @@ def topic_card(db: Session, conv: Conversation, usd_rate: float | None) -> dict:
             return {"kind": "build", "missing": True}
         return {"kind": "build", "title": b.name, "build_id": b.id, "category": "build", "condition": b.condition.value,
                 "in_stock": b.is_in_stock, **_price(b.price, b.currency, usd_rate)}
+    if kind == TopicKind.reservation:
+        from app.services.reservations import topic
+        return topic(db, conv, usd_rate)
     return {"kind": kind.value, "title": conv.store.name, "store_id": conv.store_id}
 
 
@@ -112,6 +116,8 @@ def _topic_store(db: Session, kind: TopicKind, topic_id: int, store_id: int | No
         if build is None:
             raise ChatError("not_found", 404)
         return build.store, topic_id
+    if kind == TopicKind.reservation:  # made together with the reservation, not by "Write"
+        raise ChatError("bad_topic")
     store = db.get(Store, store_id) if store_id else None
     if store is None:
         raise ChatError("not_found", 404)
@@ -156,7 +162,14 @@ def open_conversation(db: Session, user: User, kind: str, topic_id: int = 0, sto
 # --- Messages ---------------------------------------------------------------------------------------------------------
 
 def message_out(m: Message) -> dict:
-    return {"id": m.id, "author": m.author.value, "text": m.text, "is_read": m.is_read, "created_at": _aware(m.created_at)}
+    out = {"id": m.id, "author": m.author.value, "text": m.text, "is_read": m.is_read, "created_at": _aware(m.created_at)}
+    if m.author == MessageAuthor.system:  # a reservation status line: key + params, the text is in ru.json
+        try:
+            line = json.loads(m.text)
+            out.update(text="", key=line["key"], params=line.get("params") or {})
+        except (ValueError, KeyError, TypeError):
+            pass
+    return out
 
 
 def send_message(db: Session, user: User, conv_id: int, text: str) -> Message:
@@ -169,7 +182,7 @@ def send_message(db: Session, user: User, conv_id: int, text: str) -> Message:
     if side == "buyer" and is_blocked(db, conv.store_id, user.id):
         raise ChatError("blocked", 403)
     now = utcnow()
-    mine = Message.sender_id == user.id
+    mine = and_(Message.sender_id == user.id, Message.author != MessageAuthor.system)
     if db.scalar(select(func.count(Message.id)).where(mine, Message.created_at >= now - timedelta(minutes=1))) >= PER_MINUTE:
         raise ChatError("rate_minute", 429)
     if db.scalar(select(func.count(Message.id)).where(mine, Message.created_at >= now - timedelta(days=1))) >= PER_DAY:
@@ -184,8 +197,8 @@ def send_message(db: Session, user: User, conv_id: int, text: str) -> Message:
 def read_messages(db: Session, user: User, conv_id: int, after_id: int = 0) -> tuple[str, Conversation, list[Message]]:
     """Messages after `after_id` (0 = all); what the other side wrote becomes read."""
     side, conv = get_conversation(db, user, conv_id)
-    db.query(Message).filter(Message.conversation_id == conv.id, Message.author != MessageAuthor(side),
-                             Message.is_read.is_(False)).update({"is_read": True}, synchronize_session="fetch")
+    db.query(Message).filter(Message.conversation_id == conv.id, _unread_q(side, user.id)).update(
+        {"is_read": True}, synchronize_session="fetch")
     db.commit()
     msgs = db.scalars(select(Message).where(Message.conversation_id == conv.id, Message.id > after_id)
                       .order_by(Message.id)).all()
@@ -194,13 +207,18 @@ def read_messages(db: Session, user: User, conv_id: int, after_id: int = 0) -> t
 
 # --- Lists and counters -----------------------------------------------------------------------------------------------
 
-def _unread_q(side: str):
-    return and_(Message.author != MessageAuthor(side), Message.is_read.is_(False))
+def _unread_q(side: str, user_id: int | None = None):
+    """Not mine and not read. A system line (reservation status) is for the other side of the one who changed it."""
+    cond = and_(Message.author != MessageAuthor(side), Message.is_read.is_(False))
+    if user_id is None:
+        return cond
+    return and_(cond, or_(Message.author != MessageAuthor.system, Message.sender_id.is_(None),
+                          Message.sender_id != user_id))
 
 
 def unread_count(db: Session, user: User) -> int:
     side, mine = _mine(db, user)
-    return db.scalar(select(func.count(Message.id)).join(Message.conversation).where(mine, _unread_q(side))) or 0
+    return db.scalar(select(func.count(Message.id)).join(Message.conversation).where(mine, _unread_q(side, user.id))) or 0
 
 
 def list_conversations(db: Session, user: User, usd_rate: float | None, filter_: str = "all") -> list[dict]:
@@ -215,7 +233,7 @@ def list_conversations(db: Session, user: User, usd_rate: float | None, filter_:
     convs = db.scalars(q.order_by(Conversation.last_message_at.desc())).all()
     unread = dict(db.execute(
         select(Message.conversation_id, func.count(Message.id))
-        .where(Message.conversation_id.in_([c.id for c in convs]), _unread_q(side))
+        .where(Message.conversation_id.in_([c.id for c in convs]), _unread_q(side, user.id))
         .group_by(Message.conversation_id)).all())
     blocked = {b for (b,) in db.execute(select(StoreBlock.user_id).where(
         StoreBlock.store_id.in_({c.store_id for c in convs})))} if side == "store" else set()
@@ -241,7 +259,7 @@ def conversation_head(db: Session, c: Conversation, side: str, usd_rate: float |
 def overview_counts(db: Session, store: Store) -> dict:
     """For the cabinet overview: new messages and conversations where the buyer waits longer than a day."""
     new = db.scalar(select(func.count(Message.id)).join(Message.conversation).where(
-        Conversation.store_id == store.id, _unread_q("store"))) or 0
+        Conversation.store_id == store.id, _unread_q("store", store.user_id))) or 0
     waiting = 0
     since = utcnow() - timedelta(hours=NO_ANSWER_HOURS)
     for conv in db.scalars(select(Conversation).where(Conversation.store_id == store.id,

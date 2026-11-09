@@ -79,6 +79,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[UserRole] = mapped_column(str_enum(UserRole), default=UserRole.buyer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Contacts of the last reservation (phase 11): filled in the next form, the buyer may change them
+    contact_name: Mapped[str | None] = mapped_column(String(100))
+    contact_phone: Mapped[str | None] = mapped_column(String(16))
+    contact_telegram: Mapped[str | None] = mapped_column(String(33))
 
     stores: Mapped[list["Store"]] = relationship(back_populates="owner")
 
@@ -102,6 +106,8 @@ class Store(Base):
     # Invented store of the demo (scripts/seed_demo.py, live upload store); a real store is kept by demo_reset.py
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     kind: Mapped[StoreKind] = mapped_column(str_enum(StoreKind), default=StoreKind.shop, server_default="shop")
+    # How many days a confirmed reservation waits for the buyer (phase 11), 1-7
+    reservation_days: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
@@ -442,10 +448,11 @@ class TgPost(Base):
 # --- Phase 10: chat of a buyer with a store ---------------------------------------------------------------------------
 
 class TopicKind(str, enum.Enum):
-    """What a conversation is about. Phase 11 adds "reservation" (a booking of an offer)."""
+    """What a conversation is about."""
     offer = "offer"  # an offer of the store (a product card, new or used)
     build = "build"  # a ready PC of the store
     store = "store"  # a question to the store without a product
+    reservation = "reservation"  # a reservation (phase 11): made with it, topic_id = reservations.id
 
 
 class MessageAuthor(str, enum.Enum):
@@ -517,3 +524,73 @@ class StoreBlock(Base):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --- Phase 11: reservations ("put it aside for me") ----------------------------------------------------------------
+
+class ReservationStatus(str, enum.Enum):
+    new = "new"
+    confirmed = "confirmed"
+    ready = "ready"  # ready to be picked up
+    issued = "issued"  # the buyer took it (paid in the store)
+    cancelled = "cancelled"
+    expired = "expired"
+
+
+class Reservation(Base):
+    """A request "put it aside for me" with the buyer's contacts. No money and no delivery: paid and picked up in
+    the store. It never changes the stock, the prices, the market price or the monitoring.
+
+    The price is a snapshot at the moment of the reservation (no "it was cheaper" dispute)."""
+
+    __tablename__ = "reservations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    # The item: an offer of the store or a build (the other is NULL); the title stays if the item is deleted
+    offer_id: Mapped[int | None] = mapped_column(ForeignKey("offers.id", ondelete="SET NULL"), index=True)
+    build_id: Mapped[int | None] = mapped_column(ForeignKey("builds.id", ondelete="SET NULL"), index=True)
+    title: Mapped[str] = mapped_column(String(512))
+    condition: Mapped[Condition] = mapped_column(str_enum(Condition), default=Condition.new)
+    price: Mapped[float] = mapped_column(Float)
+    currency: Mapped[Currency] = mapped_column(str_enum(Currency))
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    name: Mapped[str] = mapped_column(String(100))
+    phone: Mapped[str] = mapped_column(String(16))  # +998XXXXXXXXX
+    contact: Mapped[str] = mapped_column(String(16))  # call / telegram / chat
+    telegram: Mapped[str | None] = mapped_column(String(33))
+    pickup_date: Mapped[date | None] = mapped_column(Date)
+    pickup_time: Mapped[str | None] = mapped_column(String(5))  # HH:MM
+    comment: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[ReservationStatus] = mapped_column(str_enum(ReservationStatus), default=ReservationStatus.new, index=True)
+    cancelled_by: Mapped[str | None] = mapped_column(String(8))  # store / buyer
+    cancel_reason: Mapped[str | None] = mapped_column(String(16))  # no_stock / price_changed / no_show / other
+    cancel_text: Mapped[str | None] = mapped_column(String(200))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)  # set on confirmation
+    buyer_seen: Mapped[bool] = mapped_column(Boolean, default=True)  # False: the status changed, the buyer has not looked
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    demo_key: Mapped[str | None] = mapped_column(String(32))  # constant key of a demo reservation (re-runs keep the id)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    buyer: Mapped[User] = relationship()
+    store: Mapped[Store] = relationship()
+    offer: Mapped[Offer | None] = relationship()
+    build: Mapped[Build | None] = relationship()
+    events: Mapped[list["ReservationEvent"]] = relationship(
+        back_populates="reservation", cascade="all, delete-orphan", order_by="ReservationEvent.id")
+
+
+class ReservationEvent(Base):
+    """The status history: who (buyer / store / system) and when."""
+
+    __tablename__ = "reservation_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id", ondelete="CASCADE"), index=True)
+    status: Mapped[ReservationStatus] = mapped_column(str_enum(ReservationStatus))
+    by: Mapped[str] = mapped_column(String(8))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    reservation: Mapped[Reservation] = relationship(back_populates="events")

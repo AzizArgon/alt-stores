@@ -387,8 +387,9 @@ def _chat_topic(db: Session, store: Store, topic: tuple) -> tuple[TopicKind, int
 
 def seed_chats(db: Session) -> int:
     buyer = _demo_buyer(db)
-    for old in db.scalars(select(Conversation).where(Conversation.is_demo.is_(True))):
-        db.delete(old)  # with its messages
+    for old in db.scalars(select(Conversation).where(Conversation.is_demo.is_(True),
+                                                     Conversation.topic_kind != TopicKind.reservation)):
+        db.delete(old)  # with its messages; demo reservations keep theirs (seed_reservations)
     db.commit()
     made, now = 0, utcnow()
     for email, topic, lines in DEMO_CHATS:

@@ -14,6 +14,7 @@ class StoreIn(BaseModel):
     address: str | None = Field(default=None, max_length=255)
     district: str | None = Field(default=None, max_length=128)
     city: str
+    reservation_days: int = Field(default=2, ge=1, le=7)  # how long a confirmed reservation waits (phase 11)
 
     @field_validator("city")
     @classmethod

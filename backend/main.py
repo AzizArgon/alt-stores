@@ -1,19 +1,32 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, builds, catalog, chat, market, reference, seller
+from app.api import auth, builds, catalog, chat, market, reference, reservations, seller
 from app.core.config import settings
-from app.db.database import init_db
+from app.db.database import SessionLocal, init_db
 from app.services.importer import fail_stale_imports
+
+
+async def expire_reservations_hourly() -> None:
+    """Phase 11: reservations whose term has passed become "expired" (the lists also check it when opened)."""
+    from app.services.reservations import expire_due
+
+    while True:
+        with suppress(Exception), SessionLocal() as db:
+            expire_due(db)
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
     fail_stale_imports()
+    task = asyncio.create_task(expire_reservations_hourly())
     yield
+    task.cancel()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -35,6 +48,7 @@ app.include_router(catalog.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
 app.include_router(builds.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(reservations.router, prefix="/api")
 
 
 @app.get("/api/health")
