@@ -62,7 +62,7 @@ function ConversationList({ items, base, side, activeId, filter, setFilter }) {
       ) : items.length === 0 ? (
         <EmptyState icon={MessageSquare} title={t('chat.empty')} hint={t(side === 'store' ? 'chat.emptyStore' : 'chat.emptyBuyer')} />
       ) : (
-        <ul className="grid gap-1">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-1">
           {items.map((c) => (
             <li key={c.id}>
               <Link to={`${base}/${c.id}`} aria-current={String(c.id) === activeId ? 'page' : undefined}
@@ -208,6 +208,22 @@ function Composer({ side, disabled, onSend }) {
   )
 }
 
+// Plain text only: React escapes it, so HTML is shown as text; links and phone numbers are not made clickable
+export function MessageBubble({ message: m, own }) {
+  const { t } = useTranslation()
+  if (m.author === 'system') return <li className="text-center text-xs text-muted">{m.text}</li>
+  return (
+    <li className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${own ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-2 text-ink'}`}>
+        <p className="break-words whitespace-pre-wrap">{m.text}</p>
+        <p className={`mt-0.5 text-right text-[11px] ${own ? 'text-white/75' : 'text-faint'}`}>
+          {formatChatTime(m.created_at)}{own && m.is_read ? ` · ${t('chat.read')}` : ''}
+        </p>
+      </div>
+    </li>
+  )
+}
+
 function Thread({ id, base, side, onChanged }) {
   const { t } = useTranslation()
   const otherName = useOtherName(side)
@@ -253,7 +269,6 @@ function Thread({ id, base, side, onChanged }) {
 
   if (error) return <div className="p-4"><ErrorText>{error}</ErrorText></div>
   if (!conv) return <div className="grid gap-3 p-4"><Skeleton className="h-14" /><Skeleton className="h-24" /></div>
-  const mine = side
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-2 py-2">
@@ -277,21 +292,7 @@ function Thread({ id, base, side, onChanged }) {
       <TopicCard topic={conv.topic} usdRate={conv.usd_rate} side={side} />
       <ol className="min-h-48 flex-1 space-y-2 overflow-y-auto p-3" aria-live="polite">
         {conv.messages.length === 0 && <li className="py-6 text-center text-sm text-muted">{t('chat.start')}</li>}
-        {conv.messages.map((m) => {
-          const own = m.author === mine
-          if (m.author === 'system') return <li key={m.id} className="text-center text-xs text-muted">{m.text}</li>
-          return (
-            <li key={m.id} className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
-              {/* Plain text only: React escapes it, links and phone numbers are not made clickable */}
-              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${own ? 'rounded-br-sm bg-primary text-white' : 'rounded-bl-sm bg-surface-2 text-ink'}`}>
-                <p className="break-words whitespace-pre-wrap">{m.text}</p>
-                <p className={`mt-0.5 text-right text-[11px] ${own ? 'text-white/75' : 'text-faint'}`}>
-                  {formatChatTime(m.created_at)}{own && m.is_read ? ` · ${t('chat.read')}` : ''}
-                </p>
-              </div>
-            </li>
-          )
-        })}
+        {conv.messages.map((m) => <MessageBubble key={m.id} message={m} own={m.author === side} />)}
         <li ref={bottom} aria-hidden />
       </ol>
       {conv.blocked && side === 'buyer' && <p className="border-t border-line px-3 pt-3 text-sm text-muted">{t('chat.blockedBuyer')}</p>}
@@ -338,7 +339,10 @@ export function OpenConversation() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [error, setError] = useState('')
+  const asked = useRef(false)
   useEffect(() => {
+    if (asked.current) return // once, also in React's development double run
+    asked.current = true
     const q = new URLSearchParams(window.location.search)
     const kind = q.get('kind')
     const body = kind === 'store' ? { topic_kind: 'store', store_id: Number(q.get('store')) }

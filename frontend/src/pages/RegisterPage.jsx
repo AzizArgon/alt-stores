@@ -6,7 +6,7 @@ import { Input, PasswordInput, SiteLink } from '../components/ui'
 import { goTo, sellerUrl, storeUrl } from '../config/sites'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
-import { homeFor } from '../services/roles'
+import { returnTo } from '../services/roles'
 
 // The storefront registers buyers, the cabinet (/seller/register) registers stores
 export default function RegisterPage({ seller = false }) {
@@ -42,8 +42,7 @@ export default function RegisterPage({ seller = false }) {
     setBusy(true)
     try {
       const user = await register(email, password, role, invite)
-      const from = location.state?.from
-      goTo(navigate, user.role !== 'seller' && from?.startsWith('/messages') ? from : homeFor(user))
+      goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })

@@ -20,7 +20,7 @@ import GoodsPage from './pages/GoodsPage'
 import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import { useAuth } from './services/auth.jsx'
-import { homeFor, sellerGate } from './services/roles'
+import { homeFor, returnTo, sellerGate } from './services/roles'
 
 // Goes to an address of this site, or reloads to another one (the cabinet on its own subdomain later)
 function Redirect({ to }) {
@@ -32,8 +32,9 @@ function Redirect({ to }) {
 // Pages for guests only: a logged-in user goes to his own interface (a seller to the cabinet)
 function GuestOnly({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return null
-  return user ? <Redirect to={homeFor(user)} /> : children
+  return user ? <Redirect to={returnTo(user, location.state?.from)} /> : children
 }
 
 // The seller cabinet: a guest goes to the seller login, a buyer sees "this section is for sellers"

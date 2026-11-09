@@ -8,6 +8,7 @@ No WebSocket: the open conversation asks for new messages (after_id) every few s
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -129,9 +130,10 @@ def open_conversation(db: Session, user: User, kind: str, topic_id: int = 0, sto
     # A Telegram channel is not a store (only "Open the post"); an archive price list has nobody to answer
     if store.kind == StoreKind.telegram or store.is_archive:
         raise ChatError("not_a_store")
-    conv = db.scalar(select(Conversation).where(
+    same = select(Conversation).where(
         Conversation.buyer_id == user.id, Conversation.store_id == store.id,
-        Conversation.topic_kind == topic, Conversation.topic_id == topic_id))
+        Conversation.topic_kind == topic, Conversation.topic_id == topic_id)
+    conv = db.scalar(same)
     if conv is not None:
         return conv
     if is_blocked(db, store.id, user.id):
@@ -143,7 +145,11 @@ def open_conversation(db: Session, user: User, kind: str, topic_id: int = 0, sto
         raise ChatError("rate_new", 429)
     conv = Conversation(buyer_id=user.id, store_id=store.id, topic_kind=topic, topic_id=topic_id)
     db.add(conv)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # two clicks at once: the other request has just made it
+        db.rollback()
+        conv = db.scalar(same)
     return conv
 
 

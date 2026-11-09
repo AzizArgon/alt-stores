@@ -6,7 +6,7 @@ import { Input, PasswordInput, SiteLink } from '../components/ui'
 import { goTo, sellerUrl, storeUrl } from '../config/sites'
 import { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
-import { homeFor } from '../services/roles'
+import { returnTo } from '../services/roles'
 
 // `seller`: the cabinet's own login (/seller/login); after any login each role goes to its own interface
 export default function LoginPage({ seller = false }) {
@@ -30,11 +30,7 @@ export default function LoginPage({ seller = false }) {
     setBusy(true)
     try {
       const user = await login(email, password)
-      // A guest sent from a cabinet page returns to it
-      const from = location.state?.from
-      // A buyer who pressed "Write to the seller" returns to that conversation
-      const back = user.role === 'seller' ? from?.startsWith('/seller') : from?.startsWith('/messages')
-      goTo(navigate, back ? from : homeFor(user))
+      goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })
