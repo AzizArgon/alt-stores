@@ -23,7 +23,8 @@ from sqlalchemy.orm import Session, selectinload  # noqa: E402
 
 from app.core.security import hash_password  # noqa: E402
 from app.db.models import (  # noqa: E402
-    Build, Category, Currency, ImportStatus, Offer, PriceHistory, PriceImport, Product, Store, User, UserRole, utcnow,
+    Build, Category, Conversation, Currency, ImportStatus, Message, MessageAuthor, Offer, PriceHistory, PriceImport,
+    Product, Store, TopicKind, User, UserRole, utcnow,
 )
 from app.services.exchange import RateBook, ensure_rates  # noqa: E402
 
@@ -176,7 +177,7 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     for spec in STORES:
         _store(db, spec)
     _live_store(db)
-    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}]
+    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -199,6 +200,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     store_ids = [db.scalar(select(Store.id).join(Store.owner).where(User.email == s["email"])) for s in STORES]
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
     report.append({"demo_builds": seed_builds(db, usd_rate)})
+    report.append({"demo_chats": seed_chats(db)})
     return report
 
 
@@ -326,6 +328,83 @@ def seed_builds(db: Session, usd_rate: float) -> int:
         build.is_demo = True
         for point in build.price_history:
             point.is_demo = True
+        db.commit()
+        made += 1
+    return made
+
+
+# --- Demo conversations (phase 10) ----------------------------------------------------------------------------------
+# The buyer of the demo with the demo stores: a product question answered, a build question waiting over a day,
+# a question to the store answered, a fresh one unread. Recreated on every run (Conversation.is_demo), also in
+# --builds-only mode (the demo builds get new ids there); a real store is never touched.
+DEMO_BUYER = "buyer1@example.com"
+# (store, topic: ("offer", category) / ("build", index in DEMO_BUILDS of that store) / ("store",), [(author, text, hours ago)])
+DEMO_CHATS = [
+    ("demo1@example.com", ("offer", "gpu"), [
+        ("buyer", "Здравствуйте! Видеокарта ещё в наличии? Гарантия официальная?", 30),
+        ("store", "Здравствуйте! Да, в наличии. Гарантия 1 год от магазина, чек выдаём.", 29),
+        ("buyer", "Спасибо, завтра заеду посмотреть.", 28)]),
+    ("demo1@example.com", ("build", 0), [
+        ("buyer", "Можно в этой сборке поставить SSD на 2 ТБ вместо 1 ТБ? Сколько будет стоить?", 27)]),
+    ("demo2@example.com", ("store",), [
+        ("buyer", "Вы работаете в воскресенье?", 50),
+        ("store", "Да, с 10:00 до 18:00. Ждём вас!", 49)]),
+    ("demo3@example.com", ("offer", "ssd"), [
+        ("buyer", "Цена за SSD окончательная или можно немного уступить?", 2)]),
+]
+
+
+def _demo_buyer(db: Session) -> User:
+    """The buyer of the demo; an existing account keeps its password (the server may have its own)."""
+    user = db.scalar(select(User).where(User.email == DEMO_BUYER))
+    if user is None:
+        user = User(email=DEMO_BUYER, password_hash=hash_password(DEMO_PASSWORD), role=UserRole.buyer)
+        db.add(user)
+        db.commit()
+    return user
+
+
+def _chat_topic(db: Session, store: Store, topic: tuple) -> tuple[TopicKind, int] | None:
+    if topic[0] == "store":
+        return TopicKind.store, 0
+    if topic[0] == "build":
+        builds = db.scalars(select(Build).where(Build.store_id == store.id, Build.is_demo.is_(True)).order_by(Build.id)).all()
+        return (TopicKind.build, builds[topic[1]].id) if len(builds) > topic[1] else None
+    # Not the showcase i5-12400F: the check of the phase writes about it from the card itself
+    offer = db.scalar(
+        select(Offer).join(Offer.product).join(Product.category)
+        .where(Offer.store_id == store.id, Category.slug == topic[1], Offer.is_in_stock.is_(True),
+               Offer.removed_at.is_(None), Offer.price.is_not(None), ~Offer.raw_name.contains("12400F"))
+        .order_by(Offer.id))
+    return (TopicKind.offer, offer.id) if offer else None
+
+
+def seed_chats(db: Session) -> int:
+    buyer = _demo_buyer(db)
+    for old in db.scalars(select(Conversation).where(Conversation.is_demo.is_(True))):
+        db.delete(old)  # with its messages
+    db.commit()
+    made, now = 0, utcnow()
+    for email, topic, lines in DEMO_CHATS:
+        store = db.scalar(select(Store).join(Store.owner).where(User.email == email, Store.is_demo.is_(True)))
+        found = _chat_topic(db, store, topic) if store is not None else None
+        if found is None:
+            continue
+        kind, topic_id = found
+        # The buyer may have opened the same topic himself: that conversation is his, not demo - skip it
+        if db.scalar(select(Conversation.id).where(Conversation.buyer_id == buyer.id, Conversation.store_id == store.id,
+                                                   Conversation.topic_kind == kind, Conversation.topic_id == topic_id)):
+            continue
+        conv = Conversation(buyer_id=buyer.id, store_id=store.id, topic_kind=kind, topic_id=topic_id, is_demo=True,
+                            created_at=now - timedelta(hours=lines[0][2]), last_message_at=now - timedelta(hours=lines[-1][2]))
+        last = len(lines) - 1
+        conv.messages = [
+            # Everything but the last line was seen by the other side; the last one is read only if it is the store's
+            Message(author=MessageAuthor(author), sender_id=buyer.id if author == "buyer" else store.user_id, text=text,
+                    created_at=now - timedelta(hours=hours), is_read=i < last or author == "store")
+            for i, (author, text, hours) in enumerate(lines)
+        ]
+        db.add(conv)
         db.commit()
         made += 1
     return made

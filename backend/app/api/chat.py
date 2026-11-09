@@ -46,7 +46,9 @@ def _do(fn, *args):
 
 
 def _detail(db: Session, side: str, conv, msgs) -> dict:
-    return {**svc.conversation_head(db, conv, side, _rate(db)), "messages": [svc.message_out(m) for m in msgs]}
+    usd_rate = _rate(db)
+    return {**svc.conversation_head(db, conv, side, usd_rate), "usd_rate": usd_rate,
+            "messages": [svc.message_out(m) for m in msgs]}
 
 
 @router.get("/unread")

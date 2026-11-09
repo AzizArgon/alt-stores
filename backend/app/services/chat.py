@@ -150,7 +150,7 @@ def open_conversation(db: Session, user: User, kind: str, topic_id: int = 0, sto
 # --- Messages ---------------------------------------------------------------------------------------------------------
 
 def message_out(m: Message) -> dict:
-    return {"id": m.id, "author": m.author.value, "text": m.text, "is_read": m.is_read, "created_at": m.created_at}
+    return {"id": m.id, "author": m.author.value, "text": m.text, "is_read": m.is_read, "created_at": _aware(m.created_at)}
 
 
 def send_message(db: Session, user: User, conv_id: int, text: str) -> Message:
@@ -228,7 +228,7 @@ def conversation_head(db: Session, c: Conversation, side: str, usd_rate: float |
     if blocked is None:
         blocked = is_blocked(db, c.store_id, c.buyer_id)
     return {"id": c.id, "topic": topic_card(db, c, usd_rate), "store": {"id": c.store_id, "name": c.store.name},
-            "buyer_no": c.buyer_id, "is_demo": c.is_demo, "blocked": blocked, "last_message_at": c.last_message_at,
+            "buyer_no": c.buyer_id, "is_demo": c.is_demo, "blocked": blocked, "last_message_at": _aware(c.last_message_at),
             "side": side}
 
 

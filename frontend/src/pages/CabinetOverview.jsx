@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext } from 'react-router-dom'
-import { ArrowRight, CircleCheck, CircleSlash, Clock, Monitor, ShieldAlert } from 'lucide-react'
+import { ArrowRight, CircleCheck, CircleSlash, Clock, MessageSquare, Monitor, ShieldAlert } from 'lucide-react'
 import { DemoNote } from '../components/Market'
 import { Button, Card, Skeleton } from '../components/ui'
 import api from '../services/api'
@@ -61,6 +61,18 @@ export default function CabinetOverview() {
         </div>
       )}
       {data?.stale > 0 && <p className="-mt-3 text-xs text-muted">{t('cabinet.overview.staleHint')}</p>}
+      {data?.chat && (
+        <Link to="/seller/messages" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-hover">
+          <span className="flex min-w-0 items-center gap-2.5">
+            <MessageSquare className="size-5 shrink-0 text-primary" aria-hidden />
+            <span className="text-sm">
+              {t('cabinet.overview.chatNew', { count: data.chat.new_messages })}
+              {data.chat.waiting_day > 0 && <span className="font-medium text-warning"> · {t('cabinet.overview.chatWaiting', { count: data.chat.waiting_day })}</span>}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">{t('cabinet.overview.chatLink')}<ArrowRight className="size-4" aria-hidden /></span>
+        </Link>
+      )}
       {data?.builds && (
         <Link to="/seller/builds" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-hover">
           <span className="flex min-w-0 items-center gap-2.5">

@@ -1,10 +1,11 @@
-import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Search, UserCog } from 'lucide-react'
+import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Search, UserCog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CITIES } from '../config/cities'
 import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
+import { useUnread } from '../services/chat'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
@@ -91,23 +92,39 @@ export function Avatar({ email, className = 'size-10 text-base' }) {
   )
 }
 
-function UserLinks({ logout, Item }) {
+// A red counter of unread messages (on the avatar, in the menu, in the cabinet sections)
+export function UnreadBadge({ count, className = '' }) {
+  const { t } = useTranslation()
+  if (!count) return null
+  return (
+    <span aria-label={t('chat.unread', { count })} title={t('chat.unread', { count })}
+      className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white ${className}`}>
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+function UserLinks({ logout, Item, unread }) {
   const { t } = useTranslation()
   return (
     <>
+      <Item as={Link} to="/messages" icon={MessageSquare}>
+        <span className="flex flex-1 items-center justify-between gap-2">{t('chat.title')}<UnreadBadge count={unread} /></span>
+      </Item>
       <Item as={Link} to="/profile" icon={UserCog}>{t('nav.profile')}</Item>
       <Item icon={LogOut} onClick={logout}>{t('nav.logout')}</Item>
     </>
   )
 }
 
-function UserMenu({ user, logout }) {
+function UserMenu({ user, logout, unread }) {
   const { t } = useTranslation()
   return (
     <Dropdown trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.account')} title={user.email}
-        className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        className="relative rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
         <Avatar email={user.email} />
+        <UnreadBadge count={unread} className="absolute -top-1 -right-1.5 ring-2 ring-surface" />
       </button>
     )}>
       <div className="flex items-center gap-2.5 border-b border-line p-2.5 pb-3 mb-1.5">
@@ -117,13 +134,13 @@ function UserMenu({ user, logout }) {
           <p className="text-xs text-muted">{t(`roles.${user.role}`)}</p>
         </div>
       </div>
-      <UserLinks logout={logout} Item={DropdownItem} />
+      <UserLinks logout={logout} Item={DropdownItem} unread={unread} />
     </Dropdown>
   )
 }
 
 // Phone and tablet menu: everything the desktop header shows in its row
-function MobileMenu({ open, onClose, user, logout }) {
+function MobileMenu({ open, onClose, user, logout, unread }) {
   const { t } = useTranslation()
   const { city, setCity } = useCity()
   const row = 'flex min-h-11 items-center rounded-md px-2.5 text-sm font-medium hover:bg-surface-2'
@@ -143,7 +160,7 @@ function MobileMenu({ open, onClose, user, logout }) {
         {user && <div className="my-2 border-t border-line" />}
         {user?.role === 'seller'
           ? <Button {...linkProps(sellerUrl())} className="mt-1 w-full"><LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}</Button>
-          : user && <UserLinks logout={logout} Item={DropdownItem} />}
+          : user && <UserLinks logout={logout} Item={DropdownItem} unread={unread} />}
       </nav>
       <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
         {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
@@ -163,6 +180,7 @@ export default function Header() {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
+  const unread = useUnread(!!user && user.role !== 'seller')
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
@@ -189,7 +207,7 @@ export default function Header() {
             <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">
               <LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}
             </Button>
-          ) : user ? <UserMenu user={user} logout={logout} /> : (
+          ) : user ? <UserMenu user={user} logout={logout} unread={unread} /> : (
             <div className="flex shrink-0 items-center gap-2">
               <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
               <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
@@ -199,7 +217,7 @@ export default function Header() {
         {/* The home page has its own big search: the phone row would repeat it */}
         {pathname !== '/' && <div className="pb-3 md:hidden"><HeaderSearch /></div>}
       </div>
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} />
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} unread={unread} />
     </header>
   )
 }

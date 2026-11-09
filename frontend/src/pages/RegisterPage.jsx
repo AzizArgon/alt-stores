@@ -42,7 +42,8 @@ export default function RegisterPage({ seller = false }) {
     setBusy(true)
     try {
       const user = await register(email, password, role, invite)
-      goTo(navigate, homeFor(user))
+      const from = location.state?.from
+      goTo(navigate, user.role !== 'seller' && from?.startsWith('/messages') ? from : homeFor(user))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })
@@ -82,7 +83,7 @@ export default function RegisterPage({ seller = false }) {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         {t('auth.haveAccount')}{' '}
-        <Link to={seller ? '/seller/login' : '/login'} className="font-semibold text-primary hover:underline">{t('nav.login')}</Link>
+        <Link to={seller ? '/seller/login' : '/login'} state={location.state} className="font-semibold text-primary hover:underline">{t('nav.login')}</Link>
       </p>
       <p className="mt-2 text-center text-sm text-muted">
         {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}

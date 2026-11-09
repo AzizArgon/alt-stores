@@ -32,7 +32,9 @@ export default function LoginPage({ seller = false }) {
       const user = await login(email, password)
       // A guest sent from a cabinet page returns to it
       const from = location.state?.from
-      goTo(navigate, user.role === 'seller' && from?.startsWith('/seller') ? from : homeFor(user))
+      // A buyer who pressed "Write to the seller" returns to that conversation
+      const back = user.role === 'seller' ? from?.startsWith('/seller') : from?.startsWith('/messages')
+      goTo(navigate, back ? from : homeFor(user))
     } catch (err) {
       const key = errorKey(err)
       setErrors({ [fieldOfError(key)]: t(key) })
@@ -56,7 +58,7 @@ export default function LoginPage({ seller = false }) {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         {t('auth.noAccount')}{' '}
-        <Link to={seller ? '/seller/register' : '/register'} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
+        <Link to={seller ? '/seller/register' : '/register'} state={location.state} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
       </p>
       <p className="mt-2 text-center text-sm text-muted">
         {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}

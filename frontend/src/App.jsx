@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { isExternal } from './config/sites'
+import ChatView, { OpenConversation } from './components/Chat'
 import StoreLayout from './layouts/StoreLayout'
 import BuildPage from './pages/BuildPage'
 import BuildsPage from './pages/BuildsPage'
@@ -53,6 +54,17 @@ function UserOnly({ children }) {
   return user ? children : <Navigate to="/login" replace />
 }
 
+// Buyer's messages: a guest logs in and comes back to the same address ("Write" -> login -> the conversation);
+// a seller has his messages in the cabinet
+function BuyerOnly({ children }) {
+  const { user, loading } = useAuth()
+  const location = useLocation()
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  if (user.role === 'seller') return <Redirect to={homeFor(user)} />
+  return children
+}
+
 // The catalog lived on "/" before phase B2: old links with a search or filters ("/?category=ram&f_type=DDR5") still work
 function HomeOrOldCatalog() {
   const { search } = useLocation()
@@ -77,6 +89,9 @@ export default function App() {
         <Route path="/builds/:id" element={<BuildPage />} />
         <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
+        <Route path="/messages" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
+        <Route path="/messages/new" element={<BuyerOnly><OpenConversation /></BuyerOnly>} />
+        <Route path="/messages/:id" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
         <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
         {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -95,6 +110,8 @@ export default function App() {
         <Route path="add" element={<AddSection />} />
         <Route path="imports" element={<ImportsSection />} />
         <Route path="imports/:id" element={<ImportPage />} />
+        <Route path="messages" element={<ChatView base="/seller/messages" side="store" />} />
+        <Route path="messages/:id" element={<ChatView base="/seller/messages" side="store" />} />
         <Route path="analytics" element={<SellerAnalyticsPage />} />
         <Route path="profile" element={<ProfileSection />} />
         <Route path="*" element={<Navigate to="/seller" replace />} />

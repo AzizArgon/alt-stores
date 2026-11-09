@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, Monitor, Package, Store } from 'lucide-react'
+import { ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import { ModeChoice } from '../components/ImportSummary'
 import { ErrorText } from '../components/AuthForm'
@@ -13,6 +13,7 @@ import { linkProps, storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
+import { useUnread } from '../services/chat'
 import { importTitle } from '../services/format'
 
 const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address']
@@ -235,6 +236,7 @@ const SECTIONS = [
   { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
   { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
+  { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
   { to: '/seller/imports', key: 'imports', icon: History, tab: true },
   { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
   { to: '/seller/profile', key: 'profile', icon: Store },
@@ -318,6 +320,7 @@ export function NotSellerPage() {
 export default function SellerLayout() {
   const [store, setStore] = useState(undefined)
   const [imports, setImports] = useState(null)
+  const unread = useUnread(!!store)
 
   useEffect(() => {
     api.get('/stores/me').then((res) => setStore(res.data)).catch(() => setStore(null))
@@ -334,7 +337,7 @@ export default function SellerLayout() {
   else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
   // The currency the seller chose last time is the default everywhere
   else content = <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />
-  return <SellerFrame store={store} sections={store ? SECTIONS : null}>{content}</SellerFrame>
+  return <SellerFrame store={store} sections={store ? SECTIONS.map((s) => (s.key === 'messages' ? { ...s, badge: unread } : s)) : null}>{content}</SellerFrame>
 }
 
 export function AddSection() {

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
+import { WriteButton } from '../components/Chat'
 import { ProductVisual } from '../components/CategoryIcon'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
@@ -90,10 +91,12 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
         </div>
       </div>
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
-      <div className="mt-3">
-        {ad ? <OpenPost url={offer.post_url} className="w-full sm:float-right sm:w-auto" />
-          : open ? <Contacts store={store} />
-          : <Button size="lg" className="w-full sm:float-right sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
+      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-start sm:justify-end">
+        {ad ? <OpenPost url={offer.post_url} className="w-full sm:w-auto" /> : <>
+          <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
+          {open ? <Contacts store={store} />
+            : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
+        </>}
       </div>
     </Card>
   )

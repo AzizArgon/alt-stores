@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 
-from app.db.models import Build, FraudFlag, Offer, PriceHistory, Store, User
+from app.db.models import Build, Conversation, FraudFlag, Message, Offer, PriceHistory, Store, User
 from app.services.importer import publish_import
 from scripts.seed_demo import seed_demo
 from tests.test_publish import _import, _row, db  # noqa: F401  (db is a fixture)
@@ -39,9 +39,9 @@ def test_demo_stores_share_cards_flag_cheap_items_and_rerun_without_duplicates(d
 
     # Demo builds are marked and recreated; the real store gets none
     assert all(b.is_demo and b.store.is_demo for b in db.scalars(select(Build)))
-    counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build)]
+    counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build, Conversation, Message)]
     seed_demo(db, 12_000)
-    assert [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build)] == counts
+    assert [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build, Conversation, Message)] == counts
 
 
 def test_builds_only_keeps_offers_history_and_passwords(db):
@@ -65,9 +65,13 @@ def test_builds_only_keeps_offers_history_and_passwords(db):
     db.commit()
     counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory)]
 
+    chats = [_count(db, m) for m in (Conversation, Message)]
     report = refresh_stores_and_builds(db, 12_000)
 
     assert [_count(db, m) for m in (User, Store, Offer, PriceHistory)] == counts
+    # Demo conversations are recreated with the builds (new ids), without duplicates
+    assert [_count(db, m) for m in (Conversation, Message)] == chats and report[1]["demo_chats"] == chats[0] >= 2
+    assert all(c.is_demo and c.store.is_demo for c in db.scalars(select(Conversation)))
     assert demo1.password_hash == "server-own" and demo1_store.city == "tashkent"
     assert report[0]["demo_builds"] == _count(db, Build)
     assert db.get(Store, age.id).is_demo is False

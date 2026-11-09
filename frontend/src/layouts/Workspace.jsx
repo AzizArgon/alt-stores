@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
+import { UnreadBadge } from '../components/Header'
 import Logo from '../components/Logo'
 import { DemoBanner } from './StoreLayout'
 
@@ -35,11 +36,12 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
             <nav aria-label={menuLabel} className="sticky top-16 p-3">
               {sideTitle && <p className="mb-2 truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase" title={sideTitle}>{sideTitle}</p>}
               <ul className="grid gap-0.5">
-                {sections.map(({ to, key, icon: Icon, end }) => (
+                {sections.map(({ to, key, icon: Icon, end, badge }) => (
                   <li key={key}>
                     <NavLink to={to} end={end} className={({ isActive }) => `flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
                       isActive ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-surface-2 hover:text-ink'}`}>
-                      <Icon className="size-4 shrink-0" aria-hidden />{t(`${navKey}.${key}`)}
+                      <Icon className="size-4 shrink-0" aria-hidden /><span className="flex-1">{t(`${navKey}.${key}`)}</span>
+                      <UnreadBadge count={badge} />
                     </NavLink>
                   </li>
                 ))}
@@ -50,11 +52,12 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
           <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8">{children}</main>
           <nav aria-label={menuLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
             <ul className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
-              {tabs.map(({ to, key, icon: Icon, end }) => (
+              {tabs.map(({ to, key, icon: Icon, end, badge }) => (
                 <li key={key}>
-                  <NavLink to={to} end={end} className={({ isActive }) => `flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] font-medium outline-none focus-visible:bg-surface-2 ${
+                  <NavLink to={to} end={end} className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] font-medium outline-none focus-visible:bg-surface-2 ${
                     isActive ? 'text-primary' : 'text-muted'}`}>
                     <Icon className="size-5 shrink-0" aria-hidden />
+                    <UnreadBadge count={badge} className="absolute top-1 left-1/2 ml-1.5" />
                     <span className="max-w-full truncate">{t(`${tabKey}.${key}`)}</span>
                   </NavLink>
                 </li>
