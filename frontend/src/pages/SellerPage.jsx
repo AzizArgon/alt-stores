@@ -10,6 +10,7 @@ import { Avatar } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
 import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
+import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import api, { errorKey } from '../services/api'
@@ -18,7 +19,9 @@ import { useUnread } from '../services/chat'
 import { useNewReservations } from '../services/reservations'
 import { importTitle } from '../services/format'
 
-const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'reservation_days']
+const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'hours', 'map_url', 'reservation_days']
+// Hints under the fields: where to go matters to the buyer (phase 12)
+const FIELD_HINTS = { address: 'addressHint', hours: 'hoursHint', map_url: 'mapHint' }
 const FIELD_LABELS = { inn_stir: 'innStir' }
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
@@ -28,11 +31,16 @@ function StoreForm({ store, onSaved }) {
   const [form, setForm] = useState(() =>
     Object.fromEntries(STORE_FIELDS.map((f) => [f, String(store?.[f] ?? (f === 'reservation_days' ? 2 : ''))])))
   const [error, setError] = useState('')
+  const [mapError, setMapError] = useState(false)
   const toast = useToast()
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    if (!isYandexMapsUrl(form.map_url)) {
+      setMapError(true)
+      return
+    }
     // Empty optional fields are sent as null
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim() || null]))
     payload.reservation_days = Number(payload.reservation_days) || 2
@@ -41,7 +49,8 @@ function StoreForm({ store, onSaved }) {
       toast(t('store.saved'))
       onSaved(res.data)
     } catch (err) {
-      setError(t(errorKey(err)))
+      if (err.response?.data?.detail?.code === 'map_url') setMapError(true)
+      else setError(t(errorKey(err)))
     }
   }
 
@@ -65,9 +74,13 @@ function StoreForm({ store, onSaved }) {
           <Input key={f} type="number" min={1} max={7} label={t('store.reservation_days')} hint={t('store.reservationDaysHint')}
             value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
         ) : (
-          <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
-            value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
-            onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+          <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)} hint={FIELD_HINTS[f] && t(`store.${FIELD_HINTS[f]}`)}
+            value={form[f]} required={f === 'name' || f === 'address'} minLength={f === 'name' ? 2 : f === 'address' ? 3 : undefined}
+            className={f === 'address' || f === 'map_url' ? 'md:col-span-2' : ''}
+            inputMode={f === 'map_url' ? 'url' : undefined}
+            placeholder={f === 'map_url' ? 'https://yandex.uz/maps/-/…' : f === 'hours' ? t('store.hoursPlaceholder') : undefined}
+            error={f === 'map_url' && mapError ? t('store.mapError') : undefined}
+            onChange={(e) => { setForm({ ...form, [f]: e.target.value }); if (f === 'map_url') setMapError(false) }} />
         )))}
       </div>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>

@@ -6,6 +6,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Modal, useToast } from '../components/overlays'
 import Price from '../components/Price'
+import { MapButtons, StoreName } from '../components/StoreWhere'
 import { Badge, Button, Card, EmptyState, Skeleton, Tabs } from '../components/ui'
 import api from '../services/api'
 import { notifyChanged } from '../services/chat'
@@ -52,8 +53,9 @@ function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
           </p>
           <Title {...(path ? { to: path } : {})} className="mt-1.5 block text-h3 break-words hover:text-primary">{r.title}</Title>
           <p className="text-sm text-muted">{t(`condition.${r.condition}`)} · {t('reservation.qty', { count: r.quantity })}</p>
-          <p className="mt-1 text-sm font-medium">{r.store.name}</p>
+          <p className="mt-1 text-sm font-medium"><StoreName store={r.store} /></p>
           {place && <p className="flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>}
+          {r.store.hours && <p className="pl-5 text-sm text-muted">{r.store.hours}</p>}
           {r.expires_at && ['confirmed', 'ready'].includes(r.status) && (
             <p className="mt-1 text-sm font-medium text-primary">{t('reservation.until', { date: formatDayMonth(r.expires_at) })}</p>
           )}
@@ -67,6 +69,7 @@ function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
       </div>
       <p className="mt-3 text-xs text-muted">{t('reservation.payNote')}</p>
       <div className="mt-3 grid gap-2 sm:flex sm:justify-end">
+        <MapButtons store={r.store} size="md" className="[&>a]:w-full sm:[&>a]:w-auto" />
         {r.conversation_id && (
           <Button to={`/messages/${r.conversation_id}`} variant="secondary" className="w-full sm:w-auto">
             <MessageSquare className="size-4" aria-hidden />{t('reservation.chat')}

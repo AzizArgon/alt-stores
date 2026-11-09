@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../services/auth.jsx'
+import { MapButtons } from './StoreWhere'
 import { notifyChanged } from '../services/chat'
 import {
   CONTACTS, FIELD_ERRORS, MAX_COMMENT, canReserve, checkForm, formatPhone, reservationErrorKey, reservePath, todayIso,
@@ -150,6 +151,8 @@ export function ReserveForm({ item, store, usdRate, onClose }) {
               <p className="text-sm font-semibold break-words">{item.title}</p>
               <p className="text-xs text-muted">{t(`condition.${item.condition}`)} · {store.name}</p>
               {place && <p className="text-xs text-muted">{place}</p>}
+              {store.hours && <p className="text-xs text-muted">{t('reservation.hours', { hours: store.hours })}</p>}
+              <MapButtons store={store} className="mt-2" />
             </div>
             <div className="shrink-0 text-right"><Price price={item.price} currency={item.currency} usdRate={usdRate} size="text-lg" /></div>
           </div>

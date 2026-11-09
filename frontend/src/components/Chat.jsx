@@ -8,6 +8,7 @@ import {
   MAX_TEXT, THREAD_POLL_MS, UNREAD_POLL_MS, canWrite, chatErrorKey, formatChatTime, notifyChanged, usePolling, writePath,
 } from '../services/chat'
 import { useAuth } from '../services/auth.jsx'
+import { StoreName } from './StoreWhere'
 import { systemText } from '../services/reservations'
 import { StatusBadge } from '../pages/ReservationsPage'
 import { ErrorText } from './AuthForm'
@@ -298,7 +299,9 @@ function Thread({ id, base, side, onChanged }) {
         <Link to={base} aria-label={t('chat.back')} className="flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-surface-2 md:hidden">
           <ArrowLeft className="size-5" aria-hidden />
         </Link>
-        <p className="min-w-0 flex-1 truncate px-1 font-semibold">{otherName(conv)}</p>
+        <p className="min-w-0 flex-1 truncate px-1 font-semibold">
+          {side === 'store' ? otherName(conv) : <StoreName store={conv.store} />}
+        </p>
         {conv.blocked && side === 'store' && <Badge tone="danger">{t('chat.blockedBadge')}</Badge>}
         <Dropdown trigger={({ open, toggle }) => (
           <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('chat.actions')}

@@ -193,9 +193,9 @@ def test_store_city_must_be_known():
 
     from app.schemas.seller import StoreIn
 
-    assert StoreIn(name="Shop", city="bukhara").city == "bukhara"
+    assert StoreIn(name="Shop", address="ул. Навои, 1", city="bukhara").city == "bukhara"
     for bad in ("all", "moscow"):
         with pytest.raises(ValidationError):
-            StoreIn(name="Shop", city=bad)
+            StoreIn(name="Shop", address="ул. Навои, 1", city=bad)
     with pytest.raises(ValidationError):
-        StoreIn(name="Shop")
+        StoreIn(name="Shop", address="ул. Навои, 1")

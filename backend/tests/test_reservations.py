@@ -240,6 +240,7 @@ def test_overview_counts_new_and_ending_today(client, db, world):
 def test_store_reservation_days_in_profile(client, db, world):
     seller = _auth(world["shop"].owner)
     profile = client.get("/api/stores/me", headers=seller).json()
+    profile["address"] = "ул. Навои, 1"  # required since phase 12
     assert profile["reservation_days"] == 2
     profile["reservation_days"] = 9
     assert client.put("/api/stores/me", json=profile, headers=seller).status_code == 422

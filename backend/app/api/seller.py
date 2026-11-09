@@ -17,6 +17,7 @@ from app.services.importer import (
 )
 from app.services.market import PERIODS, index_table, market_data, missing_popular, seller_position
 from app.services import undo
+from app.services.maps import MapLinkError, parse_map_url
 from app.services.manual import create_product, product_brief, save_offer, store_offer, suggest_products
 
 router = APIRouter(tags=["seller"])
@@ -52,8 +53,15 @@ def get_my_store(user: User = Depends(seller_only), db: Session = Depends(get_db
 @router.put("/stores/me", response_model=StoreOut)
 def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     store = _my_store(db, user) or Store(user_id=user.id)
+    try:
+        map_url, lat, lon = parse_map_url(data.map_url)
+    except MapLinkError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
     for field, value in data.model_dump().items():
+        if isinstance(value, str):
+            value = value.strip() or None
         setattr(store, field, value)
+    store.map_url, store.map_lat, store.map_lon = map_url, lat, lon
     db.add(store)
     db.commit()
     db.refresh(store)

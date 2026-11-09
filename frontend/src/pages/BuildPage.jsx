@@ -13,6 +13,7 @@ import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum } from '../services/format'
 import { useSpecDictionary } from '../services/specs'
 import { WriteButton } from '../components/Chat'
+import { MapButtons, StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import { Contacts } from './ProductPage'
 
@@ -116,10 +117,12 @@ export default function BuildPage() {
           <div className="mt-4 border-t border-line pt-4">
             <p className="text-xs text-muted">{t('builds.store')}</p>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
-              {store.name}
+              <StoreName store={store} />
               {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
             </p>
             <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
+            {store.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{store.hours}</p>}
+            <MapButtons store={store} className="mt-2" />
           </div>
           <div className="mt-4 grid gap-2">
             <ReserveButton store={store} usdRate={build.usd_rate} className="w-full" item={{

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
+import { MapButtons, StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import { ProductVisual } from '../components/CategoryIcon'
 import Flags from '../components/Flags'
@@ -69,11 +70,12 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
-            {store.name}
+            <StoreName store={store} />
             {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
             {ad && <AdBadge />}
           </p>
           <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
+          {!ad && store.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{store.hours}</p>}
           <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-sm">
             <span className={offer.is_in_stock ? 'font-medium text-success' : 'text-muted'}>
               {t(offer.is_in_stock ? 'product.inStock' : 'product.outOfStock')}
@@ -98,6 +100,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
             kind: 'offer', id: offer.id, title, condition: offer.condition, price: offer.price, currency: offer.currency,
             inStock: offer.is_in_stock }} />
           <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
+          <MapButtons store={store} size="lg" className="[&>a]:w-full sm:[&>a]:w-auto" />
           {open ? <Contacts store={store} />
             : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
         </>}

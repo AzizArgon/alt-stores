@@ -9,6 +9,7 @@ from app.services.catalog import (
 )
 from app.services.exchange import get_usd_rate
 from app.services.market import product_market
+from app.services import stores as stores_svc
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -95,3 +96,29 @@ def get_product(product_id: int, sort: str = Query("recommended", pattern="^(rec
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     return {**card, "usd_rate_date": rate_date, "market": product_market(db, product_id)}
+
+
+@router.get("/stores")
+def list_stores(city: str | None = None, db: Session = Depends(get_db)):
+    """"Stores": partner shops of the city (or the whole country), Telegram channels are not stores."""
+    return {"items": stores_svc.list_stores(db, _city(city))}
+
+
+def _shop(db: Session, store_id: int):
+    store = stores_svc.get_shop(db, store_id)
+    if store is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Store not found")
+    return store
+
+
+@router.get("/stores/{store_id}")
+def get_store(store_id: int, db: Session = Depends(get_db)):
+    usd_rate, rate_date = _rate(db)
+    return {**stores_svc.store_page(db, _shop(db, store_id), usd_rate), "usd_rate": usd_rate, "usd_rate_date": rate_date}
+
+
+@router.get("/stores/{store_id}/offers")
+def get_store_offers(store_id: int, group: str = Query("new", pattern="^(new|used)$"), page: int = Query(1, ge=1),
+                     db: Session = Depends(get_db)):
+    usd_rate, _ = _rate(db)
+    return stores_svc.store_offers(db, _shop(db, store_id), usd_rate, group, page)

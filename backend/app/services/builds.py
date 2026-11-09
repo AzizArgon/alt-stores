@@ -500,7 +500,8 @@ def build_detail(db: Session, build: Build, usd_rate: float | None) -> dict:
         "store_reference": store_reference(db, build, usd_rate),
         "store": {"id": store.id, "name": store.name, "city": store.city, "district": store.district,
                   "address": store.address, "phone": store.phone, "telegram": store.telegram,
-                  "is_verified": store.is_verified},
+                  "is_verified": store.is_verified, "hours": store.hours, "map_url": store.map_url,
+                  "map_lat": store.map_lat, "map_lon": store.map_lon},
     }
 
 

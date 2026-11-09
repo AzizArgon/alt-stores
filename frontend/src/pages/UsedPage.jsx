@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
+import { StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import Flags from '../components/Flags'
 import { Sheet } from '../components/overlays'
@@ -64,7 +65,7 @@ function UsedOffer({ item, usdRate, rateDate }) {
             <span className={item.condition === 'unknown' ? 'text-warning' : 'font-medium'}
               title={item.condition === 'unknown' ? t('used.conditionNote') : undefined}>{t(`condition.${item.condition}`)}</span>
             <span className="text-faint">·</span>
-            <span>{item.store.name}</span>
+            <StoreName store={item.store} />
             {ad && <AdBadge />}
           </p>
           <p className="mt-0.5 flex gap-1 text-sm text-muted">

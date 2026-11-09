@@ -11,10 +11,13 @@ class StoreIn(BaseModel):
     inn_stir: str | None = Field(default=None, max_length=20)
     phone: str | None = Field(default=None, max_length=32)
     telegram: str | None = Field(default=None, max_length=64)
-    address: str | None = Field(default=None, max_length=255)
+    # Street, house, landmark: the buyer must know where to go (phase 12)
+    address: str = Field(min_length=3, max_length=255)
     district: str | None = Field(default=None, max_length=128)
     city: str
     reservation_days: int = Field(default=2, ge=1, le=7)  # how long a confirmed reservation waits (phase 11)
+    hours: str | None = Field(default=None, max_length=100)  # "Mon-Sat 10:00-19:00", as the store writes it
+    map_url: str | None = Field(default=None, max_length=500)  # only Yandex Maps (app.services.maps)
 
     @field_validator("city")
     @classmethod
@@ -29,6 +32,9 @@ class StoreOut(StoreIn):
 
     id: int
     is_verified: bool
+    address: str | None = None  # stores made before phase 12 may have none yet
+    map_lat: float | None = None
+    map_lon: float | None = None
 
 
 class CategoryOut(BaseModel):

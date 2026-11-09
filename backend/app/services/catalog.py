@@ -472,7 +472,10 @@ def store_brief(store: Store) -> dict:
     ad = store.kind == StoreKind.telegram
     return {"id": store.id, "name": store.name, "kind": store.kind.value, "is_verified": store.is_verified and not ad,
             "phone": None if ad else store.phone, "telegram": None if ad else store.telegram,
-            "address": None if ad else store.address, "district": None if ad else store.district, "city": store.city}
+            "address": None if ad else store.address, "district": None if ad else store.district, "city": store.city,
+            # Where to go (phase 12): the buyer opens Yandex Maps, the site has no map of its own
+            "hours": None if ad else store.hours, "map_url": None if ad else store.map_url,
+            "map_lat": None if ad else store.map_lat, "map_lon": None if ad else store.map_lon}
 
 
 def price_order(offer: dict) -> tuple:

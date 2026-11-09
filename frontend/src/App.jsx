@@ -11,6 +11,8 @@ import ImportPage from './pages/ImportPage'
 import LoginPage from './pages/LoginPage'
 import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
+import StorePage from './pages/StorePage'
+import StoresPage from './pages/StoresPage'
 import UsedPage from './pages/UsedPage'
 import ProfilePage from './pages/ProfilePage'
 import ReservationsPage from './pages/ReservationsPage'
@@ -90,6 +92,8 @@ export default function App() {
         <Route path="/used" element={<UsedPage />} />
         <Route path="/builds" element={<BuildsPage />} />
         <Route path="/builds/:id" element={<BuildPage />} />
+        <Route path="/stores" element={<StoresPage />} />
+        <Route path="/store/:id" element={<StorePage />} />
         <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
         <Route path="/messages" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
