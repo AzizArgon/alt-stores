@@ -70,7 +70,8 @@ def test_builds_only_keeps_offers_history_and_passwords(db):
 
     assert [_count(db, m) for m in (User, Store, Offer, PriceHistory)] == counts
     # Demo conversations are recreated without duplicates
-    assert [_count(db, m) for m in (Conversation, Message)] == chats and report[1]["demo_chats"] == chats[0] >= 2
+    assert [_count(db, m) for m in (Conversation, Message)] == chats
+    assert report[1]["demo_chats"] == chats[0] - report[2]["demo_reservations"] >= 2
     assert all(c.is_demo and c.store.is_demo for c in db.scalars(select(Conversation)))
     assert demo1.password_hash == "server-own" and demo1_store.city == "tashkent"
     assert report[0]["demo_builds"] == _count(db, Build)
@@ -110,3 +111,35 @@ def test_builds_only_twice_keeps_build_ids_and_buyer_conversations(db):
 
     assert {b.name: b.id for b in db.scalars(select(Build))} == builds
     assert db.get(Conversation, own.id).topic_id == build_id and db.get(Build, build_id) is not None
+
+
+def test_demo_reservations_survive_builds_only_reruns(db):
+    from app.db.models import Reservation, TopicKind
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    first = {r.demo_key: (r.id, r.status.value, r.build_id) for r in db.scalars(select(Reservation))}
+    assert first and all(r.is_demo and r.store.is_demo for r in db.scalars(select(Reservation)))
+    convs = {c.topic_id: c.id for c in db.scalars(select(Conversation).where(Conversation.topic_kind == TopicKind.reservation))}
+    assert set(convs) == {rid for rid, _, _ in first.values()}
+    counts = [_count(db, m) for m in (Reservation, Conversation, Message)]
+
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+
+    assert {r.demo_key: (r.id, r.status.value, r.build_id) for r in db.scalars(select(Reservation))} == first
+    assert {c.topic_id: c.id for c in db.scalars(select(Conversation).where(
+        Conversation.topic_kind == TopicKind.reservation))} == convs
+    assert [_count(db, m) for m in (Reservation, Conversation, Message)] == counts
+    # A demo build reservation points at a build that still exists
+    assert all(db.get(Build, b) is not None for _, _, b in first.values() if b)
+    assert not db.scalars(select(Reservation).where(Reservation.store_id == age.id)).all()

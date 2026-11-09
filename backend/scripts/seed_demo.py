@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, selectinload  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.models import (  # noqa: E402
     Build, Category, Conversation, Currency, ImportStatus, Message, MessageAuthor, Offer, PriceHistory, PriceImport,
-    Product, Store, TopicKind, User, UserRole, utcnow,
+    Product, Reservation, ReservationEvent, ReservationStatus, Store, TopicKind, User, UserRole, utcnow,
 )
 from app.services.exchange import RateBook, ensure_rates  # noqa: E402
 
@@ -177,7 +177,8 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     for spec in STORES:
         _store(db, spec)
     _live_store(db)
-    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)}]
+    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
+            {"demo_reservations": seed_reservations(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -201,6 +202,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
     report.append({"demo_builds": seed_builds(db, usd_rate)})
     report.append({"demo_chats": seed_chats(db)})
+    report.append({"demo_reservations": seed_reservations(db)})
     return report
 
 
@@ -415,6 +417,96 @@ def seed_chats(db: Session) -> int:
         db.commit()
         made += 1
     return made
+
+
+# --- Demo reservations (phase 11) ----------------------------------------------------------------------------------
+# buyer1 at the demo stores, one per status; the confirmed one ends today. Updated in place by a constant key
+# (Reservation.demo_key): ids stay over re-runs, also in --builds-only mode; a real store is never touched.
+# (key, store, topic as in DEMO_CHATS, path of statuses, hours ago, cancel reason)
+DEMO_RESERVATIONS = [
+    ("new", "demo2@example.com", ("offer", "gpu"), ["new"], 3, None),
+    ("confirmed", "demo1@example.com", ("build", 0), ["new", "confirmed"], 40, None),
+    ("ready", "demo3@example.com", ("offer", "ssd"), ["new", "confirmed", "ready"], 20, None),
+    ("issued", "demo1@example.com", ("offer", "ram"), ["new", "confirmed", "ready", "issued"], 120, None),
+    ("cancelled", "demo2@example.com", ("offer", "monitor"), ["new", "cancelled"], 70, "no_stock"),
+]
+DEMO_CONTACT = {"name": "Азиз", "phone": "+998901112233", "contact": "telegram", "telegram": "@buyer1_demo"}
+
+
+def _reservation_item(db: Session, store: Store, topic: tuple):
+    found = _chat_topic(db, store, topic)
+    if found is None:
+        return None
+    kind, item_id = found
+    return db.get(Offer, item_id) if kind == TopicKind.offer else db.get(Build, item_id)
+
+
+def seed_reservations(db: Session) -> int:
+    from app.services.reservations import TZ, system_text
+
+    buyer, now = _demo_buyer(db), utcnow()
+    made = 0
+    for key, email, topic, path, hours, reason in DEMO_RESERVATIONS:
+        store = db.scalar(select(Store).join(Store.owner).where(User.email == email, Store.is_demo.is_(True)))
+        item = _reservation_item(db, store, topic) if store is not None else None
+        if item is None:
+            continue
+        r = db.scalar(select(Reservation).where(Reservation.demo_key == key, Reservation.is_demo.is_(True)))
+        if r is None:
+            r = Reservation(demo_key=key, is_demo=True)
+            db.add(r)
+        is_offer = isinstance(item, Offer)
+        status = ReservationStatus(path[-1])
+        created = now - timedelta(hours=hours)
+        r.buyer_id, r.store_id = buyer.id, store.id
+        r.offer_id, r.build_id = (item.id, None) if is_offer else (None, item.id)
+        r.title = item.product.normalized_name if is_offer else item.name
+        r.condition, r.price, r.currency, r.quantity = item.condition, item.price, item.currency, 1
+        for field, value in DEMO_CONTACT.items():
+            setattr(r, field, value)
+        r.pickup_date, r.pickup_time = None, None
+        r.comment = "Заеду после работы, если можно — отложите до вечера." if key == "new" else None
+        r.status, r.created_at, r.updated_at = status, created, created + timedelta(hours=len(path) - 1)
+        r.cancelled_by = "store" if reason else None
+        r.cancel_reason, r.cancel_text = reason, None
+        if key == "confirmed":  # ends today (Tashkent): the overview shows it
+            r.expires_at = datetime.combine(now.astimezone(TZ).date(), time(23, 30), TZ).astimezone(timezone.utc)
+        elif "confirmed" in path:
+            r.expires_at = created + timedelta(hours=1, days=store.reservation_days or 2)
+        else:
+            r.expires_at = None
+        r.buyer_seen = key != "ready"  # one changed status the buyer has not seen yet
+        r.events = [ReservationEvent(status=ReservationStatus(st), by="buyer" if st == "new" else "store",
+                                     at=created + timedelta(hours=i)) for i, st in enumerate(path)]
+        db.flush()
+        conv = db.scalar(select(Conversation).where(Conversation.topic_kind == TopicKind.reservation,
+                                                    Conversation.topic_id == r.id))
+        if conv is None:
+            conv = Conversation(buyer_id=buyer.id, store_id=store.id, topic_kind=TopicKind.reservation, topic_id=r.id,
+                                is_demo=True)
+            db.add(conv)
+        conv.created_at = created
+        until = _aware_until(r)
+        lines = [(st, buyer.id if st == "new" else store.user_id) for st in path]
+        conv.messages = [
+            Message(author=MessageAuthor.system, sender_id=sender, created_at=created + timedelta(hours=i),
+                    text=system_text("created" if st == "new" else "cancelled_store" if st == "cancelled" else st,
+                                     until=until, reason=reason or "", text=""),
+                    is_read=i < len(lines) - 1 or key != "ready")
+            for i, (st, sender) in enumerate(lines)
+        ]
+        conv.last_message_at = created + timedelta(hours=len(path) - 1)
+        db.commit()
+        made += 1
+    return made
+
+
+def _aware_until(r: Reservation) -> str:
+    from app.services.reservations import TZ
+    if r.expires_at is None:
+        return ""
+    at = r.expires_at if r.expires_at.tzinfo else r.expires_at.replace(tzinfo=timezone.utc)
+    return at.astimezone(TZ).strftime("%d.%m")
 
 
 if __name__ == "__main__":
