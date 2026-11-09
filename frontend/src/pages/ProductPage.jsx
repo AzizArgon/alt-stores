@@ -12,6 +12,7 @@ import Price from '../components/Price'
 import { useCity } from '../services/city.jsx'
 import { formatDate, formatDayMonth, formatPrice, roundSum, telegramUrl } from '../services/format'
 import { formatSpec, specLabel, specsLine } from '../services/specs'
+import { defaultGroup, groupCounts } from '../services/used'
 
 const SORTS = ['recommended', 'price']
 
@@ -190,9 +191,8 @@ export default function ProductPage() {
       </div>
     )
   }
-  const counts = { new: 0, used: 0 }
-  product.offers.forEach((o) => { counts[o.group] += 1 })
-  const group = tab || (counts.new === 0 && counts.used > 0 ? 'used' : 'new')
+  const counts = groupCounts(product.offers)
+  const group = tab || defaultGroup(counts)
   const offers = product.offers.filter((o) => o.group === group)
   const byCity = city !== 'all'
   const here = byCity ? offers.filter((o) => o.store.city === city) : offers
@@ -269,7 +269,7 @@ export default function ProductPage() {
           )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <ProductMarket market={product.market} usdRate={product.usd_rate} />
+          <ProductMarket market={product.market} usdRate={product.usd_rate} condition={group === 'new' ? 'new' : 'used'} />
           <SpecsTable product={product} />
         </div>
       </div>

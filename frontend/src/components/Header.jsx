@@ -169,14 +169,14 @@ export default function Header() {
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex h-16 items-center gap-2 md:gap-3">
           <button type="button" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')}
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary lg:hidden">
+            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary xl:hidden">
             <Menu className="size-6" aria-hidden />
           </button>
           <Logo />
           <div className="hidden md:block"><CityMenu /></div>
           <HeaderSearch className="hidden flex-1 md:block" />
           <div className="flex-1 md:hidden" />
-          <nav className="hidden shrink-0 items-center gap-1 lg:flex">
+          <nav className="hidden shrink-0 items-center gap-1 xl:flex">
             {NAV_LINKS.map((link) => (
               <NavLink key={link.to} to={link.to} end className={({ isActive }) =>
                 `rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-surface-2 ${isActive ? 'text-primary' : 'text-ink'}`}>
