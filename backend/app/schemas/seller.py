@@ -98,12 +98,15 @@ class ImportOut(BaseModel):
     error: str | None
     stats: dict = Field(default_factory=dict, validation_alias="stats_json")
     created_at: datetime
+    published_at: datetime | None = None
+    undone_at: datetime | None = None
+    can_undo: bool = False  # the store's last published file or post, not older than 7 days (phase 12)
 
-    @field_validator("created_at")
+    @field_validator("created_at", "published_at", "undone_at")
     @classmethod
-    def _assume_utc(cls, value: datetime) -> datetime:
+    def _assume_utc(cls, value: datetime | None) -> datetime | None:
         # SQLite drops the timezone; we always store UTC
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 class ImportDetail(ImportOut):

@@ -16,6 +16,7 @@ from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
 )
 from app.services.market import PERIODS, index_table, market_data, missing_popular, seller_position
+from app.services import undo
 from app.services.manual import create_product, product_brief, save_offer, store_offer, suggest_products
 
 router = APIRouter(tags=["seller"])
@@ -105,9 +106,32 @@ def paste_text(data: TextImportIn, background: BackgroundTasks, user: User = Dep
 @router.get("/imports", response_model=list[ImportOut])
 def list_imports(user: User = Depends(seller_only), db: Session = Depends(get_db)):
     store = _require_store(db, user)
-    return db.scalars(
+    undoable = undo.undoable_id(db, store)
+    imports = db.scalars(
         select(PriceImport).where(PriceImport.store_id == store.id).order_by(PriceImport.id.desc()).limit(20)
     ).all()
+    return [ImportOut.model_validate(i).model_copy(update={"can_undo": i.id == undoable}) for i in imports]
+
+
+def _undoable(db: Session, imp: PriceImport) -> None:
+    reason = undo.can_undo(db, imp)
+    if reason:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": reason})
+
+
+@router.get("/imports/{import_id}/undo")
+def undo_summary(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """"What will come back" before undoing the upload: nothing is written."""
+    imp = _my_import(db, user, import_id)[1]
+    _undoable(db, imp)
+    return undo.plan_undo(db, imp)
+
+
+@router.post("/imports/{import_id}/undo")
+def undo_upload(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    imp = _my_import(db, user, import_id)[1]
+    _undoable(db, imp)
+    return undo.undo_import(db, imp)
 
 
 @router.get("/imports/{import_id}", response_model=ImportDetail)

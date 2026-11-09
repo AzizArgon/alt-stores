@@ -52,6 +52,7 @@ class ImportStatus(str, enum.Enum):
     ready = "ready"
     failed = "failed"
     published = "published"
+    undone = "undone"  # "Undo this upload" (phase 12): can be neither undone nor published again
 
 
 class FlagLevel(str, enum.Enum):
@@ -108,6 +109,12 @@ class Store(Base):
     kind: Mapped[StoreKind] = mapped_column(str_enum(StoreKind), default=StoreKind.shop, server_default="shop")
     # How many days a confirmed reservation waits for the buyer (phase 11), 1-7
     reservation_days: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
+    # Where to go (phase 12): opening hours as the store writes them, its point in Yandex Maps (optional; without it
+    # the site searches the address), coordinates only when the link has them
+    hours: Mapped[str | None] = mapped_column(String(100))
+    map_url: Mapped[str | None] = mapped_column(String(500))
+    map_lat: Mapped[float | None] = mapped_column(Float)
+    map_lon: Mapped[float | None] = mapped_column(Float)
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
@@ -282,6 +289,10 @@ class PriceImport(Base):
     # How the rows were parsed: counts by source, AI requests, seconds (for the parser experiment)
     stats_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # "Undo this upload" (phase 12): what the publication changed (app.services.undo), when it was published/undone
+    undo_json: Mapped[dict | None] = mapped_column(JSON)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ParseCache(Base):

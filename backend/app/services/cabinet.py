@@ -149,11 +149,22 @@ def overview(db: Session, store: Store) -> dict:
         "flagged": sum(_flag_rank(o) >= LEVEL_RANK[FlagLevel.warning] for o in offers),
         "stale": sum(_aware(o.updated_at) < stale_before for o in offers),
         "last_upload": {"id": last.id, "filename": last.filename, "created_at": _aware(last.created_at)} if last else None,
+        "undo": _undo_brief(db, store),  # "Undo this upload" (phase 12)
         "categories": sorted({o.product.category.slug for o in offers if o.product.category}),
         "builds": build_counts(db, store),  # ready PCs live apart from the goods (phase B4)
         "chat": chat_counts(db, store),  # new messages and buyers waiting longer than a day (phase 10)
         "reservations": reservation_counts(db, store),  # new ones and the ones ending today (phase 11)
     }
+
+
+def _undo_brief(db: Session, store: Store) -> dict | None:
+    from app.services.undo import undo_deadline, undoable_id
+
+    imp_id = undoable_id(db, store)
+    if imp_id is None:
+        return None
+    imp = db.get(PriceImport, imp_id)
+    return {"id": imp.id, "filename": imp.filename, "source": imp.source, "deadline": undo_deadline(imp)}
 
 
 def _check_row(offer: Offer) -> dict:

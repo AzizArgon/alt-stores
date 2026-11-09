@@ -27,6 +27,7 @@ from app.services.price_cleaner import CleanRow, cache_key, clean_markdown
 from app.services.rule_parser import parse_by_rules
 from app.services.sheet_blocks import prepare_workbook
 from app.services.text_import import no_rows_reason, text_to_rows
+from app.services.undo import UNDO_SOURCES, make_snapshot, offer_state
 from app.services.spec_normalizer import (
     canonical_brand, merge_specs, normalize_specs, source_text, strip_modifiers, written_specs,
 )
@@ -502,6 +503,18 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
     products = matcher.products
     seen: set[int] = set()
     stats = {"created": 0, "updated": 0, "out_of_stock": 0}
+    # "Undo this upload" (phase 12): offers before the change (None = new), what the upload added
+    before: dict[int, dict | None] = {}
+    touched_offers: list[Offer] = []
+    new_products: list[Product] = []
+    history: list[PriceHistory] = []
+    events: list[OfferEvent] = []
+
+    def remember(o: Offer) -> None:
+        if o.id is None or o.id not in before:
+            if o.id is not None:
+                before[o.id] = offer_state(o)
+            touched_offers.append(o)
 
     rows_to_save = _rows_to_save(rows)
     # Flags are checked again: the seller may have changed category, condition or price
@@ -515,6 +528,7 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
                 specs_json=specs,
             )
             db.add(product)
+            new_products.append(product)
         else:
             product.specs_json = merge_specs(product.specs_json, specs)
         products[key] = product
@@ -534,8 +548,10 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
         else:
             price_changed = offer.price != price or offer.currency != currency
             stats["updated"] += 1
+        remember(offer)
         if offer.id is not None and (offer.is_in_stock != in_stock or offer.removed_at is not None):
-            offer.events.append(OfferEvent(field="stock", value=str(int(in_stock)), source="import"))
+            events.append(OfferEvent(field="stock", value=str(int(in_stock)), source="import"))
+            offer.events.append(events[-1])
         offer.product = product
         offer.price = price
         offer.currency = currency
@@ -546,7 +562,8 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
         offer.updated_at = utcnow()  # the price list confirmed this offer: freshness for "recommended"
         save_offer_flags(offer, r["flags"])
         if price is not None and price_changed:
-            offer.price_history.append(PriceHistory(price=price, currency=currency))
+            history.append(PriceHistory(price=price, currency=currency))
+            offer.price_history.append(history[-1])
         db.flush()
         seen.add(offer.id)
         offers_by_product.setdefault(product.id, offer)
@@ -554,8 +571,10 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
     # Only a full price list file says "everything else is sold out"; an addition or a post lists just a few goods
     for offer in offers_by_raw.values() if mode == "full" else ():
         if offer.id not in seen and offer.is_in_stock:
+            remember(offer)
             offer.is_in_stock = False
-            offer.events.append(OfferEvent(field="stock", value="0", source="import"))
+            events.append(OfferEvent(field="stock", value="0", source="import"))
+            offer.events.append(events[-1])
             stats["out_of_stock"] += 1
 
     if touched is not None:
@@ -564,6 +583,10 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
     imp.mode = mode
     imp.status = ImportStatus.published
     imp.rows_json = rows
+    imp.published_at = utcnow()
+    if imp.source in UNDO_SOURCES:
+        db.flush()
+        imp.undo_json = make_snapshot(before, touched_offers, history, events, new_products)
     db.commit()
     # Reviewed rows teach the cache: next upload of the same names needs no AI at all
     save_cache(db, _seller_cache(parsed_rows, rows), "seller")
