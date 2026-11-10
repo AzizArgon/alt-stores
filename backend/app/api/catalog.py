@@ -87,6 +87,17 @@ def list_categories(city: str | None = None, db: Session = Depends(get_db)):
             "usd_rate": usd_rate, "usd_rate_date": rate_date}
 
 
+@router.get("/barcode/{code}")
+def by_barcode(code: str, db: Session = Depends(get_db)):
+    """Phase 12.3: a code from a box typed into the search -> its card, only by the confirmed common base."""
+    from app.services.barcodes import confirmed_product
+
+    product = confirmed_product(db, code[:64])
+    if product is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown barcode")
+    return {"product_id": product.id}
+
+
 @router.get("/products/{product_id}")
 def get_product(product_id: int, sort: str = Query("recommended", pattern="^(recommended|price)$"),
                 city: str | None = None, db: Session = Depends(get_db)):

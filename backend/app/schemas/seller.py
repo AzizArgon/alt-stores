@@ -99,6 +99,7 @@ class PreviewRow(BaseModel):
     is_in_stock: bool = True
     # Phase 12.1: stock by branch column header: a count, True ("+", "есть"), False ("нет") or None (empty)
     branches: dict[str, bool | int | None] = {}
+    barcode: str | None = None  # phase 12.3: a "Штрихкод" column
     # Pasted text: the currency of this line (None = the import's one); check = not written, default was taken
     currency: Literal["USD", "UZS"] | None = None
     currency_check: bool = False
@@ -235,6 +236,7 @@ class PublishResult(BaseModel):
     created: int
     updated: int
     out_of_stock: int
+    barcodes: int = 0  # phase 12.3: codes bound by a "Штрихкод" column
 
 
 class RateOut(BaseModel):

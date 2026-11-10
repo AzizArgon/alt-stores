@@ -14,7 +14,7 @@ from app.api.seller import MAX_FILE_SIZE, _require_store, seller_only
 from app.db.database import get_db
 from app.db.models import Offer, Product, User
 from app.schemas.seller import OfferFilter
-from app.services import cabinet, stock, stock_excel
+from app.services import barcodes, cabinet, stock, stock_excel
 from app.services.branches import seller_stocks
 
 router = APIRouter(prefix="/seller/stock", tags=["stock"])
@@ -38,6 +38,7 @@ class LineIn(BaseModel):
 class OperationIn(BaseModel):
     kind: Literal["receipt", "sale", "adjust"]
     lines: list[LineIn] = Field(min_length=1, max_length=200)
+    scan: bool = False  # "Сканирование": a price-only store changes its stock as a hand edit (12.3)
 
 
 def _err(e: stock.StockError):
@@ -75,14 +76,23 @@ def save_settings(data: SettingsIn, user: User = Depends(seller_only), db: Sessi
 def operate(data: OperationIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """A receipt, a sale or an adjustment document: all lines or none."""
     try:
-        return stock.operate(db, _require_store(db, user), user, data.kind, [line.model_dump() for line in data.lines])
+        return stock.operate(db, _require_store(db, user), user, data.kind, [line.model_dump() for line in data.lines],
+                             data.scan)
     except stock.StockError as e:
         _err(e)
 
 
+def scan_offer(o: Offer) -> dict:
+    """An offer as the goods input, "Сканирование" and "Найти" show it (only the seller)."""
+    return {"id": o.id, "name": o.product.normalized_name, "raw_name": o.raw_name, "price": o.price,
+            "currency": o.currency.value, "cost_last": o.cost_last, "cost_avg": o.cost_avg,
+            "category": o.product.category.slug if o.product.category else "other", "product_id": o.product_id,
+            "is_in_stock": o.is_in_stock, "stocks": seller_stocks(o), "barcodes": [b.code for b in o.barcodes]}
+
+
 @router.get("/search")
 def search(q: str = Query("", max_length=200), user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    """The goods input of the operations: by name, the seller's line or the code (12.3 adds the barcode here)."""
+    """The goods input of the operations: by name, the seller's line, the code or the store's barcode (12.3)."""
     store = _require_store(db, user)
     q = q.strip()
     if not q:
@@ -90,13 +100,19 @@ def search(q: str = Query("", max_length=200), user: User = Depends(seller_only)
     cond = [Product.normalized_name.ilike(f"%{q}%"), Offer.raw_name.ilike(f"%{q}%")]
     if q.isdigit():
         cond.append(Offer.id == int(q))
+    try:
+        own = barcodes.store_binding(db, store, barcodes.normalize(q))
+    except barcodes.BarcodeError:
+        own = None
+    if own is not None:
+        cond.append(Offer.id == own.offer_id)
     offers = db.scalars(select(Offer).join(Product, Offer.product_id == Product.id).where(
         Offer.store_id == store.id, Offer.removed_at.is_(None), or_(*cond)).order_by(Product.normalized_name)
         .limit(15)).all()
-    if q.isdigit():
-        offers.sort(key=lambda o: o.id != int(q))
-    return [{"id": o.id, "name": o.product.normalized_name, "raw_name": o.raw_name, "price": o.price,
-             "currency": o.currency.value, "cost_last": o.cost_last, "stocks": seller_stocks(o)} for o in offers]
+    first = own.offer_id if own is not None else (int(q) if q.isdigit() else None)
+    if first is not None:
+        offers.sort(key=lambda o: o.id != first)
+    return [scan_offer(o) for o in offers]
 
 
 @router.get("/journal")

@@ -20,6 +20,8 @@ HEADER_WORDS = (
 COLUMN_ROLES = {
     "price": ("цена", "опт", "розн", "стоимость", "price"),
     "name": ("наименование", "название", "товар", "name"),
+    # Phase 12.3: before "article" ("штрихкод" contains "код"): the code binds to the offer, it is not a model
+    "barcode": ("штрихкод", "штрих-код", "barcode", "ean"),
     "article": ("артикул", "код", "part", "sku"),
     "brand": ("бренд", "производитель", "brand", "vendor"),
     "specs": ("характеристик",),
@@ -67,6 +69,7 @@ class CleanRow:
     note: str | None = None  # the seller's words next to the price: "Подписчикам 13$", "(только в сборках)"
     # Phase 12.1: stock by branch column header: a count, True ("+", "есть"), False ("нет") or None (empty, "-")
     branch_cells: dict = field(default_factory=dict)
+    barcode: str | None = None  # phase 12.3: the cell of a "Штрихкод" column (checked when published)
 
     @property
     def raw_name(self) -> str:
@@ -168,7 +171,7 @@ def _branch_columns(header: list[str], roles: dict[int, str], data: list[list[st
 def _extract_fields(row: CleanRow, cells: list[str], roles: dict[int, str]) -> None:
     by_role = {role: i for i, role in roles.items()}
     skip = {i for i, role in roles.items()
-            if role in ("specs", "stock", "index", "price", "price_wholesale", "section", "note", "brand")}
+            if role in ("specs", "stock", "index", "price", "price_wholesale", "section", "note", "brand", "barcode")}
     texts = [(i, c) for i, c in enumerate(cells) if c and i not in skip and not _NUMBER.match(c)]
     price_cols = [i for i, r in roles.items() if r == "price_wholesale"] + [i for i, r in roles.items() if r == "price"]
 
@@ -183,7 +186,7 @@ def _extract_fields(row: CleanRow, cells: list[str], roles: dict[int, str]) -> N
     row.price = parse_price(price_cell) if price_cell else None
     # "110$" / "1 250 000 сум" in the cell: the currency of this row; nothing written = the import's currency
     row.currency = price_currency(price_cell) if row.price is not None else None
-    for role, attr in (("section", "section"), ("note", "note")):
+    for role, attr in (("section", "section"), ("note", "note"), ("barcode", "barcode")):
         i = by_role.get(role)
         if i is not None and i < len(cells) and cells[i]:
             setattr(row, attr, cells[i])

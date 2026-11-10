@@ -135,6 +135,7 @@ def _preview_row(r: CleanRow, parsed: dict | None, source: str) -> dict:
         "specs_guess": guessed,
         "is_in_stock": r.is_in_stock,
         "branches": r.branch_cells,  # phase 12.1: stock by branch column header
+        "barcode": r.barcode,  # phase 12.3: bound to the offer when published
         "currency": r.currency,  # pasted text: per line; None = the currency of the whole import
         "currency_check": r.currency_check,
         "ai_risks": p.get("risks") or [],  # Anti-Fraud hints from the AI, checked after the rules
@@ -546,6 +547,7 @@ def _publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict
                 before[o.id] = offer_state(o)
             touched_offers.append(o)
 
+    codes: list[tuple[Offer, str]] = []  # phase 12.3: a "Штрихкод" column binds codes to the offers
     rows_to_save = _rows_to_save(rows)
     # Flags are checked again: the seller may have changed category, condition or price
     flag_rows(db, rows, store.id, imp.currency)
@@ -599,6 +601,8 @@ def _publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict
         db.flush()
         seen.add(offer.id)
         offers_by_product.setdefault(product.id, offer)
+        if r.get("barcode"):
+            codes.append((offer, r["barcode"]))
 
     # Only a full price list file says "everything else is sold out"; an addition or a post lists just a few goods
     for offer in offers_by_raw.values() if mode == "full" else ():
@@ -622,6 +626,10 @@ def _publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict
         db.flush()
         imp.undo_json = make_snapshot(before, touched_offers, history, events, new_products)
     db.commit()
+    if codes:
+        from app.services.barcodes import bind_many
+
+        stats["barcodes"] = bind_many(db, store, codes, user_id=store.user_id, source="import")["bound"]
     # Reviewed rows teach the cache: next upload of the same names needs no AI at all
     save_cache(db, _seller_cache(parsed_rows, rows), "seller")
     return stats

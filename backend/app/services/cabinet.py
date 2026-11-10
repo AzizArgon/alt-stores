@@ -54,7 +54,7 @@ def store_offers(db: Session, store: Store) -> list[Offer]:
     return db.scalars(
         select(Offer).where(Offer.store_id == store.id, Offer.removed_at.is_(None)).options(
             selectinload(Offer.product).selectinload(Product.category), selectinload(Offer.fraud_flags),
-            selectinload(Offer.stocks))
+            selectinload(Offer.stocks), selectinload(Offer.barcodes))
     ).all()
 
 
@@ -88,6 +88,7 @@ def offer_row(offer: Offer, market: dict | None = None) -> dict:
         "stocks": seller_stocks(offer),  # phase 12.1: by branch id; empty = the store does not track it by branch
         # phase 12.2, only the seller: purchase prices (offer currency) and the markup over the average one
         "cost_last": offer.cost_last, "cost_avg": offer.cost_avg, "markup": markup(offer),
+        "barcodes": [{"id": b.id, "code": b.code} for b in offer.barcodes],  # phase 12.3
     }
 
 
@@ -99,7 +100,7 @@ def markup(offer: Offer) -> float | None:
 
 def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
     q = (f.get("q") or "").strip().lower()
-    if q and q not in row["name"].lower() and q not in offer.raw_name.lower():
+    if q and q not in row["name"].lower() and q not in offer.raw_name.lower() and not _barcode_hit(q, row):
         return False
     if f.get("category") and row["category"] != f["category"]:
         return False
@@ -118,6 +119,17 @@ def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
     if f.get("market") and (row["market"] or {}).get("label") != f["market"]:
         return False
     return True
+
+
+def _barcode_hit(q: str, row: dict) -> bool:
+    """"My goods" search by a barcode: the whole code (UPC-A as EAN-13 too) or its part of 4+ characters."""
+    from app.services.barcodes import BarcodeError, normalize
+
+    try:
+        full = normalize(q).lower()
+    except BarcodeError:
+        full = None
+    return any(b["code"].lower() == full or (len(q) >= 4 and q in b["code"].lower()) for b in row["barcodes"])
 
 
 def _sort_key(sort: str, usd_rate: float | None):
@@ -320,6 +332,9 @@ def relink(db: Session, store: Store, offer: Offer, product: Product) -> dict:
     offer.events.append(OfferEvent(field="product", value=str(product.id), source="edit"))
     offer.updated_at = utcnow()
     db.flush()
+    from app.services.barcodes import refresh_offer
+
+    refresh_offer(db, offer)  # phase 12.3: the codes of the offer follow it to the other card
     recheck_flags(db, [offer], store)
     db.commit()
     return offer_row(offer)

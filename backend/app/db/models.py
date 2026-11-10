@@ -187,6 +187,7 @@ class Offer(Base):
     events: Mapped[list["OfferEvent"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     stocks: Mapped[list["OfferStock"]] = relationship(cascade="all, delete-orphan")
     movements: WriteOnlyMapped["StockMovement"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
+    barcodes: Mapped[list["Barcode"]] = relationship(cascade="all, delete-orphan", order_by="Barcode.id")  # 12.3
 
 
 class OfferEvent(Base):
@@ -695,3 +696,38 @@ class StockMovement(Base):
     reservation_id: Mapped[int | None] = mapped_column(ForeignKey("reservations.id", ondelete="SET NULL"))
     import_id: Mapped[int | None] = mapped_column(ForeignKey("price_imports.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+# --- Phase 12.3: barcodes -------------------------------------------------------------------------------------------
+
+class Barcode(Base):
+    """A store's binding: a code on a box -> its offer (and so the reference card). One code — one offer of a store;
+    an offer may have several codes. Works for this store at once; the common base (`barcode_codes`) needs two."""
+
+    __tablename__ = "barcodes"
+    __table_args__ = (UniqueConstraint("store_id", "code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(32), index=True)  # normalized: UPC-A is kept as EAN-13 with a 0
+    source: Mapped[str] = mapped_column(String(12), default="manual")  # manual / scan / import / demo
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BarcodeCode(Base):
+    """The common base: code -> reference card, recomputed from the stores' bindings. confirmed = two different
+    stores bound it to the same card (the buyer's search and other stores use only these); pending = one store;
+    conflict = stores bound it to different cards — no card, `conflict_json` keeps who and where for the admin."""
+
+    __tablename__ = "barcode_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), index=True)
+    status: Mapped[str] = mapped_column(String(10), index=True)  # pending / confirmed / conflict
+    stores: Mapped[int] = mapped_column(Integer, default=0)  # stores bound to the card (pending / confirmed)
+    conflict_json: Mapped[list] = mapped_column(JSON, default=list)  # [{product_id, stores: [store_id]}]
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

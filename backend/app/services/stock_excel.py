@@ -7,6 +7,7 @@ changes nothing. The file loads as a price list too (the columns have the usual 
 """
 
 import io
+import re
 from datetime import datetime, timezone
 
 from openpyxl import Workbook, load_workbook
@@ -19,6 +20,7 @@ from app.services.branches import store_branches
 from app.services.stock import StockError, journal, move
 
 ID_HEADER = "Код ALT"
+BARCODE_HEADERS = ("штрихкод", "штрих-код", "штрихкоды", "barcode", "ean")
 CONDITIONS = {"new": "новый", "used": "б/у", "refurbished": "восстановленный", "new_openbox": "новый, вскрыт",
               "unknown": "не указано"}
 KIND_TEXT = {
@@ -64,7 +66,8 @@ def export_offers(db: Session, store: Store, offers: list[Offer], with_cost: boo
         p = o.product
         stocks = {s.branch_id: s for s in o.stocks}
         row = [o.id, p.normalized_name, p.category.name if p.category else None, p.brand, p.model,
-               CONDITIONS.get(o.condition.value, o.condition.value), o.price, o.currency.value, None]
+               CONDITIONS.get(o.condition.value, o.condition.value), o.price, o.currency.value,
+               ", ".join(b.code for b in o.barcodes) or None]
         for b in branches:
             s = stocks.get(b.id)
             row.append(None if s is None else (s.quantity if s.quantity is not None else ("+" if s.in_stock else 0)))
@@ -126,8 +129,9 @@ def read_stock_file(db: Session, store: Store, content: bytes) -> dict:
     header = [_norm(c) for c in rows[head_i]]
     id_col = header.index(_norm(ID_HEADER)) if _norm(ID_HEADER) in header else None
     name_col = next((i for i, h in enumerate(header) if h in ("товар", "наименование", "название")), None)
+    code_col = next((i for i, h in enumerate(header) if h in BARCODE_HEADERS), None)  # phase 12.3
     cols = {i: by_header[h] for i, h in enumerate(header) if h in by_header}
-    if not cols:
+    if not cols and code_col is None:
         raise StockError("no_branches")
     offers = list(db.scalars(select(Offer).where(Offer.store_id == store.id)))
     by_id = {o.id: o for o in offers}
@@ -135,7 +139,9 @@ def read_stock_file(db: Session, store: Store, content: bytes) -> dict:
     for o in offers:
         for n in (o.product.normalized_name, o.raw_name):
             by_name.setdefault(_norm(n), o)
-    items, unknown = [], 0
+    from app.services.barcodes import BarcodeError, normalize, store_binding
+
+    items, unknown, codes = [], 0, []
     for r in rows[head_i + 1:]:
         if not any(c is not None and str(c).strip() for c in r):
             continue
@@ -144,13 +150,22 @@ def read_stock_file(db: Session, store: Store, content: bytes) -> dict:
             offer = by_id.get(_int(r[id_col]))
         if offer is None and name_col is not None and name_col < len(r):
             offer = by_name.get(_norm(r[name_col]))
+        cell = r[code_col] if code_col is not None and code_col < len(r) else None
+        if offer is None and cell is not None:  # a file of the warehouse with only barcodes and quantities
+            try:
+                own = store_binding(db, store, normalize(cell))
+                offer = by_id.get(own.offer_id) if own is not None else None
+            except BarcodeError:
+                pass
         if offer is None:
             unknown += 1
             continue
+        if cell is not None and str(cell).strip():
+            codes.append((offer, cell))
         values = {bid: _int(r[i]) for i, bid in cols.items() if i < len(r) and _int(r[i]) is not None}
         if values:
             items.append((offer, values))
-    return {"items": items, "unknown": unknown, "columns": sorted({bid for bid in cols.values()})}
+    return {"items": items, "unknown": unknown, "columns": sorted({bid for bid in cols.values()}), "codes": codes}
 
 
 def stock_import(db: Session, store: Store, user: User, content: bytes, filename: str, apply: bool) -> dict:
@@ -178,8 +193,28 @@ def stock_import(db: Session, store: Store, user: User, content: bytes, filename
             for c in changes:
                 move(db.get(Offer, c["offer_id"]), c["branch_id"], "import", set_to=c["after"])
         db.commit()
-    return {"branches": list(summary.values()), "changes": changes[:100], "total": len(changes),
-            "rows": len(data["items"]), "unknown": data["unknown"], "applied": apply and bool(changes)}
+    new_codes = _new_codes(db, store, data["codes"])
+    if apply and new_codes:
+        from app.services.barcodes import bind_many
+
+        bind_many(db, store, new_codes, user_id=user.id, source="import")
+    return {"barcodes": len(new_codes), "branches": list(summary.values()), "changes": changes[:100], "total": len(changes),
+            "rows": len(data["items"]), "unknown": data["unknown"], "applied": apply and bool(changes or new_codes)}
+
+
+def _new_codes(db: Session, store: Store, pairs: list) -> list:
+    """The barcode cells that would bind something new (a valid code not yet bound in this store)."""
+    from app.services.barcodes import BarcodeError, normalize, store_binding
+
+    out = []
+    for offer, cell in pairs:
+        for raw in re.split(r"[,;\s]+", str(int(cell)) if isinstance(cell, float) and cell.is_integer() else str(cell)):
+            try:
+                if raw and store_binding(db, store, normalize(raw)) is None:
+                    out.append((offer, raw))
+            except BarcodeError:
+                pass
+    return out
 
 
 def stamp() -> str:

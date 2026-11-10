@@ -257,8 +257,49 @@ def _update_cost(offer: Offer, cost: float, qty: int, db: Session) -> None:
     offer.cost_avg = round(total / count, 2) if count else cost
 
 
-def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict]) -> dict:
-    """A document of one kind (receipt / sale / adjust): all lines or none (an error names the line)."""
+def operate_price_mode(db: Session, store: Store, user: User, kind: str, lines: list[dict]) -> dict:
+    """"Сканирование" of a store in "Только прайс" (phase 12.3): a receipt / sale changes the branch's stock as a
+    hand edit would ("manual" lines of the journal): receipt — the quantity grows (an unknown one counts as 0),
+    sale — it falls, not below 0 (an unknown quantity stays "есть")."""
+    from app.services.branches import set_stock
+
+    if kind not in ("receipt", "sale") or not lines:
+        raise StockError("lines")
+    branches = _branch_ids(db, store)
+    with journal("manual", user_id=user.id):
+        for i, line in enumerate(lines):
+            try:
+                offer = _offer(db, store, int(line["offer_id"]))
+                bid, qty = int(line["branch_id"]), int(line["qty"])
+                if bid not in branches:
+                    raise StockError("branch")
+                if qty <= 0:
+                    raise StockError("qty")
+                if offer.price is None:
+                    raise StockError("price_required")
+                row = next((s for s in offer.stocks if s.branch_id == bid), None)
+                now = row.quantity if row is not None else None
+                if kind == "receipt":
+                    set_stock(offer, bid, quantity=(now or 0) + qty)
+                elif now is not None:
+                    set_stock(offer, bid, quantity=max(0, now - qty))
+            except StockError as e:
+                db.rollback()
+                e.params["line"] = i + 1
+                raise
+            except (KeyError, TypeError, ValueError):
+                db.rollback()
+                raise StockError("lines", line=i + 1)
+            offer.updated_at = utcnow()
+    db.commit()
+    return {"doc": None, "count": len(lines)}
+
+
+def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict], scan: bool = False) -> dict:
+    """A document of one kind (receipt / sale / adjust): all lines or none (an error names the line).
+    `scan`: from "Сканирование" — a store in "Только прайс" changes its stock as a hand edit (phase 12.3)."""
+    if not is_stock_mode(store) and scan:
+        return operate_price_mode(db, store, user, kind, lines)
     if not is_stock_mode(store):
         raise StockError("mode_off")
     if kind not in ("receipt", "sale", "adjust") or not lines:
