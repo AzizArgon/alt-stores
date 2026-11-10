@@ -160,7 +160,7 @@ export function BindBarcode({ code, suggestion, onBound, onClose }) {
         {!creating && (
           <div className="grid gap-1">
             <p className="font-medium">{t('barcode.bind.mine')}</p>
-            <GoodsInput onPick={(o) => bind(o.id)} allowCatalog hint={false} placeholder={t('barcode.bind.search')} />
+            <GoodsInput onPick={(o) => bind(o.id)} allowCatalog inline hint={false} placeholder={t('barcode.bind.search')} />
           </div>
         )}
         {error && <p role="alert" className="text-danger">{error}</p>}

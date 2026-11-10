@@ -33,7 +33,7 @@ export function stockError(t, err) {
 // The goods input of every operation: one field with search; Enter takes the first match. A barcode scanner types
 // into this same field (a scanner is a keyboard that ends with Enter): the search finds the store's own codes; a
 // code it doesn't know goes to `onCode` ("Привязать штрихкод"), a misread EAN/UPC is said at once (phase 12.3).
-export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = false, placeholder, hint = true, big = false }) {
+export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = false, placeholder, hint = true, big = false, inline = false }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
   const [items, setItems] = useState(null)
@@ -90,7 +90,7 @@ export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = fa
       <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} aria-label={t('warehouse.search')}
         placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9 ${big ? 'min-h-14 text-base' : ''}`} autoComplete="off" />
       {items && (
-        <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-surface shadow-pop">
+        <div className={`${inline ? "" : "absolute inset-x-0 top-full z-20 shadow-pop"} mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-surface`}>
           {items.length === 0 && <p className="px-3 py-2.5 text-sm text-muted">{t('warehouse.notFoundMine')}</p>}
           {items.map((o) => (
             <button key={o.id} type="button" onClick={() => pick(o)}

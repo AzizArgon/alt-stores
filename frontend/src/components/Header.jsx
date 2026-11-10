@@ -46,21 +46,25 @@ function HeaderSearch({ className = '' }) {
     if (urlQuery !== null && urlQuery !== value.trim()) setValue(urlQuery)
   }, [urlQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!onCatalog || value.trim() === urlQuery) return
-    const timer = setTimeout(() => openResults(value.trim(), true), SEARCH_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Phase 12.3: a code from a box opens its card — only a code confirmed in the common base (two stores bound it)
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    const text = value.trim()
+  // Phase 12.3: a code from a box opens its card — only a code confirmed in the common base (two stores bound it);
+  // the live search of the catalog does the same, so it never takes the buyer back to the empty results
+  const go = async (text, replace) => {
     if (looksLikeBarcode(text) && !checkBarcode(text).error) {
       const id = await api.get(`/catalog/barcode/${encodeURIComponent(checkBarcode(text).code)}`).then((r) => r.data.product_id).catch(() => null)
       if (id) { navigate(`/products/${id}`); return }
     }
-    openResults(text, onCatalog)
+    openResults(text, replace)
+  }
+
+  useEffect(() => {
+    if (!onCatalog || value.trim() === urlQuery) return
+    const timer = setTimeout(() => go(value.trim(), true), SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onSubmit = (e) => {
+    e.preventDefault()
+    go(value.trim(), onCatalog)
   }
 
   return (
