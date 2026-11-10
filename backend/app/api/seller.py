@@ -5,12 +5,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_role
 from app.core.limits import spend_import
 from app.db.database import get_db
-from app.db.models import Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
+from app.db.models import Branch, Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
 from app.schemas.seller import (
-    BulkIn, CheckResult, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
+    BranchIn, BulkIn, CheckResult, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
     PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
-from app.services import cabinet
+from app.services import branches, cabinet
 from app.services.cabinet import EditError
 from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
@@ -45,27 +45,89 @@ def _my_import(db: Session, user: User, import_id: int) -> tuple[Store, PriceImp
     return store, imp
 
 
+def _store_out(db: Session, store: Store) -> dict:
+    out = StoreOut.model_validate({c.name: getattr(store, c.name) for c in Store.__table__.columns}).model_dump()
+    out["branches"] = [branches.branch_seller(b, store) for b in branches.store_branches(db, store.id)]
+    return out
+
+
 @router.get("/stores/me", response_model=StoreOut)
 def get_my_store(user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    return _require_store(db, user)
+    return _store_out(db, _require_store(db, user))
 
 
 @router.put("/stores/me", response_model=StoreOut)
 def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    store = _my_store(db, user) or Store(user_id=user.id)
+    """Create the store (its address becomes the main branch) or change its own fields. Once the store has
+    branches, the address, hours and map are edited in the branches (phase 12.1): those fields are ignored here."""
+    store = _my_store(db, user)
+    has_branches = store is not None and bool(branches.store_branches(db, store.id))
+    if not has_branches and (not data.address or not data.city):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "address"})
     try:
         map_url, lat, lon = parse_map_url(data.map_url)
     except MapLinkError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    store = store or Store(user_id=user.id)
+    location = {"address", "district", "city", "hours", "map_url"}
     for field, value in data.model_dump().items():
+        if has_branches and field in location:
+            continue
         if isinstance(value, str):
             value = value.strip() or None
         setattr(store, field, value)
-    store.map_url, store.map_lat, store.map_lon = map_url, lat, lon
+    if not has_branches:
+        store.map_url, store.map_lat, store.map_lon = map_url, lat, lon
     db.add(store)
+    db.flush()
+    branches.ensure_main_branch(db, store)
     db.commit()
     db.refresh(store)
-    return store
+    return _store_out(db, store)
+
+
+def _my_branch(db: Session, store: Store, branch_id: int) -> Branch:
+    branch = db.get(Branch, branch_id)
+    if branch is None or branch.store_id != store.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Branch not found")
+    return branch
+
+
+def _branch_edit(db: Session, fn, *args):
+    try:
+        fn(db, *args)
+    except branches.BranchError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    db.commit()
+
+
+@router.post("/stores/me/branches", response_model=StoreOut, status_code=status.HTTP_201_CREATED)
+def add_branch(data: BranchIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.save_branch, store, data.model_dump())
+    return _store_out(db, store)
+
+
+@router.put("/stores/me/branches/{branch_id}", response_model=StoreOut)
+def edit_branch(branch_id: int, data: BranchIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.save_branch, store, data.model_dump(), _my_branch(db, store, branch_id))
+    return _store_out(db, store)
+
+
+@router.post("/stores/me/branches/{branch_id}/main", response_model=StoreOut)
+def set_main_branch(branch_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.make_main, store, _my_branch(db, store, branch_id))
+    return _store_out(db, store)
+
+
+@router.delete("/stores/me/branches/{branch_id}", response_model=StoreOut)
+def remove_branch(branch_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.delete_branch, store, _my_branch(db, store, branch_id))
+    return _store_out(db, store)
 
 
 @router.post("/imports", response_model=ImportOut, status_code=status.HTTP_202_ACCEPTED)

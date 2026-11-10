@@ -197,5 +197,5 @@ def test_store_city_must_be_known():
     for bad in ("all", "moscow"):
         with pytest.raises(ValidationError):
             StoreIn(name="Shop", address="ул. Навои, 1", city=bad)
-    with pytest.raises(ValidationError):
-        StoreIn(name="Shop", address="ул. Навои, 1")
+    # Phase 12.1: no city = keep the branches' own (the endpoint asks for it only when the store is created)
+    assert StoreIn(name="Shop").city is None

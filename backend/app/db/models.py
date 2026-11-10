@@ -118,6 +118,7 @@ class Store(Base):
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
+    branches: Mapped[list["Branch"]] = relationship(order_by=lambda: (Branch.is_main.desc(), Branch.id), viewonly=True)
 
 
 class Category(Base):
@@ -178,6 +179,7 @@ class Offer(Base):
     price_history: Mapped[list["PriceHistory"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     fraud_flags: Mapped[list["FraudFlag"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     events: Mapped[list["OfferEvent"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
+    stocks: Mapped[list["OfferStock"]] = relationship(cascade="all, delete-orphan")
 
 
 class OfferEvent(Base):
@@ -582,6 +584,8 @@ class Reservation(Base):
     buyer_seen: Mapped[bool] = mapped_column(Boolean, default=True)  # False: the status changed, the buyer has not looked
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     demo_key: Mapped[str | None] = mapped_column(String(32))  # constant key of a demo reservation (re-runs keep the id)
+    # Where the buyer picks it up (phase 12.1); old reservations are moved to the main branch
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -589,6 +593,7 @@ class Reservation(Base):
     store: Mapped[Store] = relationship()
     offer: Mapped[Offer | None] = relationship()
     build: Mapped[Build | None] = relationship()
+    branch: Mapped["Branch | None"] = relationship()
     events: Mapped[list["ReservationEvent"]] = relationship(
         back_populates="reservation", cascade="all, delete-orphan", order_by="ReservationEvent.id")
 
@@ -605,3 +610,45 @@ class ReservationEvent(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     reservation: Mapped[Reservation] = relationship(back_populates="events")
+
+
+# --- Phase 12.1: branches of a store and stock by branch -----------------------------------------------------------
+
+class Branch(Base):
+    """A point of the store: one store (one catalog, prices and cabinet) may have several. Exactly one is the main
+    one: its city, address, hours and map are also copied to the store row (old code and the API read them there)."""
+
+    __tablename__ = "branches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str | None] = mapped_column(String(100))  # "Чиланзар", optional
+    city: Mapped[str] = mapped_column(String(32), index=True)
+    address: Mapped[str] = mapped_column(String(255))
+    landmark: Mapped[str | None] = mapped_column(String(128))
+    hours: Mapped[str | None] = mapped_column(String(100))
+    phone: Mapped[str | None] = mapped_column(String(32))  # empty = the store's phone
+    map_url: Mapped[str | None] = mapped_column(String(500))
+    map_lat: Mapped[float | None] = mapped_column(Float)
+    map_lon: Mapped[float | None] = mapped_column(Float)
+    is_main: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    demo_key: Mapped[str | None] = mapped_column(String(32))  # constant key of a demo branch (re-runs keep the id)
+    # Price-list column header -> this branch, as the seller confirmed it once ("Чиланзар", "Склад 2")
+    columns_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class OfferStock(Base):
+    """Stock of one offer in one branch. Available = quantity - reserved; quantity None with in_stock = "есть,
+    количество не указано". The buyer never sees the quantity, only "есть / нет". `reserved` is filled in 12.2."""
+
+    __tablename__ = "offer_stocks"
+    __table_args__ = (UniqueConstraint("offer_id", "branch_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), index=True)
+    branch_id: Mapped[int] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
+    quantity: Mapped[int | None] = mapped_column(Integer)
+    reserved: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    in_stock: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

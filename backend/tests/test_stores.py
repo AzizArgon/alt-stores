@@ -93,7 +93,10 @@ def test_profile_saves_address_hours_and_map_link(db, client):
     assert saved["map_lat"] == 41.31 and saved["map_lon"] == 69.28 and saved["hours"] == "Пн–Сб 10–19"
     bad = client.put("/api/stores/me", json={**body, "map_url": "https://google.com/maps"}, headers=h)
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "map_url"
-    assert client.put("/api/stores/me", json={**body, "address": ""}, headers=h).status_code == 422
-    # Without a link the coordinates are cleared
-    assert client.put("/api/stores/me", json={**body, "map_url": None}, headers=h).json()["map_lat"] is None
+    # Phase 12.1: the address now lives in the main branch; without a link the coordinates are cleared
+    main = saved["branches"][0]
+    assert main["is_main"] and main["map_lat"] == 41.31
+    edit = {"city": "tashkent", "address": main["address"], "landmark": "ЦУМ", "map_url": None}
+    assert client.put(f"/api/stores/me/branches/{main['id']}", json={**edit, "address": ""}, headers=h).status_code == 422
+    assert client.put(f"/api/stores/me/branches/{main['id']}", json=edit, headers=h).json()["map_lat"] is None
     assert db.scalar(select(Store).where(Store.id == a.id)).address.startswith("ул. Навои")

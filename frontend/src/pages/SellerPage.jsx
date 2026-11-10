@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
+import BranchesBlock from '../components/Branches'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
@@ -23,13 +24,16 @@ const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district
 // Hints under the fields: where to go matters to the buyer (phase 12)
 const FIELD_HINTS = { address: 'addressHint', hours: 'hoursHint', map_url: 'mapHint' }
 const FIELD_LABELS = { inn_stir: 'innStir' }
+// Once the store has branches, where to go is edited per branch (phase 12.1)
+const LOCATION_FIELDS = ['city', 'district', 'address', 'hours', 'map_url']
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 
 function StoreForm({ store, onSaved }) {
   const { t } = useTranslation()
+  const fields = store?.branches?.length ? STORE_FIELDS.filter((f) => !LOCATION_FIELDS.includes(f)) : STORE_FIELDS
   const [form, setForm] = useState(() =>
-    Object.fromEntries(STORE_FIELDS.map((f) => [f, String(store?.[f] ?? (f === 'reservation_days' ? 2 : ''))])))
+    Object.fromEntries(fields.map((f) => [f, String(store?.[f] ?? (f === 'reservation_days' ? 2 : ''))])))
   const [error, setError] = useState('')
   const [mapError, setMapError] = useState(false)
   const toast = useToast()
@@ -37,7 +41,7 @@ function StoreForm({ store, onSaved }) {
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!isYandexMapsUrl(form.map_url)) {
+    if (form.map_url != null && !isYandexMapsUrl(form.map_url)) {
       setMapError(true)
       return
     }
@@ -64,7 +68,7 @@ function StoreForm({ store, onSaved }) {
         </p>
       )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {STORE_FIELDS.map((f) => (f === 'city' ? (
+        {fields.map((f) => (f === 'city' ? (
           <Select key={f} label={t('store.city')} value={form.city} required hint={t('store.cityHint')}
             onChange={(e) => setForm({ ...form, city: e.target.value })}>
             <option value="" disabled>{t('store.cityChoose')}</option>
@@ -378,5 +382,10 @@ export function ImportsSection() {
 
 export function ProfileSection() {
   const { store, setStore } = useOutletContext()
-  return <StoreForm store={store} onSaved={setStore} />
+  return (
+    <div className="grid gap-6">
+      <StoreForm key={store.branches?.length ? 'b' : 's'} store={store} onSaved={setStore} />
+      <BranchesBlock store={store} onChanged={setStore} />
+    </div>
+  )
 }

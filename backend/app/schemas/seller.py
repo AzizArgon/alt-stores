@@ -12,17 +12,18 @@ class StoreIn(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     telegram: str | None = Field(default=None, max_length=64)
     # Street, house, landmark: the buyer must know where to go (phase 12)
-    address: str = Field(min_length=3, max_length=255)
+    # Required when the store is created; later the address lives in the branches (phase 12.1), these stay None
+    address: str | None = Field(default=None, min_length=3, max_length=255)
     district: str | None = Field(default=None, max_length=128)
-    city: str
+    city: str | None = None
     reservation_days: int = Field(default=2, ge=1, le=7)  # how long a confirmed reservation waits (phase 11)
     hours: str | None = Field(default=None, max_length=100)  # "Mon-Sat 10:00-19:00", as the store writes it
     map_url: str | None = Field(default=None, max_length=500)  # only Yandex Maps (app.services.maps)
 
     @field_validator("city")
     @classmethod
-    def known_city(cls, value: str) -> str:
-        if value not in CITIES:
+    def known_city(cls, value: str | None) -> str | None:
+        if value is not None and value not in CITIES:
             raise ValueError("unknown city")
         return value
 
@@ -33,8 +34,28 @@ class StoreOut(StoreIn):
     id: int
     is_verified: bool
     address: str | None = None  # stores made before phase 12 may have none yet
+    branches: list[dict] = []  # phase 12.1: the main one first
     map_lat: float | None = None
     map_lon: float | None = None
+
+
+class BranchIn(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    city: str
+    address: str = Field(max_length=255)
+    landmark: str = Field(max_length=128)
+    hours: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=32)
+    map_url: str | None = Field(default=None, max_length=500)
+
+
+class StockIn(BaseModel):
+    """One branch of one offer: a quantity, or only "есть / нет", or clear = not tracked there."""
+
+    branch_id: int
+    quantity: int | None = Field(default=None, ge=0, le=1_000_000)
+    present: bool | None = None
+    clear: bool = False
 
 
 class CategoryOut(BaseModel):

@@ -56,5 +56,8 @@ def init_db():
 
     from app.db.seed import seed_categories
 
+    from app.services.branches import migrate_branches
+
     with SessionLocal() as db:
         seed_categories(db)
+        migrate_branches(db)  # phase 12.1: the store's address -> its main branch (once)
