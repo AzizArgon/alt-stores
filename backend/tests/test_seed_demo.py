@@ -189,3 +189,39 @@ def test_demo_branches_and_stock_rerun_without_duplicates_and_keep_ids(db):
     seed_demo(db, 12_000)
     refresh_stores_and_builds(db, 12_000)
     assert state() == first
+
+
+def test_demo_stock_journal_is_the_same_on_every_run(db):
+    from app.db.models import OfferStock, Reservation, StockMovement
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        {**_row(2, "AMD Ryzen 5 7600X, 4.7 GHz, AM5, OEM", 190), "category": "cpu", "brand": "AMD"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(3, 40)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    stores = {s.owner.email: s for s in db.scalars(select(Store).where(Store.is_demo.is_(True)))}
+    assert stores["demo1@example.com"].stock_mode == "stock"
+    assert stores["demo2@example.com"].stock_mode == stores["demo3@example.com"].stock_mode == "price"
+    assert age.stock_mode == "price"
+
+    def state():
+        moves = db.scalars(select(StockMovement).where(StockMovement.store_id == stores["demo1@example.com"].id)).all()
+        stock = {(s.offer_id, s.branch_id): (s.quantity, s.reserved) for s in db.scalars(select(OfferStock))}
+        return sorted((m.offer_id, m.branch_id, m.kind, m.delta, m.quantity_after) for m in moves), stock
+
+    first = state()
+    kinds = {k for _, _, k, _, _ in first[0]}
+    assert {"initial", "receipt", "sale", "adjust", "reserve"} <= kinds
+    assert all(q is None or q >= 0 for q, _ in first[1].values())
+    r = db.scalar(select(Reservation).where(Reservation.demo_key == "reserved"))
+    assert r.reserved_qty == 1 and r.status.value == "confirmed"
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+    assert not db.scalars(select(StockMovement).where(StockMovement.store_id == age.id)).all()

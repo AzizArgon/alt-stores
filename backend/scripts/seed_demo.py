@@ -73,7 +73,8 @@ DEMO_BRANCHES = {
 }
 # Quantities by branch (in the order above) for the first goods of the store; None = "есть, количество не указано"
 STOCK_PATTERNS = {
-    "demo1@example.com": [(5, 2, 0), (0, 0, 3), (1, None, 4)],
+    # Silicon Plus keeps stock (phase 12.2): only numbers; one item "заканчивается" comes from its journal
+    "demo1@example.com": [(5, 2, 0), (0, 0, 3), (2, 3, 4)],
     "demo2@example.com": [(3, 0), (0, 2)],
 }
 SHOWCASE_STOCK = {"demo1@example.com": (3, 0, 2), "demo2@example.com": (2, 1)}
@@ -266,7 +267,7 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
         seed_stock(db, _store(db, spec), spec["email"])
     _live_store(db)
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
-            {"demo_reservations": seed_reservations(db)}]
+            {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -292,6 +293,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_builds": seed_builds(db, usd_rate)})
     report.append({"demo_chats": seed_chats(db)})
     report.append({"demo_reservations": seed_reservations(db)})
+    report.append({"demo_stock_journal": seed_stock_journal(db)})
     return report
 
 
@@ -517,6 +519,8 @@ DEMO_RESERVATIONS = [
     ("confirmed", "demo1@example.com", ("build", 0), ["new", "confirmed"], 40, None),
     ("ready", "demo3@example.com", ("offer", "ssd"), ["new", "confirmed", "ready"], 20, None),
     ("issued", "demo1@example.com", ("offer", "ram"), ["new", "confirmed", "ready", "issued"], 120, None),
+    # Phase 12.2: confirmed in "Учёт остатков" — holds a reserve in its branch
+    ("reserved", "demo1@example.com", ("offer", "cpu"), ["new", "confirmed"], 30, None),
     ("cancelled", "demo2@example.com", ("offer", "monitor"), ["new", "cancelled"], 70, "no_stock"),
 ]
 DEMO_CONTACT = {"name": "Азиз", "phone": "+998901112233", "contact": "telegram", "telegram": "@buyer1_demo"}
@@ -608,6 +612,123 @@ def _aware_until(r: Reservation) -> str:
         return ""
     at = r.expires_at if r.expires_at.tzinfo else r.expires_at.replace(tzinfo=timezone.utc)
     return at.astimezone(TZ).strftime("%d.%m")
+
+
+# --- Phase 12.2: Silicon Plus keeps stock ("Учёт остатков") with a journal of the last weeks ----------------------
+JOURNAL_EMAIL = "demo1@example.com"
+JOURNAL_DAYS = 18  # the opening balance
+# (goods index among the tracked ones by name, branch index, days ago, kind, quantity, extra); receipts of one day
+# are one document. The chain is built backwards from today's quantities, so they stay as seed_stock set them.
+JOURNAL_EVENTS = [
+    (0, 0, 15, "receipt", 4, {}), (2, 1, 15, "receipt", 3, {}), (5, 2, 15, "receipt", 2, {}),
+    (0, 0, 12, "sale", 1, {}), (2, 1, 11, "sale", 1, {}), (8, 0, 10, "receipt", 2, {}),
+    (5, 2, 8, "sale", 1, {"comment": "Оптовый покупатель"}), (11, 1, 6, "adjust", -1, {"reason": "defect", "comment": "Повреждена коробка"}),
+    (0, 0, 4, "receipt", 2, {}), (8, 0, 3, "sale", 1, {}), (2, 1, 2, "sale", 1, {}),
+]
+LOW_GOODS = 14  # this one "заканчивается": a sale left 1 in the main branch
+
+
+def seed_stock_journal(db: Session) -> int:
+    """The same journal on every run (also --builds-only): the store's lines are written again, ids of goods kept."""
+    from app.db.models import Branch, OfferStock, StockMovement
+
+    store = db.scalar(select(Store).join(Store.owner).where(User.email == JOURNAL_EMAIL, Store.is_demo.is_(True)))
+    if store is None:
+        return 0
+    db.execute(delete(StockMovement).where(StockMovement.store_id == store.id))
+    keys = [DEMO_BRANCHES[JOURNAL_EMAIL]["main"][0]] + [b[0] for b in DEMO_BRANCHES[JOURNAL_EMAIL]["more"]]
+    bids = [db.scalar(select(Branch.id).where(Branch.store_id == store.id, Branch.demo_key == k)) for k in keys]
+    store.stock_mode, store.low_stock = "stock", 1
+    for other in db.scalars(select(Store).where(Store.is_demo.is_(True), Store.id != store.id)):
+        other.stock_mode = "price"  # Byte Market, PC Galaxy, the live store: "Только прайс"
+    now = utcnow()
+    reserved = db.scalar(select(Reservation).where(Reservation.demo_key == "reserved", Reservation.is_demo.is_(True)))
+    issued = db.scalar(select(Reservation).where(Reservation.demo_key == "issued", Reservation.is_demo.is_(True)))
+    for r in db.scalars(select(Reservation).where(Reservation.store_id == store.id)):
+        r.reserved_qty = 0
+    offers = db.scalars(select(Offer).join(Offer.product).where(Offer.store_id == store.id)
+                        .order_by(Product.normalized_name)).all()
+    for o in offers:
+        o.cost_last = o.cost_avg = None
+        for s in o.stocks:
+            s.reserved = 0
+            if s.quantity is None:
+                s.quantity = 2
+    # The reserved item needs stock in its branch; the low one: 1 in the main branch
+    if reserved is not None and reserved.offer is not None and reserved.branch_id:
+        row = next((s for s in reserved.offer.stocks if s.branch_id == reserved.branch_id), None)
+        if row is None:
+            row = OfferStock(branch_id=reserved.branch_id, reserved=0, quantity=3)
+            reserved.offer.stocks.append(row)
+        row.quantity = max(row.quantity or 0, 3)
+    db.flush()
+    tracked = [o for o in offers if o.stocks and o.price is not None and (reserved is None or o.id != reserved.offer_id)]
+    chains: dict[tuple[int, int], list] = {}
+
+    def add(offer, bid, days, kind, qty, extra, **refs):
+        chains.setdefault((offer.id, bid), []).append((now - timedelta(days=days), kind, qty, extra, refs))
+
+    for gi, bi, days, kind, qty, extra in JOURNAL_EVENTS:
+        if gi < len(tracked):
+            add(tracked[gi], bids[bi], days, kind, qty, extra)
+    if LOW_GOODS < len(tracked):
+        low = tracked[LOW_GOODS]
+        row = next((s for s in low.stocks if s.branch_id == bids[0]), None)
+        if row is not None:
+            row.quantity = 1
+            add(low, bids[0], 1, "sale", 1, {})
+    if issued is not None and issued.offer is not None and issued.branch_id:
+        add(issued.offer, issued.branch_id, 115 / 24, "res_sale", 1, {"price": issued.price}, reservation_id=issued.id)
+    by_id = {o.id: o for o in offers}
+    lines = 0
+    for o in offers:
+        for s in o.stocks:
+            events = sorted(chains.get((o.id, s.branch_id), []), key=lambda e: e[0])
+            sign = {"receipt": 1, "sale": -1, "res_sale": -1, "adjust": 1}
+            final = s.quantity
+            q = final - sum(sign[k] * n for _, k, n, _, _ in events)
+            if q < 0:  # never below zero: a bigger opening balance and the same today
+                q = 0
+                events = [e for e in events if e[1] != "receipt"]
+                q = max(0, final - sum(sign[k] * n for _, k, n, _, _ in events))
+            db.add(StockMovement(store_id=store.id, offer_id=o.id, branch_id=s.branch_id, kind="initial", delta=q,
+                                 quantity_before=None, quantity_after=q, reserved_after=0,
+                                 created_at=now - timedelta(days=JOURNAL_DAYS)))
+            lines += 1
+            for at, kind, n, extra, refs in events:
+                delta = sign[kind] * n
+                cost = round(o.price * 0.86, 0 if o.currency == Currency.UZS else 2) if kind == "receipt" else None
+                db.add(StockMovement(
+                    store_id=store.id, offer_id=o.id, branch_id=s.branch_id, kind=kind, delta=delta,
+                    reserved_delta=-n if kind == "res_sale" else 0, quantity_before=q, quantity_after=q + delta,
+                    reserved_after=0, cost=cost, price=extra.get("price", o.price) if kind in ("sale", "res_sale") else None,
+                    currency=o.currency.value, reason=extra.get("reason"), comment=extra.get("comment"),
+                    doc=f"{kind[:1].upper()}-{at:%y%m%d}-demo" if kind != "res_sale" else None,
+                    user_id=store.user_id, created_at=at, **refs))
+                if cost is not None:
+                    o.cost_last = cost
+                    o.cost_avg = cost
+                q += delta
+                lines += 1
+            s.quantity = q
+            s.in_stock = q - (s.reserved or 0) > 0
+    # The confirmed demo reservation holds its reserve
+    if reserved is not None and reserved.offer is not None and reserved.branch_id:
+        row = next(s for s in reserved.offer.stocks if s.branch_id == reserved.branch_id)
+        row.reserved = reserved.quantity
+        row.in_stock = row.quantity - row.reserved > 0
+        reserved.reserved_qty = reserved.quantity
+        db.add(StockMovement(store_id=store.id, offer_id=reserved.offer_id, branch_id=row.branch_id, kind="reserve",
+                             delta=0, reserved_delta=reserved.quantity, quantity_before=row.quantity,
+                             quantity_after=row.quantity, reserved_after=row.reserved, user_id=store.user_id,
+                             reservation_id=reserved.id, created_at=reserved.created_at + timedelta(hours=1)))
+        lines += 1
+    from app.services.branches import recompute_offer
+
+    for o in by_id.values():
+        recompute_offer(o)
+    db.commit()
+    return lines
 
 
 if __name__ == "__main__":
