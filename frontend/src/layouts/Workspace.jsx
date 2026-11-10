@@ -51,14 +51,16 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
           {/* Bottom padding on a phone: the content does not hide under the tab bar */}
           <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8">{children}</main>
           <nav aria-label={menuLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-            <ul className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+            {/* Every name is read whole: a tab is never narrower than its name ("Добав…" was cut in an equal grid);
+                the spare width is shared, and only a very narrow screen would scroll the bar sideways */}
+            <ul className="flex overflow-x-auto overscroll-x-contain [scrollbar-width:none]">
               {tabs.map(({ to, key, icon: Icon, end, badge }) => (
-                <li key={key}>
-                  <NavLink to={to} end={end} className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] font-medium outline-none focus-visible:bg-surface-2 ${
+                <li key={key} className="min-w-max flex-1">
+                  <NavLink to={to} end={end} className={({ isActive }) => `relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-[11px] font-medium outline-none focus-visible:bg-surface-2 ${
                     isActive ? 'text-primary' : 'text-muted'}`}>
                     <Icon className="size-5 shrink-0" aria-hidden />
                     <UnreadBadge count={badge} className="absolute top-1 left-1/2 ml-1.5" />
-                    <span className="max-w-full truncate">{t(`${tabKey}.${key}`)}</span>
+                    <span className="whitespace-nowrap">{t(`${tabKey}.${key}`)}</span>
                   </NavLink>
                 </li>
               ))}

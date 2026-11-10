@@ -152,10 +152,10 @@ export function ReserveForm({ item, store, usdRate, onClose }) {
               <p className="text-xs text-muted">{t(`condition.${item.condition}`)} · {store.name}</p>
               {place && <p className="text-xs text-muted">{place}</p>}
               {store.hours && <p className="text-xs text-muted">{t('reservation.hours', { hours: store.hours })}</p>}
-              <MapButtons store={store} className="mt-2" />
             </div>
             <div className="shrink-0 text-right"><Price price={item.price} currency={item.currency} usdRate={usdRate} size="text-lg" /></div>
           </div>
+          <MapButtons store={store} className="mt-2" />
           <p className="mt-2 text-sm font-medium">{t('reservation.payNote')}</p>
           {PUBLIC_DEMO && <p className="mt-1 text-xs font-medium text-warning">{t('reservation.demoNote')}</p>}
           <p className="mt-1 text-xs text-muted">{t('reservation.remembered')}</p>

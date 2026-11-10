@@ -234,7 +234,7 @@ function ImportHistory({ items, onChanged }) {
       <ul className="mt-2 divide-y divide-line">
         {items.map((imp) => (
           <li key={imp.id} className="flex flex-col justify-between gap-x-3 gap-y-0.5 py-2 text-sm md:flex-row md:items-center">
-            <span className="min-w-0 break-words md:truncate">
+            <span className="min-w-0 break-words md:flex-1 md:truncate">
               <Badge className="mr-2">{t(`manual.source.${imp.source}`)}</Badge>
               {imp.source === 'manual'
                 ? <span className="font-medium">{importTitle(imp)}</span>
