@@ -377,8 +377,14 @@ def overview(db: Session, store: Store) -> dict | None:
     low = []
     rows = db.execute(select(OfferStock, Offer).join(Offer).where(
         Offer.store_id == store.id, Offer.removed_at.is_(None), OfferStock.quantity.is_not(None))).all()
+    threshold = store.low_stock if store.low_stock is not None else 1
+    seen_out: set[int] = set()
     for row, offer in rows:
-        if free(row) <= (store.low_stock if store.low_stock is not None else 1):
+        # Running low in a branch (1..threshold), or sold out in every branch (once per item); a branch that
+        # simply does not carry the item (0 there, available elsewhere) is normal
+        out = not offer.is_in_stock and offer.price is not None and offer.id not in seen_out
+        if 0 < free(row) <= threshold or out:
+            seen_out.add(offer.id)
             low.append({"offer_id": offer.id, "branch_id": row.branch_id, "branch": branches.get(row.branch_id),
                         "available": free(row)})
     names = _names(db, [i["offer_id"] for i in low])
