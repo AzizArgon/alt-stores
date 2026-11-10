@@ -639,16 +639,18 @@ def seed_stock_journal(db: Session) -> int:
     if store is None:
         return 0
     db.execute(delete(StockMovement).where(StockMovement.store_id == store.id))
+    _reset_warehouse(db, store)  # phase 12.4: the warehouse rows are made again below
     keys = [DEMO_BRANCHES[JOURNAL_EMAIL]["main"][0]] + [b[0] for b in DEMO_BRANCHES[JOURNAL_EMAIL]["more"]]
     bids = [db.scalar(select(Branch.id).where(Branch.store_id == store.id, Branch.demo_key == k)) for k in keys]
     store.stock_mode, store.low_stock = "stock", 1
     for other in db.scalars(select(Store).where(Store.is_demo.is_(True), Store.id != store.id)):
-        other.stock_mode = "price"  # Byte Market, PC Galaxy, the live store: "Только прайс"
+        other.stock_mode = "price"  # PC Galaxy, the live store: "Только прайс" (Byte Market: seed_no_warehouse)
+        other.has_warehouse = False
     now = utcnow()
     reserved = db.scalar(select(Reservation).where(Reservation.demo_key == "reserved", Reservation.is_demo.is_(True)))
     issued = db.scalar(select(Reservation).where(Reservation.demo_key == "issued", Reservation.is_demo.is_(True)))
     for r in db.scalars(select(Reservation).where(Reservation.store_id == store.id)):
-        r.reserved_qty = 0
+        r.reserved_qty, r.sold_out_at = 0, None
     offers = db.scalars(select(Offer).join(Offer.product).where(Offer.store_id == store.id)
                         .order_by(Product.normalized_name)).all()
     for o in offers:
@@ -728,8 +730,171 @@ def seed_stock_journal(db: Session) -> int:
         lines += 1
     from app.services.branches import recompute_offer
 
+    db.flush()
+    lines += seed_warehouse(db, store, tracked, bids, now)
     for o in by_id.values():
         recompute_offer(o)
+    db.commit()
+    lines += seed_no_warehouse(db)
+    return lines
+
+
+# --- Phase 12.4: Silicon Plus has a warehouse, Byte Market has none -------------------------------------------------
+WAREHOUSE_KEY = "d1-warehouse"
+STOCKTAKE_KEY = "d1-stocktake"
+NO_WAREHOUSE_EMAIL = "demo2@example.com"
+WH_QTY = [6, 4, 3, 5, 2, 8, 3, 4]  # the warehouse stock of the first tracked goods (after the put-out)
+WH_RECEIPT_DAYS, PUT_OUT_DAYS, STOCKTAKE_DAYS = 7, 5, 3
+PUT_OUT_QTY = 2
+
+
+def _reset_warehouse(db: Session, store: Store) -> None:
+    """Before the journal is written again: the warehouse rows go; goods kept only there are on sale again."""
+    from app.db.models import Branch, OfferStock
+
+    wh = db.scalar(select(Branch).where(Branch.store_id == store.id, Branch.demo_key == WAREHOUSE_KEY))
+    if wh is None:
+        return
+    for row in list(db.scalars(select(OfferStock).where(OfferStock.branch_id == wh.id))):
+        offer = db.get(Offer, row.offer_id)
+        offer.stocks.remove(row)
+        if not offer.stocks:
+            offer.is_in_stock = offer.price is not None
+    db.flush()
+    db.info.pop("warehouse_ids", None)
+
+
+def seed_warehouse(db: Session, store: Store, tracked: list, bids: list, now) -> int:
+    """Silicon Plus: "есть отдельный склад" — one receipt to the warehouse, one put-out to Юнусабад, one item only in
+    the warehouse, one applied stocktake of Юнусабад with a shortage and a surplus. The same ids on every run."""
+    from app.db.models import Branch, OfferStock, StockMovement, Stocktake
+
+    wh = db.scalar(select(Branch).where(Branch.store_id == store.id, Branch.demo_key == WAREHOUSE_KEY))
+    if wh is None:
+        wh = Branch(store_id=store.id, city=store.city or "tashkent", address="", is_warehouse=True, demo_key=WAREHOUSE_KEY)
+        db.add(wh)
+        db.flush()
+    store.has_warehouse = True
+    db.info.pop("warehouse_ids", None)
+    yunus = bids[0]
+    lines = 0
+    events = {0, 2, 5, 8, 11, 14}  # goods with journal lines (JOURNAL_EVENTS, LOW_GOODS)
+    free = [i for i in range(len(tracked)) if i not in events]
+
+    def initial(offer, bid):
+        return db.scalar(select(StockMovement).where(StockMovement.offer_id == offer.id, StockMovement.branch_id == bid,
+                                                     StockMovement.kind == "initial"))
+
+    def line(offer, bid, kind, before, after, at, doc, **extra):
+        db.add(StockMovement(store_id=store.id, offer_id=offer.id, branch_id=bid, kind=kind, delta=after - before,
+                             quantity_before=before, quantity_after=after, reserved_after=0, doc=doc,
+                             user_id=store.user_id, created_at=at, currency=offer.currency.value, **extra))
+
+    # The put-out item: the receipt brought WH + 2, two went to Юнусабад
+    moved = tracked[free.pop(0)] if free else None
+    receipt_at, receipt_doc = now - timedelta(days=WH_RECEIPT_DAYS), f"R-{now - timedelta(days=WH_RECEIPT_DAYS):%y%m%d}-demo-wh"
+    goods = [(o, q) for o, q in zip(tracked[:len(WH_QTY)], WH_QTY) if o is not moved]
+    # One item only in the warehouse: a good without stock by branch (on the storefront it becomes "нет в наличии")
+    untracked = db.scalars(select(Offer).join(Offer.product).where(
+        Offer.store_id == store.id, Offer.price.is_not(None), Offer.removed_at.is_(None), ~Offer.stocks.any())
+        .order_by(Product.normalized_name)).first()
+    if untracked is not None:
+        goods.append((untracked, 3))
+    if moved is not None:
+        goods.append((moved, 4))
+    for offer, q in goods:
+        got = q + (PUT_OUT_QTY if offer is moved else 0)
+        cost = round(offer.price * 0.85, 0 if offer.currency == Currency.UZS else 2)
+        offer.stocks.append(OfferStock(branch_id=wh.id, quantity=q, reserved=0, in_stock=True, updated_at=receipt_at))
+        line(offer, wh.id, "receipt", 0, got, receipt_at, receipt_doc, cost=cost)
+        offer.cost_last = offer.cost_avg = cost
+        lines += 1
+    if moved is not None:
+        at, doc = now - timedelta(days=PUT_OUT_DAYS), f"M-{now - timedelta(days=PUT_OUT_DAYS):%y%m%d}-demo"
+        row = next((s for s in moved.stocks if s.branch_id == yunus), None)
+        if row is None:
+            row = OfferStock(branch_id=yunus, quantity=0, reserved=0)
+            moved.stocks.append(row)
+        cur = row.quantity or 0
+        line(moved, wh.id, "move_out", 4 + PUT_OUT_QTY, 4, at, doc)
+        line(moved, yunus, "move_in", cur, cur + PUT_OUT_QTY, at, doc)
+        row.quantity, row.in_stock = cur + PUT_OUT_QTY, True
+        lines += 2
+    # The stocktake of Юнусабад: a shortage, a surplus and two matches; the journal before it agrees with them
+    at = now - timedelta(days=STOCKTAKE_DAYS)
+    rows = []
+    for i in free:
+        r = next((s for s in tracked[i].stocks if s.branch_id == yunus and s.quantity is not None), None)
+        if r is not None and initial(tracked[i], yunus) is not None:
+            rows.append((tracked[i], r))
+    short = rows.pop(0) if rows else None
+    over = next((x for x in rows if x[1].quantity >= 1), None)
+    if over:
+        rows.remove(over)
+    result = []
+    doc = f"I-{at:%y%m%d}-demo"
+    for kind, pair in (("short", short), ("over", over)):
+        if pair is None:
+            continue
+        offer, r = pair
+        before = r.quantity + 1 if kind == "short" else r.quantity - 1
+        first = initial(offer, yunus)
+        first.quantity_after = first.delta = before
+        line(offer, yunus, "inventory", before, r.quantity, at, doc, reason="inventory")
+        lines += 1
+        result.append({"offer_id": offer.id, "name": offer.product.normalized_name,
+                       "category": offer.product.category.slug if offer.product.category else "other",
+                       "expected": before, "counted": r.quantity, "diff": r.quantity - before, "status": kind})
+    for offer, r in rows[:2]:
+        result.append({"offer_id": offer.id, "name": offer.product.normalized_name,
+                       "category": offer.product.category.slug if offer.product.category else "other",
+                       "expected": r.quantity, "counted": r.quantity, "diff": 0, "status": "match"})
+    st = db.scalar(select(Stocktake).where(Stocktake.store_id == store.id, Stocktake.demo_key == STOCKTAKE_KEY))
+    if st is None:
+        st = Stocktake(store_id=store.id, demo_key=STOCKTAKE_KEY)
+        db.add(st)
+    st.branch_id, st.status, st.doc, st.categories_json, st.excluded_json = yunus, "applied", doc, [], []
+    st.counts_json = {str(x["offer_id"]): x["counted"] for x in result if x["counted"]}
+    st.result_json, st.positions = result, len(result)
+    st.shortage = sum(-x["diff"] for x in result if x["diff"] < 0)
+    st.surplus = sum(x["diff"] for x in result if x["diff"] > 0)
+    st.user_id, st.created_at, st.finished_at = store.user_id, at - timedelta(minutes=40), at
+    # Other stocktakes of the demo store (a reviewer's tries) go away: the history is the same on every run
+    for other in db.scalars(select(Stocktake).where(Stocktake.store_id == store.id, Stocktake.demo_key.is_(None))):
+        db.delete(other)
+    for o in tracked:
+        o.oversold_at = None
+    return lines
+
+
+def seed_no_warehouse(db: Session) -> int:
+    """Byte Market: "Учёт остатков", "склада нет" — receipts go straight into a branch. The journal: the opening
+    balance of its quantities; the confirmed reservations take their reserve."""
+    from app.db.models import StockMovement, Stocktake
+    from app.services import stock
+
+    store = db.scalar(select(Store).join(Store.owner).where(User.email == NO_WAREHOUSE_EMAIL, Store.is_demo.is_(True)))
+    if store is None:
+        return 0
+    db.execute(delete(StockMovement).where(StockMovement.store_id == store.id))
+    db.execute(delete(Stocktake).where(Stocktake.store_id == store.id))
+    store.stock_mode, store.has_warehouse = "stock", False
+    at = utcnow() - timedelta(days=JOURNAL_DAYS)
+    lines = 0
+    for o in db.scalars(select(Offer).where(Offer.store_id == store.id)):
+        o.oversold_at = None
+        for s in o.stocks:
+            s.reserved = 0
+            if s.quantity is None:
+                continue
+            db.add(StockMovement(store_id=store.id, offer_id=o.id, branch_id=s.branch_id, kind="initial", delta=s.quantity,
+                                 quantity_after=s.quantity, reserved_after=0, created_at=at))
+            lines += 1
+    db.flush()
+    for r in db.scalars(select(Reservation).where(Reservation.store_id == store.id)):
+        r.reserved_qty, r.sold_out_at = 0, None
+        if r.status in (ReservationStatus.confirmed, ReservationStatus.ready):
+            stock.take_reserve(db, store, r, store.user_id)
     db.commit()
     return lines
 

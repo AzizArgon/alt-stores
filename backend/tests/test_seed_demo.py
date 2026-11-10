@@ -175,7 +175,7 @@ def test_demo_branches_and_stock_rerun_without_duplicates_and_keep_ids(db):
 
     def state():
         by_store = {}
-        for b in db.scalars(select(Branch).order_by(Branch.id)):
+        for b in db.scalars(select(Branch).where(Branch.is_warehouse.is_(False)).order_by(Branch.id)):
             by_store.setdefault(b.store_id, []).append((b.id, b.city, b.is_main))
         return by_store, _count(db, OfferStock)
 
@@ -208,11 +208,13 @@ def test_demo_stock_journal_is_the_same_on_every_run(db):
     seed_demo(db, 12_000)
     stores = {s.owner.email: s for s in db.scalars(select(Store).where(Store.is_demo.is_(True)))}
     assert stores["demo1@example.com"].stock_mode == "stock"
-    assert stores["demo2@example.com"].stock_mode == stores["demo3@example.com"].stock_mode == "price"
+    assert stores["demo2@example.com"].stock_mode == "stock"  # phase 12.4: Byte Market, "склада нет"
+    assert stores["demo3@example.com"].stock_mode == "price"
     assert age.stock_mode == "price"
 
     def state():
-        moves = db.scalars(select(StockMovement).where(StockMovement.store_id == stores["demo1@example.com"].id)).all()
+        moves = db.scalars(select(StockMovement).where(StockMovement.store_id.in_(
+            [stores["demo1@example.com"].id, stores["demo2@example.com"].id]))).all()
         stock = {(s.offer_id, s.branch_id): (s.quantity, s.reserved) for s in db.scalars(select(OfferStock))}
         return sorted((m.offer_id, m.branch_id, m.kind, m.delta, m.quantity_after) for m in moves), stock
 
@@ -287,3 +289,51 @@ def test_demo_moderation_waits_for_the_admin_and_keeps_ids(db):
     assert ids() == first
     assert counts(db)["flags"] == 1 and counts(db)["fixes"] == 1 and counts(db)["reports"] == 1
     assert db.scalar(select(func.count()).select_from(ProductFix)) == 1
+
+
+def test_demo_warehouse_put_out_and_stocktake_rerun_keeps_ids(db):
+    """Phase 12.4: Silicon Plus has a warehouse (a put-out, an applied stocktake with a shortage and a surplus),
+    Byte Market has none; --builds-only twice changes nothing and keeps the ids; the journal agrees with the stock."""
+    from app.db.models import Branch, OfferStock, StockMovement, Stocktake
+    from app.services import warehouse
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [{**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+            *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 90)]]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    stores = {s.owner.email: s for s in db.scalars(select(Store).where(Store.is_demo.is_(True)))}
+    silicon, byte = stores["demo1@example.com"], stores["demo2@example.com"]
+    assert silicon.has_warehouse and not byte.has_warehouse and byte.stock_mode == "stock"
+    wh = db.scalar(select(Branch).where(Branch.store_id == silicon.id, Branch.is_warehouse.is_(True)))
+    assert wh is not None and wh.id not in {b.id for b in silicon.branches}
+
+    def state():
+        moves = db.scalars(select(StockMovement).where(StockMovement.store_id == silicon.id)).all()
+        stock = {(s.offer_id, s.branch_id): (s.quantity, s.reserved) for s in db.scalars(select(OfferStock))}
+        sts = [(s.id, s.status, s.shortage, s.surplus) for s in db.scalars(select(Stocktake))]
+        return sorted((m.offer_id, m.branch_id, m.kind, m.delta, m.quantity_after, m.doc) for m in moves), stock, sts, wh.id
+
+    first = state()
+    kinds = {m[2] for m in first[0]}
+    assert {"move_out", "move_in", "inventory", "receipt"} <= kinds
+    assert len({m[5] for m in first[0] if m[2] in ("move_out", "move_in")}) == 1  # one put-out document
+    st = first[2]
+    assert len(st) == 1 and st[0][1] == "applied" and st[0][2] >= 1 and st[0][3] >= 1
+    # The journal of every row ends at its quantity
+    for (oid, bid), (q, _) in first[1].items():
+        lines = sorted((m for m in db.scalars(select(StockMovement).where(StockMovement.offer_id == oid,
+                        StockMovement.branch_id == bid, StockMovement.kind != "reserve"))), key=lambda m: (m.created_at, m.id))
+        if lines and db.get(Offer, oid).store_id == silicon.id:
+            assert lines[-1].quantity_after == q, (oid, bid)
+    over = warehouse.overview_extra(db, silicon)
+    assert over["only_warehouse"] and over["last_stocktake"]["shortage"] >= 1
+    only = db.get(Offer, over["only_warehouse"][0]["offer_id"])
+    assert only.is_in_stock is False  # only in the warehouse: "нет в наличии" for the buyer
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+    assert age.stock_mode == "price" and not age.has_warehouse  # the real store is not touched
