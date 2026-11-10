@@ -33,7 +33,8 @@ def test_demo_stores_share_cards_flag_cheap_items_and_rerun_without_duplicates(d
     assert byte_market.currency.value == "UZS" and byte_market.price > 1_000_000
 
     # PC Galaxy sells the SSD at half price: flagged, the showcase CPU is not
-    cheap = db.scalars(select(FraudFlag).where(FraudFlag.type == "price_below_market")).all()
+    cheap = db.scalars(select(FraudFlag).where(FraudFlag.type == "price_below_market",
+                                     FraudFlag.is_demo.is_(False))).all()  # phase 13: not the demo dispute
     assert [f.offer.store.name for f in cheap] == ["PC Galaxy"]
     assert "990 PRO" in cheap[0].offer.raw_name
 
@@ -252,3 +253,37 @@ def test_demo_barcodes_confirmed_pending_and_one_conflict_rerun_keeps_ids(db):
     refresh_stores_and_builds(db, 12_000)
     refresh_stores_and_builds(db, 12_000)
     assert state() == first
+
+
+def test_demo_moderation_waits_for_the_admin_and_keeps_ids(db):
+    """Phase 13: one report, one disputed flag, one card fix; reruns reset them to "waiting" in place."""
+    from app.db.models import ChatReport, FlagStatus, ProductFix
+    from app.services.admin import counts
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers", is_verified=True)
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        {**_row(2, "AMD Ryzen 5 7500F, 3.7 GHz, AM5, OEM", 130), "category": "cpu", "brand": "AMD"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(3, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    ids = lambda: [db.scalar(select(m.id).where(m.is_demo.is_(True))) for m in (ChatReport, FraudFlag, ProductFix)]  # noqa: E731
+    first = ids()
+    assert None not in first
+    w = counts(db)
+    assert w["reports"] == 1 and w["flags"] == 1 and w["fixes"] == 1 and w["stores"] >= 1 and w["barcodes"] >= 1
+    # The admin decided; the next run puts everything back to "waiting" with the same ids
+    db.get(FraudFlag, first[1]).status = FlagStatus.dismissed
+    db.get(ProductFix, first[2]).status = "rejected"
+    db.get(ChatReport, first[0]).status = "reviewed"
+    db.commit()
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert ids() == first
+    assert counts(db)["flags"] == 1 and counts(db)["fixes"] == 1 and counts(db)["reports"] == 1
+    assert db.scalar(select(func.count()).select_from(ProductFix)) == 1

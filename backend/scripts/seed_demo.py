@@ -268,7 +268,7 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     _live_store(db)
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
             {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
-            {"demo_barcodes": seed_barcodes(db)}]
+            {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -296,6 +296,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_reservations": seed_reservations(db)})
     report.append({"demo_stock_journal": seed_stock_journal(db)})
     report.append({"demo_barcodes": seed_barcodes(db)})
+    report.append({"demo_moderation": seed_moderation(db)})
     return report
 
 
@@ -798,6 +799,69 @@ def seed_barcodes(db: Session) -> int:
         refresh_common(db, code)
     db.commit()
     return len(wanted)
+
+
+# --- Phase 13: what waits for the admin -------------------------------------------------------------------------------
+# Byte Market and PC Galaxy are demo stores without the check; the barcode conflict comes from seed_barcodes.
+# One report, one disputed flag and one card fix, all marked is_demo: updated in place (the same ids), reset to
+# "waiting" on every run (also --builds-only).
+DEMO_REPORT_COMMENT = "Покупатель пишет грубо и требует скидку"
+DEMO_DISPUTE = "Это акция до конца недели: цена верная, товар новый"
+
+
+def seed_moderation(db: Session) -> dict:
+    from app.db.models import ChatReport, FlagLevel, FlagSource, FlagStatus, FraudFlag, ProductFix
+
+    made = {}
+    shop = db.scalar(select(Store).join(Store.owner).where(User.email == STORES[0]["email"], Store.is_demo.is_(True)))
+    if shop is None:
+        return made
+    # A report of the store on a demo reservation conversation (those keep their ids over re-runs)
+    conv = db.scalar(select(Conversation).where(Conversation.is_demo.is_(True), Conversation.store_id == shop.id,
+                                                Conversation.topic_kind == TopicKind.reservation).order_by(Conversation.id))
+    report = db.scalar(select(ChatReport).where(ChatReport.is_demo.is_(True)))
+    if conv is not None:
+        report = report or ChatReport(is_demo=True)
+        report.conversation_id, report.reporter_id, report.reason = conv.id, shop.user_id, "abuse"
+        report.comment, report.status, report.resolution = DEMO_REPORT_COMMENT, "new", None
+        report.admin_comment = report.resolved_at = None
+        db.add(report)
+        made["report"] = 1
+    # A disputed "below the market" flag of a showcase offer
+    offer = db.scalar(select(Offer).join(Offer.product).where(
+        Offer.store_id == shop.id, Offer.price.is_not(None), Product.normalized_name.contains(SHOWCASE[0])))
+    flag = db.scalar(select(FraudFlag).where(FraudFlag.is_demo.is_(True)))
+    if offer is not None:
+        if flag is None:
+            flag = FraudFlag(is_demo=True)
+            offer.fraud_flags.append(flag)
+        flag.offer_id, flag.type, flag.level, flag.source = offer.id, "price_below_market", FlagLevel.warning, FlagSource.rule
+        flag.reason_key, flag.params = "below_market", {"percent": 22, "median": round((offer.price or 0) * 1.3), "count": 3}
+        flag.status, flag.dispute_comment, flag.disputed_at = FlagStatus.disputed, DEMO_DISPUTE, utcnow()
+        flag.resolution = flag.admin_answer = flag.resolved_at = None
+        made["flag"] = 1
+    # A card fix: the store suggests "BOX" in the name of a card other demo stores sell too
+    fix = db.scalar(select(ProductFix).where(ProductFix.is_demo.is_(True)))
+    product = db.get(Product, fix.product_id) if fix is not None else None
+    if product is None:
+        others = select(Offer.product_id).where(Offer.store_id != shop.id, Offer.price.is_not(None))
+        product = db.scalar(select(Product).join(Offer, Offer.product_id == Product.id).join(Product.category).where(
+            Offer.store_id == shop.id, Offer.price.is_not(None), Product.id.in_(others), Category.slug == "cpu")
+            .order_by(Product.normalized_name))
+    if product is not None:
+        if fix is None:
+            card = {"name": product.normalized_name, "brand": product.brand, "model": product.model,
+                    "category": product.category.slug if product.category else "other",
+                    "specs": {k: v for k, v in (product.specs_json or {}).items() if not k.startswith("_")}}
+            fix = ProductFix(is_demo=True, product_id=product.id, before=card, after={**card})
+        fix.store_id = shop.id
+        base = fix.before["name"].removesuffix(" BOX")
+        fix.after = {**fix.before, "name": f"{base} BOX", "model": f"{(fix.before.get('model') or base).removesuffix(' BOX')} BOX"}
+        fix.status, fix.reject_reason, fix.resolved_at, fix.merged_into = "pending", None, None, None
+        db.add(fix)
+        made["fix"] = 1
+    db.commit()
+    return made
 
 
 if __name__ == "__main__":
