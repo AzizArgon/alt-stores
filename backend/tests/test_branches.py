@@ -302,3 +302,29 @@ def test_stores_list_shows_a_store_in_every_city_of_its_branches(db, client):
         items = client.get(f"/api/catalog/stores?city={city}").json()["items"]
         assert [(i["id"], i["branches_here"]) for i in items] == [(store.id, here)]
     assert client.get("/api/catalog/stores?city=bukhara").json()["items"] == []
+
+
+# --- manual editing in the cabinet ---------------------------------------------------------------------------------
+
+def test_seller_edits_stock_by_branch_and_bulk_marks_a_branch(db):
+    from app.services import cabinet
+
+    store, chil, yunus = _stores_with_branches(db)
+    publish_import(db, _imp(db, store), store, FIRST[:2])
+    offers = cabinet.store_offers(db, store)
+    row = cabinet.set_branch_stock(db, store, offers[0], [{"branch_id": yunus.id, "quantity": 4}])
+    assert row["stocks"][str(yunus.id)]["quantity"] == 4 and row["is_in_stock"]
+    row = cabinet.set_branch_stock(db, store, offers[0], [{"branch_id": yunus.id, "quantity": 0}])
+    assert not row["is_in_stock"]
+    # The filter by branch
+    rows = cabinet.filtered_offers(db, store, {"branch": yunus.id, "stock": "out"})
+    assert {o.id for o, _ in rows} == {o.id for o in offers}
+    # "в филиале Юнусабад: есть" for all: the preview first, then applied
+    assert cabinet.bulk(db, store, offers, "branch_on", None, False, yunus.id)["count"] == 2
+    cabinet.bulk(db, store, offers, "branch_on", None, True, yunus.id)
+    assert all(o.is_in_stock and _stock(o)[yunus.id] == (None, True) for o in offers)
+    # The general switch "нет" = "нет" in every branch
+    cabinet.apply_changes(offers[0], {"is_in_stock": False}, "edit")
+    assert all(not s.in_stock for s in offers[0].stocks)
+    with pytest.raises(cabinet.EditError):
+        cabinet.set_branch_stock(db, store, offers[0], [{"branch_id": 9999, "quantity": 1}])

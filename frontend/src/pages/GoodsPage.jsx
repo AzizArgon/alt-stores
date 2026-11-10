@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { ArrowDown, ArrowUp, Info, OctagonAlert, PackageSearch, TriangleAlert } from 'lucide-react'
+import { QtyInput, branchLabel } from '../components/BranchStock'
 import { CategoryIcon } from '../components/CategoryIcon'
 import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
@@ -93,7 +94,7 @@ function SortHeader({ k, sort, desc, onSort, className = '', children }) {
   )
 }
 
-function Filters({ params, setParam, categories }) {
+function Filters({ params, setParam, categories, branches }) {
   const { t } = useTranslation()
   const [q, setQ] = useState(params.get('q') || '')
   // The search waits until the seller stops typing
@@ -117,6 +118,14 @@ function Filters({ params, setParam, categories }) {
         {select('stock', ['in', 'out'], 'cabinet.stock')}
         {select('condition', CONDITIONS, 'condition')}
         {select('market', ['below', 'at', 'above'], 'cabinet.marketFilter')}
+        {branches.length > 0 && (
+          // Phase 12.1: the stock filter and the columns of one branch
+          <select value={params.get('branch') || ''} onChange={(e) => setParam('branch', e.target.value)} aria-label={t('stock.branchFilter')}
+            className={`${selectClass} ${params.get('branch') ? 'border-primary' : ''}`}>
+            <option value="">{t('stock.branchFilter')}: {t('stock.allBranches')}</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
+          </select>
+        )}
       </div>
       <div className="flex flex-wrap gap-x-5">
         <Checkbox label={t('cabinet.filter.flagged')} checked={params.get('flagged') === '1'} onChange={(e) => setParam('flagged', e.target.checked ? '1' : '')} />
@@ -127,9 +136,10 @@ function Filters({ params, setParam, categories }) {
 }
 
 // Bulk actions over chosen rows (or all by the filter): preview "N goods will change" first
-function BulkBar({ count, total, allByFilter, onAll, onClear, onAction }) {
+function BulkBar({ count, total, allByFilter, onAll, onClear, onAction, branches }) {
   const { t } = useTranslation()
   const [percent, setPercent] = useState('5')
+  const [branch, setBranch] = useState(() => String(branches[0]?.id || ''))
   return (
     <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
       <span className="font-medium">{t('cabinet.bulk.selected', { count: allByFilter ? total : count })}</span>
@@ -146,6 +156,16 @@ function BulkBar({ count, total, allByFilter, onAll, onClear, onAction }) {
           <span className="text-muted">%</span>
           <Button size="sm" disabled={!Number(percent)} onClick={() => onAction('price', Number(percent))}>{t('cabinet.bulk.price')}</Button>
         </span>
+        {branches.length > 0 && (
+          <span className="flex min-w-0 flex-wrap items-center gap-1">
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label={t('stock.bulkBranch')}
+              className="h-9 max-w-44 min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm">
+              {branches.map((b) => <option key={b.id} value={b.id}>{t('stock.inBranch', { branch: branchLabel(b) })}</option>)}
+            </select>
+            <Button size="sm" variant="secondary" onClick={() => onAction('branch_on', null, Number(branch))}>{t('stock.markPresent')}</Button>
+            <Button size="sm" variant="secondary" onClick={() => onAction('branch_off', null, Number(branch))}>{t('stock.markAbsent')}</Button>
+          </span>
+        )}
       </span>
     </div>
   )
@@ -154,9 +174,9 @@ function BulkBar({ count, total, allByFilter, onAll, onClear, onAction }) {
 function BulkConfirm({ preview, onCancel, onApply, busy }) {
   const { t } = useTranslation()
   if (!preview) return null
-  const { action, percent, result } = preview
+  const { action, percent, result, branch } = preview
   return (
-    <Modal open onClose={onCancel} title={t(`cabinet.bulk.title.${action}`, { percent: percent > 0 ? `+${percent}` : percent })}
+    <Modal open onClose={onCancel} title={t(`cabinet.bulk.title.${action}`, { percent: percent > 0 ? `+${percent}` : percent, branch: branchLabel(branch) })}
       footer={<>
         <Button variant="secondary" onClick={onCancel}>{t('manual.cancel')}</Button>
         <Button disabled={busy || result.count === 0} onClick={onApply}>{t('cabinet.bulk.apply', { count: result.count })}</Button>
@@ -184,6 +204,8 @@ function BulkConfirm({ preview, onCancel, onApply, busy }) {
 export default function GoodsPage() {
   const { t } = useTranslation()
   const toast = useToast()
+  const { store } = useOutletContext() || {}
+  const branches = store?.branches || []
   const [params, setParams] = useSearchParams()
   const [data, setData] = useState(null)
   const [categories, setCategories] = useState([])
@@ -260,16 +282,17 @@ export default function GoodsPage() {
     return next
   })
 
-  const bulkBody = (action, percent) => {
-    if (!allByFilter) return { ids: [...selected], action, percent }
+  const bulkBody = (action, percent, branchId) => {
+    const extra = branchId ? { branch_id: branchId } : {}
+    if (!allByFilter) return { ids: [...selected], action, percent, ...extra }
     const f = Object.fromEntries(new URLSearchParams(query))
     delete f.page; delete f.sort; delete f.desc
-    return { filter: { ...f, flagged: Boolean(f.flagged), stale: Boolean(f.stale) }, action, percent }
+    return { filter: { ...f, flagged: Boolean(f.flagged), stale: Boolean(f.stale) }, action, percent, ...extra }
   }
-  const askBulk = async (action, percent) => {
+  const askBulk = async (action, percent, branchId) => {
     try {
-      const res = await api.post('/seller/offers/bulk', { ...bulkBody(action, percent), apply: false })
-      setPreview({ action, percent, result: res.data })
+      const res = await api.post('/seller/offers/bulk', { ...bulkBody(action, percent, branchId), apply: false })
+      setPreview({ action, percent, branchId, branch: branches.find((b) => b.id === branchId), result: res.data })
     } catch (err) {
       toast(t(errorKey(err)), 'danger')
     }
@@ -277,7 +300,7 @@ export default function GoodsPage() {
   const applyBulk = async () => {
     setBusy(true)
     try {
-      const res = await api.post('/seller/offers/bulk', { ...bulkBody(preview.action, preview.percent), apply: true })
+      const res = await api.post('/seller/offers/bulk', { ...bulkBody(preview.action, preview.percent, preview.branchId), apply: true })
       toast(t('cabinet.bulk.done', { count: res.data.count }))
       setPreview(null)
       setSelected(new Set())
@@ -293,6 +316,9 @@ export default function GoodsPage() {
   const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
   const anySelected = selected.size > 0 || allByFilter
   const hasFilters = filterKey.length > 0
+  // Columns by branch (phase 12.1): the chosen branch, else all of them up to three
+  const chosen = branches.find((b) => String(b.id) === params.get('branch'))
+  const columns = chosen ? [chosen] : branches.slice(0, 3)
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -301,7 +327,7 @@ export default function GoodsPage() {
         {data && <p className="text-sm text-muted">{t('cabinet.found', { count: data.total })}</p>}
       </div>
       <Card padded={false} className="min-w-0">
-        <Filters params={params} setParam={setParam} categories={categories} />
+        <Filters params={params} setParam={setParam} categories={categories} branches={branches} />
         <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-sm md:px-4 lg:hidden">
           <Checkbox label={t('cabinet.bulk.page')} checked={pageChecked} onChange={togglePage} />
           <select value={sort} onChange={(e) => onSort(e.target.value)} aria-label={t('cabinet.sort')} className="ml-auto h-9 max-w-[55%] min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm">
@@ -314,7 +340,7 @@ export default function GoodsPage() {
         </div>
         {anySelected && (
           <BulkBar count={selected.size} total={data?.total || 0} allByFilter={allByFilter} onAll={() => setAllByFilter(true)}
-            onClear={() => { setSelected(new Set()); setAllByFilter(false) }} onAction={askBulk} />
+            onClear={() => { setSelected(new Set()); setAllByFilter(false) }} onAction={askBulk} branches={branches} />
         )}
 
         {!data && <div className="grid gap-2 p-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
@@ -336,6 +362,9 @@ export default function GoodsPage() {
                   <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className="w-40">{t('cabinet.col.price')}</SortHeader>
                   <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className="hidden w-32 xl:table-cell">{t('cabinet.col.condition')}</SortHeader>
                   <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className="w-24">{t('cabinet.col.stock')}</SortHeader>
+                  {columns.map((b) => (
+                    <th key={b.id} className="w-20 px-2 py-2 font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
+                  ))}
                   <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className="w-36">{t('cabinet.col.market')}</SortHeader>
                   <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className="hidden w-28 xl:table-cell">{t('cabinet.col.updated')}</SortHeader>
                 </tr>
@@ -365,6 +394,9 @@ export default function GoodsPage() {
                     <td className="px-2 py-2.5 align-top">
                       <Switch checked={o.is_in_stock} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
+                    {columns.map((b) => (
+                      <td key={b.id} className="px-2 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} /></td>
+                    ))}
                     <td className="px-2 py-2.5 align-top"><MarketLabel info={o.market} /></td>
                     <td className="hidden px-2 py-3 align-top text-muted xl:table-cell">{formatDate(o.updated_at)}</td>
                   </tr>
@@ -394,6 +426,16 @@ export default function GoodsPage() {
                       <Switch checked={o.is_in_stock} onChange={(v) => patch(o.id, { is_in_stock: v })}
                         label={<span className="text-xs">{t(o.is_in_stock ? 'import.inStock' : 'import.outOfStock')}</span>} />
                     </div>
+                    {columns.length > 0 && (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {columns.map((b) => (
+                          <label key={b.id} className="block min-w-0">
+                            <span className="block truncate text-xs text-muted">{branchLabel(b)}</span>
+                            <QtyInput offer={o} branch={b} onSaved={replaceRow} />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                     <p className="mt-1 text-xs text-muted">{t(`condition.${o.condition}`)} · {t('cabinet.updatedOn', { date: formatDate(o.updated_at) })}</p>
                   </div>
                 </li>
@@ -405,7 +447,7 @@ export default function GoodsPage() {
       </Card>
 
       <BulkConfirm preview={preview} busy={busy} onCancel={() => setPreview(null)} onApply={applyBulk} />
-      <OfferEditor offerId={editing} rate={rate} onClose={() => setEditing(null)}
+      <OfferEditor offerId={editing} rate={rate} branches={branches} onClose={() => setEditing(null)}
         onChanged={(row) => (row ? replaceRow(row) : setReloadKey((k) => k + 1))} />
     </div>
   )

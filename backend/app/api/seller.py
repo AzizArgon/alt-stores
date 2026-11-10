@@ -7,7 +7,7 @@ from app.core.limits import spend_import
 from app.db.database import get_db
 from app.db.models import Branch, Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
 from app.schemas.seller import (
-    BranchIn, BulkIn, CheckResult, ColumnsIn, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
+    BranchIn, BulkIn, CheckResult, ColumnsIn, StockIn, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
     PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
 from app.services import branch_stock, branches, cabinet
@@ -387,6 +387,14 @@ def edit_offer(offer_id: int, data: OfferPatch, user: User = Depends(seller_only
     return _edit(cabinet.update_offer, db, store, _my_offer(db, store, offer_id), data.model_dump(exclude_unset=True))
 
 
+@router.put("/seller/offers/{offer_id}/stocks")
+def edit_offer_stocks(offer_id: int, data: list[StockIn], user: User = Depends(seller_only),
+                      db: Session = Depends(get_db)):
+    """Stock by branch (phase 12.1): a quantity, "есть / нет" (quantity unknown) or clear = not tracked there."""
+    store = _require_store(db, user)
+    return _edit(cabinet.set_branch_stock, db, store, _my_offer(db, store, offer_id), [d.model_dump() for d in data])
+
+
 @router.delete("/seller/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_offer(offer_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """Only the store's offer: the card and the price history stay."""
@@ -423,4 +431,8 @@ def bulk_offers(data: BulkIn, user: User = Depends(seller_only), db: Session = D
         offers = [o for o in cabinet.store_offers(db, store) if o.id in wanted]
     else:
         offers = [o for o, _ in cabinet.filtered_offers(db, store, (data.filter or OfferFilter()).model_dump())]
-    return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply)
+    if data.action in ("branch_on", "branch_off"):
+        if data.branch_id is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "branch_required"})
+        _my_branch(db, store, data.branch_id)
+    return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply, data.branch_id)

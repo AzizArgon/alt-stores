@@ -184,6 +184,26 @@ def set_stock(offer: Offer, branch_id: int, quantity: int | None = None, present
     return row
 
 
+def set_general(db: Session, offer: Offer, in_stock: bool) -> None:
+    """The seller's general "в наличии / нет" for an offer tracked by branch: "нет" = "нет" in every branch;
+    "есть" with no branch available = "есть" in the main branch. An offer not tracked: only the general flag."""
+    if not offer.stocks:
+        offer.is_in_stock = in_stock
+        return
+    if not in_stock:
+        for s in list(offer.stocks):
+            set_stock(offer, s.branch_id, quantity=0)
+    elif not any(available(s) for s in offer.stocks):
+        main = main_branch(db, offer.store_id)
+        set_stock(offer, main.id if main else offer.stocks[0].branch_id, present=True)
+
+
+def seller_stocks(offer: Offer) -> dict:
+    """The seller's own view (never the buyer's): {branch_id: {quantity, in_stock, stale}}."""
+    return {str(s.branch_id): {"quantity": s.quantity, "reserved": s.reserved or 0, "in_stock": available(s),
+                               "stale": is_stale(s)} for s in offer.stocks}
+
+
 def clear_stock(offer: Offer, branch_id: int) -> None:
     """"Не указано": the branch row goes away (the offer is not tracked there)."""
     offer.stocks[:] = [s for s in offer.stocks if s.branch_id != branch_id]

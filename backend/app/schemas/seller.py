@@ -212,14 +212,16 @@ class OfferFilter(BaseModel):
     condition: CONDITIONS | None = None
     stale: bool = False
     market: Literal["above", "below", "at"] | None = None
+    branch: int | None = None  # phase 12.1: the stock filter applies to this branch
 
 
 class BulkIn(BaseModel):
     # Chosen rows, or every row by the filter when ids is None
     ids: list[int] | None = Field(default=None, max_length=5000)
     filter: OfferFilter | None = None
-    action: Literal["off", "on", "price"]
+    action: Literal["off", "on", "price", "branch_on", "branch_off"]
     percent: float | None = Field(default=None, ge=-50, le=100)
+    branch_id: int | None = None  # "в филиале …: есть / нет"
     apply: bool = False  # False: only the preview "N goods will change"
 
 

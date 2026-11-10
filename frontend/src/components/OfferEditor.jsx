@@ -6,6 +6,7 @@ import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice } from '../services/format'
 import { specsText, useSpecDictionary } from '../services/specs'
 import { ProductLine } from './AddFromCatalog'
+import { StockEditor } from './BranchStock'
 import { ErrorText } from './AuthForm'
 import { CategoryIcon } from './CategoryIcon'
 import Flags from './Flags'
@@ -240,7 +241,7 @@ function History({ items }) {
 }
 
 // The offer editor: a panel on the right (full screen on a phone), opened by a click on a row of "My goods"
-export default function OfferEditor({ offerId, rate, onClose, onChanged }) {
+export default function OfferEditor({ offerId, rate, branches = [], onClose, onChanged }) {
   const { t } = useTranslation()
   const toast = useToast()
   const [detail, setDetail] = useState(null)
@@ -299,6 +300,11 @@ export default function OfferEditor({ offerId, rate, onClose, onChanged }) {
           <Section title={t('cabinet.editor.own')} className="border-t-0 pt-0">
             <OwnForm key={`${detail.id}-${reloadKey}`} offer={detail} onSaved={saved} />
           </Section>
+          {branches.length > 0 && (
+            <Section title={t('stock.title')}>
+              <StockEditor offer={detail} branches={branches} onSaved={(row) => { setDetail((d) => ({ ...d, ...row })); onChanged(row) }} />
+            </Section>
+          )}
           <CardSection key={`card-${detail.id}-${reloadKey}`} detail={detail} onApplied={() => refresh(null)}
             onMerge={(product) => api.post(`/seller/offers/${detail.id}/relink`, { product_id: product.id }).then(moved)
               .catch((err) => toast(t(errorKey(err, { 409: 'cabinet.error.offer_exists' })), 'danger'))} />
