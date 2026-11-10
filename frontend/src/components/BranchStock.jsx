@@ -18,7 +18,7 @@ export async function saveStocks(offerId, items) {
 
 // The quantity right in the row of "My goods": Enter or leaving the field saves, Esc brings it back;
 // an empty field = "не указано" (the branch is not tracked for this item)
-export function QtyInput({ offer, branch, onSaved, className = '' }) {
+export function QtyInput({ offer, branch, onSaved, className = '', readOnly = false }) {
   const { t } = useTranslation()
   const toast = useToast()
   const stock = stockOf(offer, branch)
@@ -43,6 +43,15 @@ export function QtyInput({ offer, branch, onSaved, className = '' }) {
     }
   }
   const present = stock && stock.quantity == null && stock.in_stock
+  // "Учёт остатков" (phase 12.2): the number is shown, it changes only by operations of "Склад"
+  if (readOnly) {
+    return (
+      <span title={t('cabinet.error.stock_mode')} className={`flex h-9 items-center px-2 text-sm tabular-nums ${stock?.quantity === 0 ? 'text-faint' : ''} ${className}`}>
+        {stock ? (stock.quantity ?? (stock.in_stock ? t('stock.present') : '—')) : '—'}
+        {stock?.reserved > 0 && <span className="ml-1 text-xs text-info">({stock.reserved})</span>}
+      </span>
+    )
+  }
   return (
     <input type="number" inputMode="numeric" min="0" step="1" value={value} onChange={(e) => setValue(e.target.value)} onBlur={save}
       aria-label={t('stock.qtyIn', { branch: branchLabel(branch) })} title={stock?.stale ? t('stock.staleSeller') : undefined}

@@ -4,6 +4,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { ArrowRight, CalendarCheck, CircleCheck, CircleSlash, Clock, MessageSquare, Monitor, ShieldAlert } from 'lucide-react'
 import { DemoNote } from '../components/Market'
 import UndoUpload from '../components/UndoUpload'
+import { MovementRow } from './WarehousePage'
 import { Button, Card, Skeleton } from '../components/ui'
 import api from '../services/api'
 
@@ -108,6 +109,8 @@ export default function CabinetOverview() {
         </Link>
       )}
 
+      {data?.stock && <StockOverview stock={data.stock} />}
+
       <Card as="section">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex flex-wrap items-center gap-2 text-h3">{t('cabinet.overview.marketTitle')} <DemoNote show={market?.includes_demo} /></h2>
@@ -128,5 +131,52 @@ export default function CabinetOverview() {
         )}
       </Card>
     </div>
+  )
+}
+
+// Phase 12.2, "Учёт остатков": running low (with a receipt link), reservations without a reserve, last movements
+function StockOverview({ stock }) {
+  const { t } = useTranslation()
+  return (
+    <Card as="section" className="grid gap-5">
+      <div>
+        <h2 className="text-h3">{t('warehouse.overview.low')}</h2>
+        <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.lowHint', { count: stock.threshold })}</p>
+        {stock.low.length === 0 ? <p className="mt-2 text-sm text-muted">{t('warehouse.overview.lowNone')}</p> : (
+          <ul className="mt-2 divide-y divide-line">
+            {stock.low.map((i) => (
+              <li key={`${i.offer_id}-${i.branch_id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium" title={i.name}>{i.name}</span>
+                  <span className="text-xs text-muted">{i.branch} · <span className={i.available === 0 ? 'text-danger' : 'text-warning'}>{t('warehouse.overview.available', { count: i.available })}</span></span>
+                </span>
+                <Button size="sm" variant="secondary" to={`/seller/stock?tab=receipt&offer=${i.offer_id}`} className="shrink-0">{t('warehouse.overview.toReceipt')}</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {stock.low_total > stock.low.length && <p className="mt-1 text-xs text-muted">{t('warehouse.overview.more', { count: stock.low_total - stock.low.length })}</p>}
+      </div>
+      {stock.unreserved.length > 0 && (
+        <div>
+          <h2 className="text-h3 text-warning">{t('warehouse.overview.unreserved')}</h2>
+          <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.unreservedHint')}</p>
+          <ul className="mt-2 grid gap-1 text-sm">
+            {stock.unreserved.map((r) => (
+              <li key={r.id}><Link className="text-primary hover:underline" to={`/seller/reservations?id=${r.id}`}>№{r.id} · {r.title}</Link> <span className="text-muted">× {r.quantity}{r.branch && ` · ${r.branch}`}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {stock.last.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-h3">{t('warehouse.overview.last')}</h2>
+            <Link to="/seller/stock?tab=journal" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">{t('warehouse.overview.openJournal')}<ArrowRight className="size-4" aria-hidden /></Link>
+          </div>
+          <ul className="mt-2 grid gap-2">{stock.last.map((m) => <MovementRow key={m.id} m={m} compact />)}</ul>
+        </div>
+      )}
+    </Card>
   )
 }

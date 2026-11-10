@@ -133,6 +133,11 @@ function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
                 {r.branches.map((b) => <option key={b.id} value={b.id}>{[b.name, b.address].filter(Boolean).join(' — ')}</option>)}
               </select>
             ) : <span className="break-words">{r.branch ? [r.branch.name, r.branch.address].filter(Boolean).join(' — ') : '—'}</span>}
+            {r.reserved_qty != null && ['confirmed', 'ready'].includes(r.status) && (
+              <span className={`mt-1 block text-xs ${r.reserved_qty ? 'text-info' : 'text-warning'}`}>
+                {r.reserved_qty ? t('warehouse.reservation.reserved', { count: r.reserved_qty }) : t('warehouse.reservation.notReserved')}
+              </span>
+            )}
           </Row>
         )}
         {pickupText(r) && <Row label={t('reservation.pickupDate')}>{pickupText(r)}</Row>}

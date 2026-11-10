@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
+import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, FileBarChart, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store, Boxes } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
+import StockModeBlock from '../components/StockMode'
 import { ScopeChoice } from '../components/BranchColumns'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
@@ -264,6 +265,7 @@ function ImportHistory({ items, onChanged }) {
 const SECTIONS = [
   { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
   { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
+  { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true },  // phase 12.2
   { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
   { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
@@ -271,6 +273,7 @@ const SECTIONS = [
   // Not in the phone bar (8 tabs do not fit 360 px): the history opens from the overview's last upload
   { to: '/seller/imports', key: 'imports', icon: History },
   { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
+  { to: '/seller/reports', key: 'reports', icon: FileBarChart },  // a placeholder: revenue and reports later
   { to: '/seller/profile', key: 'profile', icon: Store },
 ]
 
@@ -391,6 +394,7 @@ export function ProfileSection() {
     <div className="grid gap-6">
       <StoreForm key={store.branches?.length ? 'b' : 's'} store={store} onSaved={setStore} />
       <BranchesBlock store={store} onChanged={setStore} />
+      <StockModeBlock store={store} onChanged={setStore} />
     </div>
   )
 }

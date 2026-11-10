@@ -368,6 +368,8 @@ def out(db: Session, r: Reservation, side: str, usd_rate: float | None) -> dict:
     }
     # The buyer's phone and Telegram: only to the buyer and to the store of this reservation (never the email)
     data.update({"name": r.name, "phone": r.phone, "telegram": r.telegram, "buyer_no": r.buyer_id})
+    if side == "store" and r.store.stock_mode == "stock":
+        data["reserved_qty"] = r.reserved_qty  # phase 12.2: only the store sees its reserve
     return data
 
 

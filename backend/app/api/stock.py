@@ -59,6 +59,18 @@ def set_mode(data: ModeIn, user: User = Depends(seller_only), db: Session = Depe
         _err(e)
 
 
+class SettingsIn(BaseModel):
+    low_stock: int = Field(ge=0, le=1000)
+
+
+@router.put("/settings")
+def save_settings(data: SettingsIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    store.low_stock = data.low_stock
+    db.commit()
+    return {"low_stock": store.low_stock}
+
+
 @router.post("/operations")
 def operate(data: OperationIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """A receipt, a sale or an adjustment document: all lines or none."""
