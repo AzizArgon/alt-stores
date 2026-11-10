@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
+import { BranchAvailability } from '../components/BranchList'
 import { MapButtons, StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import { ProductVisual } from '../components/CategoryIcon'
@@ -13,6 +14,7 @@ import { Badge, Breadcrumbs, Button, Card, Skeleton, Tabs } from '../components/
 import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
 import { useCity } from '../services/city.jsx'
+import { cityParam } from '../config/cities'
 import { formatDate, formatDayMonth, formatPrice, roundSum, telegramUrl } from '../services/format'
 import { formatSpec, specLabel, specsLine } from '../services/specs'
 import { defaultGroup, groupCounts } from '../services/used'
@@ -58,12 +60,15 @@ export function OpenPost({ url, className = '' }) {
 
 export const isAd = (offer) => offer.store.kind === 'telegram'
 
-function OfferCard({ offer, usdRate, rateDate, market, title }) {
+function OfferCard({ offer, usdRate, rateDate, market, title, city }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { store } = offer
   const ad = isAd(offer)
-  const place = [t(`cities.${store.city}`), store.district, store.address].filter(Boolean).join(', ')
+  // The branch of the chosen city first (phase 12.1), else the store's main address
+  const first = offer.stock?.branches?.[0]
+  const where = first && !ad ? { ...store, ...first, id: store.id, name: store.name, phone: store.phone } : store
+  const place = [t(`cities.${where.city}`), where.district, where.address].filter(Boolean).join(', ')
 
   return (
     <Card as="li" padded={false} className={`min-w-0 p-4 ${offer.is_in_stock ? '' : 'opacity-60'}`}>
@@ -75,7 +80,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
             {ad && <AdBadge />}
           </p>
           <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
-          {!ad && store.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{store.hours}</p>}
+          {!ad && where.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{where.hours}</p>}
           <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-sm">
             <span className={offer.is_in_stock ? 'font-medium text-success' : 'text-muted'}>
               {t(offer.is_in_stock ? 'product.inStock' : 'product.outOfStock')}
@@ -85,6 +90,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
               {ad ? t('used.posted', { date: formatDate(offer.posted_at) }) : t('product.updated', { date: formatDate(offer.updated_at) })}
             </span>
           </p>
+          {!ad && <BranchAvailability stock={offer.stock} city={city} />}
           {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
           <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
         </div>
@@ -100,7 +106,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
             kind: 'offer', id: offer.id, title, condition: offer.condition, price: offer.price, currency: offer.currency,
             inStock: offer.is_in_stock }} />
           <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
-          <MapButtons store={store} size="lg" className="[&>a]:w-full sm:[&>a]:w-auto" />
+          <MapButtons store={where} size="lg" className="[&>a]:w-full sm:[&>a]:w-auto" />
           {open ? <Contacts store={store} />
             : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
         </>}
@@ -110,10 +116,11 @@ function OfferCard({ offer, usdRate, rateDate, market, title }) {
 }
 
 function OfferList({ offers, product }) {
+  const { city } = useCity()
   return (
     <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
       {offers.map((o) => (
-        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} title={product.name} />
+        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} title={product.name} city={city} />
       ))}
     </ul>
   )
@@ -186,10 +193,11 @@ export default function ProductPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get(`/catalog/products/${id}`, { params: { sort } })
+    // The city (phase 12.1): "в наличии" and "есть в N из M филиалов" by the branches of that city
+    api.get(`/catalog/products/${id}`, { params: { sort, city: cityParam(city) } })
       .then((res) => { setProduct(res.data); setError('') })
       .catch((err) => setError(t(errorKey(err))))
-  }, [id, sort, t])
+  }, [id, sort, city, t])
 
   if (error) return <ErrorText>{error}</ErrorText>
   if (!product) {
@@ -205,8 +213,10 @@ export default function ProductPage() {
   const group = tab || defaultGroup(counts)
   const offers = product.offers.filter((o) => o.group === group)
   const byCity = city !== 'all'
-  const here = byCity ? offers.filter((o) => o.store.city === city) : offers
-  const elsewhere = byCity ? offers.filter((o) => o.store.city !== city) : []
+  // A store is in the city when one of its branches is there
+  const inCity = (o) => o.in_city || o.store.city === city
+  const here = byCity ? offers.filter(inCity) : offers
+  const elsewhere = byCity ? offers.filter((o) => !inCity(o)) : []
   const range = priceRange(here, product.usd_rate)
   const cityName = t(`cities.${city}`)
   const keySpecs = product.specs.filter((s) => s.main)

@@ -42,7 +42,15 @@ export default function StoresPage() {
                   <Link to={`/store/${s.id}`} className="text-h3 break-words hover:text-primary hover:underline">{s.name}</Link>
                   {s.is_verified && <Badge tone="success"><BadgeCheck className="mr-1 inline size-3.5" aria-hidden />{t('store.verifiedShort')}</Badge>}
                 </div>
-                <StoreWhere store={s} className="mt-2" />
+                {/* Phase 12.1: the store is in every city of its branches; the first branch here is the city's */}
+                <StoreWhere store={s.branches?.[0] ? { ...s, ...s.branches[0], id: s.id } : s} className="mt-2" />
+                {s.branches?.length > 1 && (
+                  <Link to={`/store/${s.id}`} className="mt-2 text-sm text-primary hover:underline">
+                    {city !== 'all' && s.branches_here > 0
+                      ? t('stores.branchesHere', { count: s.branches_here, city: t(`cities.${city}`) })
+                      : t('stores.branchesAll', { count: s.branches.length })}
+                  </Link>
+                )}
                 {!s.address && <p className="mt-2 text-sm text-muted">{t(`cities.${s.city}`)} · {t('stores.noAddress')}</p>}
                 <Link to={`/store/${s.id}`} className="mt-3 flex items-center gap-1.5 text-sm text-muted hover:text-primary">
                   <Package className="size-4" aria-hidden />{t('stores.inStock', { count: s.in_stock })}

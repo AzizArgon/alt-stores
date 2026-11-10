@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { BadgeCheck, Phone, Send, Store } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
+import { BranchesByCity } from '../components/BranchList'
 import BuildTile from '../components/BuildTile'
 import { WriteButton } from '../components/Chat'
 import ProductTile from '../components/ProductTile'
 import StoreWhere from '../components/StoreWhere'
 import { Badge, Breadcrumbs, Button, Card, EmptyState, Pagination, Skeleton, SkeletonCards, Tabs } from '../components/ui'
 import api from '../services/api'
+import { useCity } from '../services/city.jsx'
 import { useSpecDictionary } from '../services/specs'
 
 const GROUPS = ['new', 'used']
@@ -18,6 +20,7 @@ export default function StorePage() {
   const { t } = useTranslation()
   const { id } = useParams()
   const dictionary = useSpecDictionary()
+  const { city } = useCity()
   const [store, setStore] = useState(null)
   const [missing, setMissing] = useState(false)
   const [group, setGroup] = useState('new')
@@ -54,11 +57,14 @@ export default function StorePage() {
           <h1 className="text-h2 break-words md:text-h1">{store.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {store.is_verified && <Badge tone="success"><BadgeCheck className="mr-1 inline size-3.5" aria-hidden />{t('store.verifiedShort')}</Badge>}
-            <Badge>{t(`cities.${store.city}`)}</Badge>
+            {(store.cities?.length ? store.cities : [store.city]).map((c) => <Badge key={c}>{t(`cities.${c}`)}</Badge>)}
             {store.is_demo && <Badge>{t('stores.demo')}</Badge>}
           </div>
-          <StoreWhere store={store} route className="mt-4" />
-          {!store.address && <p className="mt-4 text-sm text-muted">{t('stores.noAddress')}</p>}
+          {store.branches?.length > 1 ? (
+            // Phase 12.1: every branch by city, the chosen city first
+            <div className="mt-4"><BranchesByCity branches={store.branches} city={city} /></div>
+          ) : <StoreWhere store={store.branches?.[0] ? { ...store, ...store.branches[0], id: store.id } : store} route className="mt-4" />}
+          {!store.address && !store.branches?.length && <p className="mt-4 text-sm text-muted">{t('stores.noAddress')}</p>}
         </div>
         <div className="flex flex-col gap-2">
           {store.phone && <Button href={`tel:${store.phone.replace(/[^\d+]/g, '')}`} variant="secondary"><Phone className="size-4" aria-hidden />{store.phone}</Button>}

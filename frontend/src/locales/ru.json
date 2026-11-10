@@ -1457,7 +1457,15 @@
     "inStock_few": "{{count}} товара в наличии",
     "inStock_many": "{{count}} товаров в наличии",
     "empty": "В этом городе пока нет магазинов-партнёров",
-    "emptyHint": "Выберите другой город или «Весь Узбекистан»"
+    "emptyHint": "Выберите другой город или «Весь Узбекистан»",
+    "branchesHere_one": "{{count}} филиал в городе {{city}}",
+    "branchesHere_few": "{{count}} филиала в городе {{city}}",
+    "branchesHere_many": "{{count}} филиалов в городе {{city}}",
+    "branchesHere_other": "{{count}} филиалов в городе {{city}}",
+    "branchesAll_one": "{{count}} филиал — все адреса",
+    "branchesAll_few": "{{count}} филиала — все адреса",
+    "branchesAll_many": "{{count}} филиалов — все адреса",
+    "branchesAll_other": "{{count}} филиалов — все адреса"
   },
   "branches": {
     "title": "Филиалы",
@@ -1513,6 +1521,26 @@
     "branchFilter": "Филиал",
     "allBranches": "все",
     "bulkBranch": "Филиал для отметки",
-    "inBranch": "В филиале {{branch}}"
+    "inBranch": "В филиале {{branch}}",
+    "buyer": {
+      "yes": "есть",
+      "no": "нет",
+      "summary_one": "Есть в {{available}} из {{total}} филиала",
+      "summary_few": "Есть в {{available}} из {{total}} филиалов",
+      "summary_many": "Есть в {{available}} из {{total}} филиалов",
+      "summary_other": "Есть в {{available}} из {{total}} филиалов",
+      "inCity_one": "{{city}}: есть в {{available}} из {{total}} филиала",
+      "inCity_few": "{{city}}: есть в {{available}} из {{total}} филиалов",
+      "inCity_many": "{{city}}: есть в {{available}} из {{total}} филиалов",
+      "inCity_other": "{{city}}: есть в {{available}} из {{total}} филиалов",
+      "notTracked": "Наличие в филиале уточняйте у магазина",
+      "updated": "Обновлено {{date}}",
+      "stale": "Давно не обновлялось ({{date}}), уточняйте у магазина",
+      "staleShort": "давно не обновлялось",
+      "branchCount_one": "{{count}} филиал",
+      "branchCount_few": "{{count}} филиала",
+      "branchCount_many": "{{count}} филиалов",
+      "branchCount_other": "{{count}} филиалов"
+    }
   }
 }
