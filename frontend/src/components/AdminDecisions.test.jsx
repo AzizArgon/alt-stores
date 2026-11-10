@@ -5,6 +5,7 @@ import '../i18n'
 import { ToastProvider } from './overlays'
 import { BlockedNotice, SellerFlags } from './AdminDecisions'
 import { ADMIN_SECTIONS, NoAccessPage } from '../pages/AdminPage'
+import { BLOCK_ACTION, reportSides } from '../pages/AdminModeration'
 import { AuthProvider } from '../services/auth.jsx'
 import { actionGroup, adminErrorKey, cleanParams } from '../services/admin'
 
@@ -48,5 +49,17 @@ describe('the admin panel', () => {
     expect(adminErrorKey({ response: { status: 429, data: { detail: { code: 'too_many_logins' } } } })).toBe('errors.too_many_logins')
     expect(actionGroup('store_block')).toBe('store')
     expect(cleanParams({ q: '', verified: 'false', city: null })).toEqual({ verified: 'false' })
+  })
+})
+
+describe('a report: who complained about whom (one main block button)', () => {
+  it('the store complained -> the main action blocks the buyer, the store is in "more"', () => {
+    const { from, target } = reportSides({ reporter_side: 'store' })
+    expect([from, target]).toEqual(['store', 'buyer'])
+    expect(BLOCK_ACTION[target]).toBe('block_user')
+  })
+  it('the buyer complained -> the main action blocks the store', () => {
+    const { target } = reportSides({ reporter_side: 'buyer' })
+    expect(BLOCK_ACTION[target]).toBe('block_store')
   })
 })

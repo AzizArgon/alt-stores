@@ -1,11 +1,11 @@
 // Phase 13: the admin's moderation sections — stores, chat reports, disputed flags, card fixes, barcode conflicts and
 // Telegram channels. Every action asks for a comment (a reason where someone is blocked or refused) and is journaled.
-import { ArrowRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, Ellipsis, ExternalLink, ShieldOff } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Flags from '../components/Flags'
-import { useToast } from '../components/overlays'
+import { Dropdown, DropdownItem, useToast } from '../components/overlays'
 import { Badge, Button, Card, Input, Select, Tabs } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { storeUrl } from '../config/sites'
@@ -118,9 +118,9 @@ export function AdminStoreCard() {
               <h1 className="mt-1 text-h1 break-words">{s.name}</h1>
               <div className="mt-2"><StoreBadges s={s} /></div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => verify(!s.is_verified)}>{t(s.is_verified ? 'admin.stores.unverify' : 'admin.stores.verify')}</Button>
-              <Button variant={s.blocked ? 'secondary' : 'danger'} onClick={() => block(!s.blocked)}>{t(s.blocked ? 'admin.stores.unblock' : 'admin.stores.block')}</Button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={() => verify(!s.is_verified)}>{t(s.is_verified ? 'admin.stores.unverify' : 'admin.stores.verify')}</Button>
+              <Button variant={s.blocked ? 'secondary' : 'danger'} className="w-full sm:w-auto" onClick={() => block(!s.blocked)}>{t(s.blocked ? 'admin.stores.unblock' : 'admin.stores.block')}</Button>
             </div>
           </div>
           {s.blocked && <p className="rounded-lg border border-danger-line bg-danger-soft p-3 text-sm text-danger">{t('admin.stores.blockReason', { reason: s.block_reason })}</p>}
@@ -168,57 +168,117 @@ export function AdminStoreCard() {
 
 // --- chat reports -----------------------------------------------------------------------------------------------------
 
+// One side of a report: "Магазин Silicon Plus" or "Покупатель buyer1@…", marked if already blocked
+function Party({ side, r }) {
+  const { t } = useTranslation()
+  const who = side === 'store' ? r.store : r.buyer
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+      <span className="text-muted">{t(side === 'store' ? 'admin.reports.store' : 'admin.reports.buyer')}</span>
+      {side === 'store'
+        ? <Link className="font-medium text-primary hover:underline" to={`/admin/stores/${who?.id}`}>{who?.name}</Link>
+        : <span className="font-medium break-all">{who?.email}</span>}
+      {who?.blocked && <Badge tone="danger">{t('admin.users.blockedBadge')}</Badge>}
+    </span>
+  )
+}
+
+// A reservation status line is a thin grey divider; people's lines are messages
+function ReportMessage({ m }) {
+  const { t } = useTranslation()
+  if (m.author === 'system') {
+    return (
+      <li className="flex items-center gap-2 py-0.5 text-xs text-faint">
+        <span aria-hidden className="h-px min-w-4 flex-1 bg-line-strong" />
+        <span className="max-w-[80%] text-center">{systemText(t, m)} · {dateTime(m.at)}</span>
+        <span aria-hidden className="h-px min-w-4 flex-1 bg-line-strong" />
+      </li>
+    )
+  }
+  return (
+    <li className={`max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-card ${m.author === 'store' ? 'justify-self-end bg-primary-soft' : 'justify-self-start bg-surface'}`}>
+      <span className="block text-xs text-muted">{t(`admin.reports.author.${m.author}`)} · {dateTime(m.at)}</span>
+      <span className="break-words whitespace-pre-wrap">{m.text}</span>
+    </li>
+  )
+}
+
+export const BLOCK_ACTION = { buyer: 'block_user', store: 'block_store' }
+const BLOCK_LABEL = { buyer: 'admin.reports.blockBuyer', store: 'admin.reports.blockStore' }
+
+// Who complained about whom: the store complained -> the main action blocks the buyer, and the other way round
+export function reportSides(r) {
+  const from = r.reporter_side === 'store' ? 'store' : 'buyer'
+  return { from, target: from === 'store' ? 'buyer' : 'store' }
+}
+
 function ReportDetail({ id, onChanged }) {
   const { t } = useTranslation()
   const [r, reload] = useAdminData(`/admin/reports/${id}`)
   const [action, setAction] = useState(null)
   const act = (kind) => setAction({
-    title: t({ dismiss: 'admin.reports.dismiss', block_user: 'admin.reports.blockUser', block_store: 'admin.reports.blockStore' }[kind]),
-    danger: kind !== 'dismiss', required: kind !== 'dismiss',
+    title: t({ dismiss: 'admin.reports.dismiss', block_user: BLOCK_LABEL.buyer, block_store: BLOCK_LABEL.store }[kind]),
+    // Any block goes through a confirmation with a required reason (the blocked side sees it)
+    danger: kind !== 'dismiss', required: kind !== 'dismiss', fieldHint: kind !== 'dismiss' ? t('admin.reasonHint') : null,
     hint: kind === 'block_user' ? t('admin.reports.blockUserHint') : kind === 'block_store' ? t('admin.stores.blockHint') : null,
     onConfirm: async (comment) => { await api.post(`/admin/reports/${id}`, { action: kind, comment }); reload(); onChanged() },
   })
+  if (!r) return <Loading data={r} />
+  const { from, target } = reportSides(r)
+  const blocked = (side) => (side === 'store' ? r.store : r.buyer)?.blocked
   return (
-    <Loading data={r}>
-      {r && (
-        <Card className="grid gap-3">
-          <div>
-            <p className="font-semibold">#{r.id} · {t(`chat.reason.${r.reason}`, r.reason)}</p>
-            <p className="text-sm break-words text-muted">{t('admin.reports.from', { email: r.reporter, side: t(r.reporter_side === 'store' ? 'admin.reports.sideStore' : 'admin.reports.sideBuyer') })}</p>
-            {r.comment && <p className="mt-1 text-sm break-words">{r.comment}</p>}
-            <p className="mt-1 text-sm">
-              {t('admin.reports.buyer')}: <span className="break-all">{r.buyer?.email}</span>{r.buyer?.blocked && <Badge tone="danger" className="ml-1">{t('admin.users.blockedBadge')}</Badge>}
-              {' · '}{t('admin.reports.store')}: <Link className="text-primary hover:underline" to={`/admin/stores/${r.store?.id}`}>{r.store?.name}</Link>
-            </p>
-          </div>
-          <section>
-            <h3 className="text-sm font-semibold">{t('admin.reports.conversation')}</h3>
-            <p className="text-xs text-muted">{t('admin.reports.onlyThis')}</p>
-            <ul className="mt-2 grid max-h-80 gap-2 overflow-y-auto rounded-lg bg-surface-2 p-3">
-              {r.messages.map((m) => (
-                <li key={m.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${m.author === 'store' ? 'justify-self-end bg-primary-soft' : 'bg-surface'}`}>
-                  <span className="block text-xs text-muted">{t(`admin.reports.author.${m.author}`)} · {dateTime(m.at)}</span>
-                  <span className="break-words whitespace-pre-wrap">{m.author === 'system' ? systemText(t, m) : m.text}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          {r.status === 'new' ? (
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={() => act('dismiss')}>{t('admin.reports.dismiss')}</Button>
-              <Button variant="danger" onClick={() => act('block_user')}>{t('admin.reports.blockUser')}</Button>
-              <Button variant="danger" onClick={() => act('block_store')}>{t('admin.reports.blockStore')}</Button>
-            </div>
-          ) : (
-            <p className="text-sm">
-              <Badge tone="success">{t(`admin.reports.resolution.${r.resolution}`)}</Badge>
-              {r.admin_comment && <span className="ml-2 break-words text-muted">{t('admin.reports.adminComment', { text: r.admin_comment })}</span>}
-            </p>
-          )}
-          <ActionModal action={action} onClose={() => setAction(null)} />
-        </Card>
+    <Card className="grid gap-4">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-semibold">{t(`chat.reason.${r.reason}`, r.reason)}</span>
+        <span className="inline-flex items-center gap-2"><span aria-hidden className="text-faint">·</span>
+          <Badge tone={r.status === 'new' ? 'warning' : 'neutral'}>{t(`admin.reports.status.${r.status}`)}</Badge></span>
+        <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-muted"><span aria-hidden className="text-faint">·</span>
+          {dateTime(r.created_at)}</span>
+      </p>
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" title={t('admin.reports.whoWhom')}>
+        <Party side={from} r={r} />
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <ArrowRight className="size-4 shrink-0 text-faint" aria-label={t('admin.reports.about')} />
+          <Party side={target} r={r} />
+        </span>
+      </p>
+      {r.comment && (
+        <blockquote className="border-l-4 border-line-strong pl-3 text-sm break-words italic">«{r.comment}»</blockquote>
       )}
-    </Loading>
+      <section>
+        <h3 className="text-sm font-semibold">{t('admin.reports.conversation')}</h3>
+        <p className="text-xs text-muted">{t('admin.reports.onlyThis')}</p>
+        <ul className="mt-2 grid max-h-96 gap-2 overflow-y-auto rounded-lg bg-surface-2 p-3">
+          {r.messages.map((m) => <ReportMessage key={m.id} m={m} />)}
+        </ul>
+      </section>
+      {r.status === 'new' ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Button variant="danger" className="w-full sm:w-auto" disabled={blocked(target)} onClick={() => act(BLOCK_ACTION[target])}>
+            {t(BLOCK_LABEL[target])}
+          </Button>
+          <Button variant="secondary" className="w-full sm:w-auto" onClick={() => act('dismiss')}>{t('admin.reports.dismiss')}</Button>
+          <div className="w-full sm:w-auto">
+            <Dropdown align="left" up trigger={({ open, toggle }) => (
+              <Button variant="secondary" className="w-full sm:w-auto" onClick={toggle} aria-expanded={open}
+                aria-label={t('admin.reports.more')} title={t('admin.reports.more')}>
+                <Ellipsis className="size-5" aria-hidden /><span className="sm:hidden">{t('admin.reports.moreShort')}</span>
+              </Button>
+            )}>
+              <DropdownItem icon={ShieldOff} disabled={blocked(from)} onClick={() => act(BLOCK_ACTION[from])}>
+                {t(BLOCK_LABEL[from])}
+              </DropdownItem>
+            </Dropdown>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm">
+          <Badge tone="success">{t(`admin.reports.resolution.${r.resolution}`)}</Badge>
+          {r.admin_comment && <span className="ml-2 break-words text-muted">{t('admin.reports.adminComment', { text: r.admin_comment })}</span>}
+        </p>
+      )}
+      <ActionModal action={action} onClose={() => setAction(null)} />
+    </Card>
   )
 }
 
@@ -533,8 +593,8 @@ function ChannelRow({ ch, onChanged, onDelete }) {
           {log.error && <p className="text-danger">{t('admin.channels.error', { text: log.error })}</p>}
         </div>
       )}
-      <div className="flex flex-wrap items-end gap-2">
-        <Select label={t('admin.channels.city')} value={ch.city} onChange={(e) => patch({ city: e.target.value })} className="w-40">
+      <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
+        <Select label={t('admin.channels.city')} value={ch.city} onChange={(e) => patch({ city: e.target.value })} className="sm:w-40">
           {STORE_CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
         </Select>
         <Button variant="secondary" onClick={() => patch({ enabled: !ch.enabled })}>{t(ch.enabled ? 'admin.channels.disable' : 'admin.channels.enable')}</Button>

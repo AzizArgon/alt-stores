@@ -89,7 +89,8 @@ const DropdownContext = createContext(null)
 
 // Dropdown menu: closes on a click outside, on Esc and after choosing an item.
 // `trigger` gets { open, toggle } and draws the button
-export function Dropdown({ trigger, align = 'right', panelClassName = 'w-64', children }) {
+// `up`: the panel opens above the trigger (a button at the bottom of a card, above the phone tab bar)
+export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', children }) {
   const [open, setOpen] = useState(false)
   const box = useRef(null)
   const close = useCallback(() => setOpen(false), [])
@@ -105,7 +106,7 @@ export function Dropdown({ trigger, align = 'right', panelClassName = 'w-64', ch
       {trigger({ open, toggle: () => setOpen(!open) })}
       {open && (
         <DropdownContext.Provider value={close}>
-          <div role="menu" className={`absolute top-full z-40 mt-2 max-w-[calc(100vw-2rem)] animate-[pop-in_120ms] rounded-lg border border-line bg-surface p-1.5 shadow-pop ${
+          <div role="menu" className={`absolute z-40 ${up ? 'bottom-full mb-2' : 'top-full mt-2'} max-w-[calc(100vw-2rem)] animate-[pop-in_120ms] rounded-lg border border-line bg-surface p-1.5 shadow-pop ${
             align === 'right' ? 'right-0' : 'left-0'} ${panelClassName}`}>
             {children}
           </div>
