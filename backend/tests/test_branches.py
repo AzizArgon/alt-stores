@@ -328,3 +328,31 @@ def test_seller_edits_stock_by_branch_and_bulk_marks_a_branch(db):
     assert all(not s.in_stock for s in offers[0].stocks)
     with pytest.raises(cabinet.EditError):
         cabinet.set_branch_stock(db, store, offers[0], [{"branch_id": 9999, "quantity": 1}])
+
+
+# --- reservations ---------------------------------------------------------------------------------------------------
+
+def test_reservation_only_in_a_branch_with_stock_and_the_store_may_move_it(db):
+    from app.db.models import Message, UserRole
+    from app.services import reservations as res
+
+    store, offer, (chil, yunus, sam) = _two_city_store(db)
+    buyer = User(email="buyer@example.com", password_hash="x", role=UserRole.buyer)
+    store.owner.role = UserRole.seller
+    db.add(buyer)
+    db.commit()
+    body = {"kind": "offer", "item_id": offer.id, "name": "Азиз", "phone": "+998901234567", "contact": "call"}
+    with pytest.raises(res.ReservationError, match="branch"):
+        res.create(db, buyer, body)  # the branch is required
+    with pytest.raises(res.ReservationError, match="branch_no_stock"):
+        res.create(db, buyer, {**body, "branch_id": yunus.id})  # 0 there
+    r = res.create(db, buyer, {**body, "branch_id": chil.id})
+    out = res.out(db, r, "buyer", None)
+    assert out["branch"]["id"] == chil.id and out["branch"]["address"] == chil.address
+    assert "quantity" not in out["branch"]
+    # The store moves it to Samarkand: a system line in the chat
+    r = res.change_branch(db, store.owner, r.id, sam.id)
+    assert r.branch_id == sam.id
+    assert "branch_changed" in db.scalars(select(Message.text).order_by(Message.id.desc())).first()
+    with pytest.raises(res.ReservationError):
+        res.change_branch(db, buyer, r.id, chil.id)  # only the store

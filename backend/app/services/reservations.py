@@ -17,9 +17,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
-    Build, Conversation, Message, MessageAuthor, Offer, Reservation, ReservationEvent, ReservationStatus as S, Store,
+    Branch, Build, Conversation, Message, MessageAuthor, Offer, Reservation, ReservationEvent, ReservationStatus as S, Store,
     StoreKind, TopicKind, User, UserRole, utcnow,
 )
+from app.services.branches import available, branch_public, store_branches
 from app.services.chat import ChatError, _aware, _price, is_blocked
 
 TZ = timezone(timedelta(hours=5))  # Tashkent: "today" and the dates in system lines
@@ -155,6 +156,22 @@ def _check_limits(db: Session, user: User, offer: Offer | None, build: Build | N
         raise ReservationError("limit_same", 429)
 
 
+def _pickup_branch(db: Session, store: Store, offer: Offer | None, branch_id) -> Branch | None:
+    """Phase 12.1: the branch where the buyer picks it up — required when the store has branches; with stock by
+    branch only a branch where the item is available (the reservation of the stock itself comes in 12.2)."""
+    branches = store_branches(db, store.id)
+    if not branches:
+        return None
+    branch = next((b for b in branches if b.id == branch_id), None) if branch_id else None
+    if branch is None:
+        raise ReservationError("branch")
+    if offer is not None and offer.stocks:
+        row = next((s for s in offer.stocks if s.branch_id == branch.id), None)
+        if row is None or not available(row):
+            raise ReservationError("branch_no_stock")
+    return branch
+
+
 def create(db: Session, user: User, data: dict) -> Reservation:
     if user.role != UserRole.buyer:
         raise ReservationError("buyers_only", 403)
@@ -174,13 +191,14 @@ def create(db: Session, user: User, data: dict) -> Reservation:
         raise ReservationError("comment")
     expire_due(db)
     _check_limits(db, user, offer, build)
+    branch = _pickup_branch(db, store, offer, data.get("branch_id"))
 
     item = offer or build
     r = Reservation(
         buyer_id=user.id, store_id=store.id, offer_id=offer.id if offer else None, build_id=build.id if build else None,
         title=offer.product.normalized_name if offer else build.name, condition=item.condition,
         price=item.price, currency=item.currency, quantity=quantity, **contacts,
-        pickup_date=pickup_date, pickup_time=pickup_time, comment=comment,
+        pickup_date=pickup_date, pickup_time=pickup_time, comment=comment, branch_id=branch.id if branch else None,
     )
     r.events.append(ReservationEvent(status=S.new, by="buyer"))
     db.add(r)
@@ -248,6 +266,26 @@ def advance(db: Session, user: User, res_id: int) -> Reservation:
     return r
 
 
+def change_branch(db: Session, user: User, res_id: int, branch_id: int) -> Reservation:
+    """The store moves an active reservation to another of its branches; a system line tells the buyer."""
+    side, r = get_for(db, user, res_id)
+    if side != "store":
+        raise ReservationError("sellers_only", 403)
+    if r.status not in ACTIVE:
+        raise ReservationError("bad_status")
+    branch = next((b for b in store_branches(db, r.store_id) if b.id == branch_id), None)
+    if branch is None:
+        raise ReservationError("branch")
+    if branch.id == r.branch_id:
+        return r
+    r.branch_id, r.updated_at, r.buyer_seen = branch.id, utcnow(), False
+    _system_line(db, r, "branch_changed", user, branch=branch.name or "", address=branch.address,
+                 city=branch.city)
+    db.commit()
+    db.refresh(r)
+    return r
+
+
 def cancel(db: Session, user: User, res_id: int, reason: str | None = None, text: str | None = None) -> Reservation:
     """The store cancels with a reason from the list; the buyer cancels any time before "issued"."""
     side, r = get_for(db, user, res_id)
@@ -302,6 +340,9 @@ def out(db: Session, r: Reservation, side: str, usd_rate: float | None) -> dict:
         "store": {"id": r.store.id, "name": r.store.name, "city": r.store.city, "address": r.store.address,
                   "district": r.store.district, "phone": r.store.phone, "hours": r.store.hours,
                   "map_url": r.store.map_url, "map_lat": r.store.map_lat, "map_lon": r.store.map_lon},
+        # Phase 12.1: where to pick it up (address, hours, map); the store may change it
+        "branch": branch_public(r.branch, r.store) if r.branch else None,
+        "branches": [branch_public(b, r.store) for b in store_branches(db, r.store_id)] if side == "store" else [],
         "conversation_id": conv.id if conv else None, "is_demo": r.is_demo,
         "history": [{"status": e.status.value, "by": e.by, "at": _aware(e.at)} for e in r.events],
         "next": NEXT[r.status].value if r.status in NEXT else None, "can_cancel": r.status in ACTIVE,

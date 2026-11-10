@@ -127,7 +127,7 @@ export default function BuildPage() {
           <div className="mt-4 grid gap-2">
             <ReserveButton store={store} usdRate={build.usd_rate} className="w-full" item={{
               kind: 'build', id: build.id, title: build.name, condition: build.condition, price: build.price,
-              currency: build.currency, inStock: build.is_in_stock }} />
+              currency: build.currency, inStock: build.is_in_stock, branches: build.branches }} />
             <WriteButton kind="build" id={build.id} store={store} className="w-full" />
             {open ? <Contacts store={store} />
               : <Button size="lg" className="w-full" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}

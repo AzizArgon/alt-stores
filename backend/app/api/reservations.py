@@ -25,6 +25,11 @@ class ReservationIn(BaseModel):
     pickup_time: str | None = Field(None, max_length=5)
     # Longer comments are refused with a clear code (reservation.error.comment), not cut
     comment: str | None = Field(None, max_length=svc.MAX_COMMENT * 2)
+    branch_id: int | None = None  # phase 12.1: where to pick it up (required when the store has branches)
+
+
+class BranchIn(BaseModel):
+    branch_id: int
 
 
 class CancelIn(BaseModel):
@@ -88,6 +93,13 @@ def one(res_id: int, user: User = Depends(get_current_user), db: Session = Depen
 @router.post("/{res_id}/advance")
 def advance(res_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     r = _do(svc.advance, db, user, res_id)
+    return svc.out(db, r, "store", _rate(db))
+
+
+@router.post("/{res_id}/branch")
+def change_branch(res_id: int, data: BranchIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The store moves the reservation to another branch (a system line in the chat)."""
+    r = _do(svc.change_branch, db, user, res_id, data.branch_id)
     return svc.out(db, r, "store", _rate(db))
 
 

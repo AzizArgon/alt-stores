@@ -40,7 +40,9 @@ function itemPath(r) {
 function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
   const { t } = useTranslation()
   const path = itemPath(r)
-  const place = [t(`cities.${r.store.city}`), r.store.district, r.store.address].filter(Boolean).join(', ')
+  // Phase 12.1: the branch to pick it up (address, hours, map); else the store's own address
+  const where = r.branch ? { ...r.store, ...r.branch, id: r.store.id, name: r.store.name } : r.store
+  const place = [t(`cities.${where.city}`), where.district, where.address].filter(Boolean).join(', ')
   const Title = path ? Link : 'span'
   return (
     <Card as="li" id={`reservation-${r.id}`} className={`min-w-0 scroll-mt-24 ${highlight ? 'ring-2 ring-primary' : ''}`}>
@@ -55,7 +57,8 @@ function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
           <p className="text-sm text-muted">{t(`condition.${r.condition}`)} · {t('reservation.qty', { count: r.quantity })}</p>
           <p className="mt-1 text-sm font-medium"><StoreName store={r.store} /></p>
           {place && <p className="flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>}
-          {r.store.hours && <p className="pl-5 text-sm text-muted">{r.store.hours}</p>}
+          {r.branch?.name && <p className="pl-5 text-sm text-muted">{t('reservation.branchName', { name: r.branch.name })}</p>}
+          {where.hours && <p className="pl-5 text-sm text-muted">{where.hours}</p>}
           {r.expires_at && ['confirmed', 'ready'].includes(r.status) && (
             <p className="mt-1 text-sm font-medium text-primary">{t('reservation.until', { date: formatDayMonth(r.expires_at) })}</p>
           )}
@@ -69,7 +72,7 @@ function ReservationCard({ r, usdRate, highlight, unseen, onCancel }) {
       </div>
       <p className="mt-3 text-xs text-muted">{t('reservation.payNote')}</p>
       <div className="mt-3 grid gap-2 sm:flex sm:justify-end">
-        <MapButtons store={r.store} size="md" className="[&>a]:w-full sm:[&>a]:w-auto" />
+        <MapButtons store={where} size="md" className="[&>a]:w-full sm:[&>a]:w-auto" />
         {r.conversation_id && (
           <Button to={`/messages/${r.conversation_id}`} variant="secondary" className="w-full sm:w-auto">
             <MessageSquare className="size-4" aria-hidden />{t('reservation.chat')}

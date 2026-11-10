@@ -104,7 +104,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title, city }) {
         {ad ? <OpenPost url={offer.post_url} className="w-full sm:w-auto" /> : <>
           <ReserveButton store={store} usdRate={usdRate} className="w-full sm:w-auto" item={{
             kind: 'offer', id: offer.id, title, condition: offer.condition, price: offer.price, currency: offer.currency,
-            inStock: offer.is_in_stock }} />
+            inStock: offer.is_in_stock, branches: offer.stock?.branches, tracked: offer.stock?.tracked }} />
           <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
           <MapButtons store={where} size="lg" className="[&>a]:w-full sm:[&>a]:w-auto" />
           {open ? <Contacts store={store} />

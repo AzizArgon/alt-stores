@@ -246,7 +246,9 @@ def test_store_reservation_days_in_profile(client, db, world):
     assert client.put("/api/stores/me", json=profile, headers=seller).status_code == 422
     profile["reservation_days"] = 5
     assert client.put("/api/stores/me", json=profile, headers=seller).json()["reservation_days"] == 5
-    rid = _book(client, world["b1"], world["offer"].id).json()["id"]
+    # Since phase 12.1 the saved address is the main branch: the buyer picks it up there
+    branch_id = client.get("/api/stores/me", headers=seller).json()["branches"][0]["id"]
+    rid = _book(client, world["b1"], world["offer"].id, branch_id=branch_id).json()["id"]
     out = client.post(f"/api/reservations/{rid}/advance", headers=seller).json()
     r = db.get(Reservation, rid)
     assert out["status"] == "confirmed" and (r.expires_at - r.created_at.replace(tzinfo=r.expires_at.tzinfo)).days >= 4

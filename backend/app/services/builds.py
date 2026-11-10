@@ -498,6 +498,7 @@ def build_detail(db: Session, build: Build, usd_rate: float | None) -> dict:
         "components": [component_out(c) for c in build.components],
         "flags": build_flags(build), "compatibility": compatibility(build),
         "store_reference": store_reference(db, build, usd_rate),
+        "branches": _branches(store),
         "store": {"id": store.id, "name": store.name, "city": store.city, "district": store.district,
                   "address": store.address, "phone": store.phone, "telegram": store.telegram,
                   "is_verified": store.is_verified, "hours": store.hours, "map_url": store.map_url,
@@ -530,6 +531,13 @@ def _facet(items: list[dict], key: str) -> list[dict]:
 
 def _ts(dt: datetime) -> float:
     return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def _branches(store: Store) -> list[dict]:
+    """Phase 12.1: the build is reserved in one of the store's branches (no stock by branch for builds)."""
+    from app.services.branches import branch_public
+
+    return [branch_public(b, store) for b in store.branches]
 
 
 def list_builds(db: Session, usd_rate: float | None, f: dict, city: str | None = None, sort: str = "new",

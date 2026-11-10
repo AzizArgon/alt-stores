@@ -69,6 +69,19 @@ function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
       setBusy(false)
     }
   }
+  const changeBranch = async (branchId) => {
+    setBusy(true)
+    setError('')
+    try {
+      await api.post(`/reservations/${r.id}/branch`, { branch_id: branchId })
+      toast(t('reservation.branchChanged'))
+      onMoved()
+    } catch (err) {
+      setError(t(reservationErrorKey(err)))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <Card as="li" className={`min-w-0 ${highlight ? 'ring-2 ring-primary' : ''}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -110,6 +123,18 @@ function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
           )}
         </p>
         <Row label={t('reservation.contact')}>{t(`reservation.contactKind.${r.contact}`)}</Row>
+        {r.branches?.length > 0 && (
+          <Row label={t('reservation.branch')}>
+            {r.can_cancel && r.branches.length > 1 ? (
+              // Phase 12.1: the store may move it to another branch (a system line in the chat)
+              <select value={r.branch?.id ?? ''} disabled={busy} aria-label={t('reservation.changeBranch')} onChange={(e) => changeBranch(Number(e.target.value))}
+                className="h-9 w-full max-w-xs min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm">
+                {!r.branch && <option value="">—</option>}
+                {r.branches.map((b) => <option key={b.id} value={b.id}>{[b.name, b.address].filter(Boolean).join(' — ')}</option>)}
+              </select>
+            ) : <span className="break-words">{r.branch ? [r.branch.name, r.branch.address].filter(Boolean).join(' — ') : '—'}</span>}
+          </Row>
+        )}
         {pickupText(r) && <Row label={t('reservation.pickupDate')}>{pickupText(r)}</Row>}
         {r.comment && <Row label={t('reservation.comment')}><span className="break-words whitespace-pre-wrap">{r.comment}</span></Row>}
         {r.expires_at && ['confirmed', 'ready'].includes(r.status) && (
