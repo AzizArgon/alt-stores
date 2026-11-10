@@ -10,7 +10,7 @@ import { StockEditor } from './BranchStock'
 import { BarcodeField } from './Barcode'
 import { ErrorText } from './AuthForm'
 import { CategoryIcon } from './CategoryIcon'
-import Flags from './Flags'
+import { SellerFlags } from './AdminDecisions'
 import { MarketLabel } from './Market'
 import NewProductForm from './NewProductForm'
 import { Modal, Sheet, useToast } from './overlays'
@@ -296,7 +296,7 @@ export default function OfferEditor({ offerId, rate, branches = [], onClose, onC
               <div className="mt-1"><MarketLabel info={detail.market} /></div>
             </div>
           </div>
-          <Flags flags={detail.flags} className="grid gap-1" />
+          <SellerFlags offer={detail} onChanged={() => refresh(null)} />
 
           <Section title={t('cabinet.editor.own')} className="border-t-0 pt-0">
             <OwnForm key={`${detail.id}-${reloadKey}`} offer={detail} onSaved={saved} />

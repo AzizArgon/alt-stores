@@ -25,8 +25,10 @@ import WarehousePage, { ReportsPage } from './pages/WarehousePage'
 import ScanPage from './pages/ScanPage'
 import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
+import AdminLayout, { AdminAuthLayout, AdminLog, AdminLoginPage, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
+import { AdminBarcodes, AdminChannels, AdminFixes, AdminFlags, AdminReports, AdminStoreCard, AdminStores } from './pages/AdminModeration'
 import { useAuth } from './services/auth.jsx'
-import { homeFor, returnTo, sellerGate } from './services/roles'
+import { adminGate, homeFor, returnTo, sellerGate } from './services/roles'
 
 // Goes to an address of this site, or reloads to another one (the cabinet on its own subdomain later)
 function Redirect({ to }) {
@@ -54,6 +56,17 @@ function SellerOnly({ children }) {
   return children
 }
 
+// The admin panel (phase 13): a guest goes to the admin login, a seller or a buyer sees "no access"
+function AdminOnly({ children }) {
+  const { user, loading } = useAuth()
+  const location = useLocation()
+  if (loading) return null
+  const gate = adminGate(user)
+  if (gate === 'login') return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
+  if (gate === 'noAccess') return <NoAccessPage />
+  return children
+}
+
 // Any logged-in user; guests go to the login page
 function UserOnly({ children }) {
   const { user, loading } = useAuth()
@@ -68,7 +81,7 @@ function BuyerOnly({ children }) {
   const location = useLocation()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
-  if (user.role === 'seller') return <Redirect to={homeFor(user)} />
+  if (user.role === 'seller' || user.role === 'admin') return <Redirect to={homeFor(user)} />
   return children
 }
 
@@ -82,7 +95,7 @@ function HomeOrOldCatalog() {
 const UiPage = import.meta.env.DEV ? lazy(() => import('./pages/UiPage')) : null
 
 // Two interfaces on one site and one database: the storefront and the seller cabinet (/seller).
-// Phase 12 adds the admin (/admin) as the third one on the same Workspace frame.
+// Phase 13: the admin (/admin) is the third one on the same Workspace frame.
 export default function App() {
   return (
     <Routes>
@@ -129,6 +142,23 @@ export default function App() {
         <Route path="analytics" element={<SellerAnalyticsPage />} />
         <Route path="profile" element={<ProfileSection />} />
         <Route path="*" element={<Navigate to="/seller" replace />} />
+      </Route>
+
+      <Route element={<AdminAuthLayout />}>
+        <Route path="/admin/login" element={<GuestOnly><AdminLoginPage /></GuestOnly>} />
+      </Route>
+      <Route path="/admin" element={<AdminOnly><AdminLayout /></AdminOnly>}>
+        <Route index element={<AdminOverview />} />
+        <Route path="stores" element={<AdminStores />} />
+        <Route path="stores/:id" element={<AdminStoreCard />} />
+        <Route path="reports" element={<AdminReports />} />
+        <Route path="flags" element={<AdminFlags />} />
+        <Route path="fixes" element={<AdminFixes />} />
+        <Route path="barcodes" element={<AdminBarcodes />} />
+        <Route path="channels" element={<AdminChannels />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="log" element={<AdminLog />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
   )

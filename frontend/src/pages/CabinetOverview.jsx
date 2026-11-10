@@ -4,6 +4,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { ArrowRight, CalendarCheck, CircleCheck, CircleSlash, Clock, MessageSquare, Monitor, ShieldAlert } from 'lucide-react'
 import { DemoNote } from '../components/Market'
 import UndoUpload from '../components/UndoUpload'
+import { DecisionsBlock } from '../components/AdminDecisions'
 import { MovementRow } from './WarehousePage'
 import { Button, Card, Skeleton } from '../components/ui'
 import api from '../services/api'
@@ -75,6 +76,7 @@ export default function CabinetOverview() {
         </div>
       )}
       {data?.stale > 0 && <p className="-mt-3 text-xs text-muted">{t('cabinet.overview.staleHint')}</p>}
+      <DecisionsBlock />
       {data?.chat && (
         <Link to="/seller/messages" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card transition-shadow hover:shadow-hover">
           <span className="flex min-w-0 items-center gap-2.5">

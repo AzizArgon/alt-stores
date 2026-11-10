@@ -33,7 +33,8 @@ export default function LoginPage({ seller = false }) {
       goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
-      setErrors({ [fieldOfError(key)]: t(key) })
+      const detail = err.response?.data?.detail  // a blocked user: {code: 'user_blocked', reason}
+      setErrors({ [fieldOfError(key)]: t(key, typeof detail === 'object' ? detail : {}) })
     } finally {
       setBusy(false)
     }

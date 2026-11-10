@@ -16,6 +16,7 @@ import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
+import { BlockedNotice } from '../components/AdminDecisions'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 import { useUnread } from '../services/chat'
@@ -374,7 +375,7 @@ export default function SellerLayout() {
   // Without a store profile goods can't be added in any way
   else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
   // The currency the seller chose last time is the default everywhere
-  else content = <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} />
+  else content = <><BlockedNotice store={store} /><Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} /></>
   return <SellerFrame store={store} sections={store ? SECTIONS.map((s) => (badges[s.key] != null ? { ...s, badge: badges[s.key] } : s)) : null}>{content}</SellerFrame>
 }
 
