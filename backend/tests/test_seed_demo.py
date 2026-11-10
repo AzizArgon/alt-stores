@@ -225,3 +225,30 @@ def test_demo_stock_journal_is_the_same_on_every_run(db):
     refresh_stores_and_builds(db, 12_000)
     assert state() == first
     assert not db.scalars(select(StockMovement).where(StockMovement.store_id == age.id)).all()
+
+
+def test_demo_barcodes_confirmed_pending_and_one_conflict_rerun_keeps_ids(db):
+    from app.db.models import Barcode, BarcodeCode
+    from app.services.barcodes import check_digit
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(1, 60)]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+
+    def state():
+        return sorted((b.id, b.store_id, b.offer_id, b.code) for b in db.scalars(select(Barcode)))
+
+    first = state()
+    assert 15 <= len({c for *_, c in first}) <= 20
+    assert all(c.startswith("2") and c[:3] <= "299" and int(c[-1]) == check_digit(c[:-1]) for *_, c in first)
+    status = {c.status for c in db.scalars(select(BarcodeCode))}
+    assert status == {"confirmed", "pending", "conflict"}
+    assert db.scalar(select(func.count()).select_from(BarcodeCode).where(BarcodeCode.status == "conflict")) == 1
+    assert not any(s == age.id for _, s, _, _ in first)  # the real store is not touched
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first

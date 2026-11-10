@@ -267,7 +267,8 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
         seed_stock(db, _store(db, spec), spec["email"])
     _live_store(db)
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
-            {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)}]
+            {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
+            {"demo_barcodes": seed_barcodes(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -294,6 +295,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_chats": seed_chats(db)})
     report.append({"demo_reservations": seed_reservations(db)})
     report.append({"demo_stock_journal": seed_stock_journal(db)})
+    report.append({"demo_barcodes": seed_barcodes(db)})
     return report
 
 
@@ -729,6 +731,73 @@ def seed_stock_journal(db: Session) -> int:
         recompute_offer(o)
     db.commit()
     return lines
+
+
+# --- Phase 12.3: barcodes of Silicon Plus and Byte Market ----------------------------------------------------------
+# Only internal codes: EAN-13 with the prefix 290 (the range 200–299 is for in-store use and never meets a real
+# product), with the right check digit. 8 cards bound by both stores (confirmed in the common base), 6 only by
+# Silicon Plus and 3 only by Byte Market (pending), one code bound to different cards (a conflict for the admin).
+# The same codes on every run (also --builds-only): rows are updated in place, nothing is duplicated.
+BARCODE_STORES = ("demo1@example.com", "demo2@example.com")
+BARCODE_BOTH, BARCODE_FIRST, BARCODE_SECOND = 8, 6, 3
+DEMO_UNKNOWN_CODE = 99  # a valid code bound nowhere: the "Привязать штрихкод" scene
+
+
+def demo_code(i: int) -> str:
+    from app.services.barcodes import make_ean13
+
+    return make_ean13(f"2900000{i:05d}")
+
+
+def seed_barcodes(db: Session) -> int:
+    from app.db.models import Barcode
+    from app.services.barcodes import refresh_common
+
+    stores = [db.scalar(select(Store).join(Store.owner).where(User.email == e, Store.is_demo.is_(True))) for e in BARCODE_STORES]
+    if None in stores:
+        return 0
+    first, second = stores
+    offers = {}
+    for st in stores:
+        rows = db.scalars(select(Offer).join(Offer.product).where(Offer.store_id == st.id, Offer.removed_at.is_(None),
+                                                                  Offer.price.is_not(None)).order_by(Product.normalized_name, Offer.id))
+        offers[st.id] = {o.product_id: o for o in rows}
+    both = [p for p in offers[first.id] if p in offers[second.id]][:BARCODE_BOTH]
+    only_first = [p for p in offers[first.id] if p not in offers[second.id]][:BARCODE_FIRST]
+    only_second = [p for p in offers[second.id] if p not in offers[first.id]][:BARCODE_SECOND]
+    wanted: dict[tuple[int, str], Offer] = {}
+    n = 1
+    for p in both:
+        for st in stores:
+            wanted[(st.id, demo_code(n))] = offers[st.id][p]
+        n += 1
+    for st, products in ((first, only_first), (second, only_second)):
+        for p in products:
+            wanted[(st.id, demo_code(n))] = offers[st.id][p]
+            n += 1
+    if only_first and len(only_second) > 1:  # the conflict: the same code on two different cards
+        wanted[(first.id, demo_code(50))] = offers[first.id][only_first[-1]]
+        wanted[(second.id, demo_code(50))] = offers[second.id][only_second[-1]]
+    ids = [st.id for st in stores]
+    existing = {(b.store_id, b.code): b for b in db.scalars(select(Barcode).where(Barcode.store_id.in_(ids), Barcode.is_demo.is_(True)))}
+    codes = {code for _, code in wanted} | {code for _, code in existing}
+    for key, b in existing.items():
+        if key not in wanted:
+            db.delete(b)
+    for (store_id, code), offer in wanted.items():
+        b = existing.get((store_id, code))
+        if b is None:
+            clash = db.scalar(select(Barcode).where(Barcode.store_id == store_id, Barcode.code == code))
+            if clash is not None:  # the seller bound this demo code by hand: leave it
+                continue
+            db.add(Barcode(store_id=store_id, offer_id=offer.id, code=code, source="demo", is_demo=True))
+        else:
+            b.offer_id = offer.id
+    db.flush()
+    for code in sorted(codes):
+        refresh_common(db, code)
+    db.commit()
+    return len(wanted)
 
 
 if __name__ == "__main__":
