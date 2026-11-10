@@ -372,6 +372,7 @@ def out(db: Session, r: Reservation, side: str, usd_rate: float | None) -> dict:
     data.update({"name": r.name, "phone": r.phone, "telegram": r.telegram, "buyer_no": r.buyer_id})
     if side == "store" and r.store.stock_mode == "stock":
         data["reserved_qty"] = r.reserved_qty  # phase 12.2: only the store sees its reserve
+        data["sold_out"] = r.sold_out_at is not None and r.status in ACTIVE  # 12.4: sold at the counter
     return data
 
 

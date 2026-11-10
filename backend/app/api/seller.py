@@ -49,6 +49,9 @@ def _my_import(db: Session, user: User, import_id: int) -> tuple[Store, PriceImp
 def _store_out(db: Session, store: Store) -> dict:
     out = StoreOut.model_validate({c.name: getattr(store, c.name) for c in Store.__table__.columns}).model_dump()
     out["branches"] = [branches.branch_seller(b, store) for b in branches.store_branches(db, store.id)]
+    from app.services.warehouse import warehouse_out
+
+    out["warehouse"] = warehouse_out(db, store)  # phase 12.4: never on the storefront
     return out
 
 
@@ -89,7 +92,7 @@ def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session 
 
 def _my_branch(db: Session, store: Store, branch_id: int) -> Branch:
     branch = db.get(Branch, branch_id)
-    if branch is None or branch.store_id != store.id:
+    if branch is None or branch.store_id != store.id or branch.is_warehouse:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Branch not found")
     return branch
 

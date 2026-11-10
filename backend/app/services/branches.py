@@ -9,12 +9,16 @@ quantity None = "есть, количество не указано". `OfferStoc
 An offer without rows is "the store does not keep stock by branch": its general flag is used ("уточняйте").
 When an offer has rows, its general Offer.is_in_stock = available in at least one branch.
 The buyer never sees a quantity, only "есть / нет".
+
+Phase 12.4: a store may have one warehouse — a Branch with is_warehouse: a place of storage, not a point for buyers.
+Its rows are the seller's stock, but never count for "есть / нет", the city, reservations or the market (goods
+only in the warehouse are "нет в наличии" on the storefront). `store_branches` leaves it out unless asked.
 """
 
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, exists, or_, select, true
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.db.models import Branch, Offer, OfferStock, Reservation, Store, StoreKind, utcnow
 from app.services.maps import parse_map_url
@@ -33,9 +37,38 @@ def _aware(dt: datetime | None) -> datetime | None:
 
 # --- the branches themselves ---------------------------------------------------------------------------------------
 
-def store_branches(db: Session, store_id: int) -> list[Branch]:
-    return list(db.scalars(select(Branch).where(Branch.store_id == store_id)
-                           .order_by(Branch.is_main.desc(), Branch.id)))
+def store_branches(db: Session, store_id: int, warehouse: bool = False) -> list[Branch]:
+    """The store's points for buyers; warehouse=True: also its warehouse, when it is on (last)."""
+    q = select(Branch).where(Branch.store_id == store_id)
+    if warehouse:
+        q = q.where(Branch.is_warehouse.is_(False) | Branch.store_id.in_(
+            select(Store.id).where(Store.id == store_id, Store.has_warehouse.is_(True))))
+    else:
+        q = q.where(Branch.is_warehouse.is_(False))
+    return list(db.scalars(q.order_by(Branch.is_warehouse, Branch.is_main.desc(), Branch.id)))
+
+
+def warehouse_of(db: Session, store_id: int) -> Branch | None:
+    """The warehouse row (it stays when the warehouse is switched off: the journal keeps its name)."""
+    return db.scalar(select(Branch).where(Branch.store_id == store_id, Branch.is_warehouse.is_(True)))
+
+
+def warehouse_ids(offer: Offer) -> set[int]:
+    """Ids of the warehouse of the offer's store, cached in the session (one query per store and request)."""
+    db = object_session(offer)
+    if db is None or offer.store_id is None:
+        return set()
+    cache = db.info.setdefault("warehouse_ids", {})
+    if offer.store_id not in cache:
+        cache[offer.store_id] = set(db.scalars(select(Branch.id).where(
+            Branch.store_id == offer.store_id, Branch.is_warehouse.is_(True))))
+    return cache[offer.store_id]
+
+
+def shop_rows(offer: Offer) -> list[OfferStock]:
+    """The rows of the buyer's points (without the warehouse)."""
+    wh = warehouse_ids(offer)
+    return [s for s in offer.stocks if s.branch_id not in wh]
 
 
 def main_branch(db: Session, store_id: int) -> Branch | None:
@@ -195,9 +228,9 @@ def set_general(db: Session, offer: Offer, in_stock: bool) -> None:
         offer.is_in_stock = in_stock
         return
     if not in_stock:
-        for s in list(offer.stocks):
+        for s in shop_rows(offer):
             set_stock(offer, s.branch_id, quantity=0)
-    elif not any(available(s) for s in offer.stocks):
+    elif not any(available(s) for s in shop_rows(offer)):
         main = main_branch(db, offer.store_id)
         set_stock(offer, main.id if main else offer.stocks[0].branch_id, present=True)
 
@@ -216,9 +249,9 @@ def clear_stock(offer: Offer, branch_id: int) -> None:
 
 
 def recompute_offer(offer: Offer) -> None:
-    """The general "в наличии" of a tracked offer = available in at least one branch."""
+    """The general "в наличии" of a tracked offer = available in at least one branch (the warehouse is not one)."""
     if offer.stocks:
-        offer.is_in_stock = any(available(s) for s in offer.stocks)
+        offer.is_in_stock = any(available(s) for s in shop_rows(offer))
 
 
 def stock_state(offer: Offer) -> dict:
@@ -284,11 +317,12 @@ def in_city(city: str | None):
     if not city:
         return true()
     return or_(Offer.store_id.in_(select(Store.id).where(Store.city == city)),
-               Offer.store_id.in_(select(Branch.store_id).where(Branch.city == city)))
+               Offer.store_id.in_(select(Branch.store_id).where(Branch.city == city, Branch.is_warehouse.is_(False))))
 
 
 def store_in_city(city: str):
-    return or_(Store.city == city, Store.id.in_(select(Branch.store_id).where(Branch.city == city)))
+    return or_(Store.city == city, Store.id.in_(select(Branch.store_id).where(
+        Branch.city == city, Branch.is_warehouse.is_(False))))
 
 
 def in_stock_in(city: str | None):
@@ -298,5 +332,5 @@ def in_stock_in(city: str | None):
         return Offer.is_in_stock.is_(True)
     tracked = exists().where(OfferStock.offer_id == Offer.id)
     there = exists().where(OfferStock.offer_id == Offer.id, OfferStock.in_stock.is_(True),
-                           OfferStock.branch_id == Branch.id, Branch.city == city)
+                           OfferStock.branch_id == Branch.id, Branch.city == city, Branch.is_warehouse.is_(False))
     return or_(and_(~tracked, Offer.is_in_stock.is_(True)), there)

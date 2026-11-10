@@ -27,8 +27,11 @@ KIND_TEXT = {
     "initial": "Начальный остаток", "receipt": "Приход", "sale": "Продажа", "adjust": "Корректировка",
     "reserve": "Резерв брони", "unreserve": "Снятие резерва", "res_sale": "Продажа по брони",
     "import": "Импорт остатков", "undo": "Отмена загрузки", "manual": "Ручная правка",
+    "move_out": "Выкладка: со склада", "move_in": "Выкладка: в филиал", "return": "Возврат", "inventory": "Ревизия",
 }
-REASON_TEXT = {"inventory": "инвентаризация", "defect": "брак", "loss": "потеря", "other": "другое"}
+REASON_TEXT = {"inventory": "инвентаризация", "defect": "брак", "loss": "потеря", "other": "другое",
+               "wh_off": "склад выключен", "changed_mind": "передумал", "defect_out": "брак, не в наличие",
+               "oversold": "продано больше, чем по учёту"}
 
 
 def _branch_title(b) -> str:
@@ -85,7 +88,7 @@ def export_journal(movements: list[dict]) -> bytes:
     for m in movements:
         at = m["at"].astimezone(timezone.utc).replace(tzinfo=None) if m["at"] else None
         change = m["delta"] if m["kind"] not in ("reserve", "unreserve") else m["reserved_delta"]
-        rows.append([at, KIND_TEXT.get(m["kind"], m["kind"]), m["name"], m["branch"], m["before"], change,
+        rows.append([at, KIND_TEXT.get(m["kind"], m["kind"]), m["name"], "Склад" if m["branch"] == "@warehouse" else m["branch"], m["before"], change,
                      m["after"], m["reserved_after"], m["cost"], m["price"], m["currency"],
                      REASON_TEXT.get(m["reason"]) if m["reason"] else None, m["comment"], m["doc"],
                      m["reservation_id"], m["import_id"]])

@@ -23,8 +23,11 @@ from app.db.models import (
     Branch, Offer, OfferStock, Reservation, ReservationStatus, StockMovement, Store, User, utcnow,
 )
 
-KINDS = ("initial", "receipt", "sale", "adjust", "reserve", "unreserve", "res_sale", "import", "undo", "manual")
-REASONS = ("inventory", "defect", "loss", "other")
+KINDS = ("initial", "receipt", "sale", "adjust", "reserve", "unreserve", "res_sale", "import", "undo", "manual",
+         "move_out", "move_in", "return", "inventory")  # phase 12.4: "Выкладка", "Возврат", "Ревизия"
+REASONS = ("inventory", "defect", "loss", "other", "wh_off")
+RETURN_REASONS = ("defect", "changed_mind", "other")
+DOC_PREFIX = {"receipt": "R", "sale": "S", "adjust": "A", "move": "M", "return": "V", "inventory": "I"}
 _ctx: ContextVar[dict] = ContextVar("stock_journal", default={})
 
 
@@ -85,11 +88,11 @@ def move(offer: Offer, branch_id: int, kind: str, qty: int = 0, *, set_to: int |
     row = _row(offer, branch_id)
     q0, r0 = row.quantity, row.reserved or 0
     qty = int(qty or 0)
-    if kind in ("receipt", "sale", "res_sale", "reserve", "unreserve") and qty <= 0:
+    if kind in ("receipt", "sale", "res_sale", "reserve", "unreserve", "move_in", "move_out") and qty <= 0:
         raise StockError("qty")
-    if kind == "receipt":
+    if kind in ("receipt", "move_in"):
         row.quantity = (row.quantity or 0) + qty
-    elif kind == "sale":
+    elif kind in ("sale", "move_out"):
         if row.quantity is None:
             raise StockError("unknown_qty")
         if qty > free(row):
@@ -245,7 +248,94 @@ def _offer(db: Session, store: Store, offer_id: int) -> Offer:
 
 
 def _branch_ids(db: Session, store: Store) -> set[int]:
-    return set(db.scalars(select(Branch.id).where(Branch.store_id == store.id)))
+    """The places of operations: the branches and the warehouse when it is on (phase 12.4)."""
+    from app.services.branches import store_branches
+
+    return {b.id for b in store_branches(db, store.id, warehouse=True)}
+
+
+def new_doc(kind: str) -> str:
+    return f"{DOC_PREFIX.get(kind, kind[:1].upper())}-{utcnow():%y%m%d}-{secrets.token_hex(2)}"
+
+
+def _active_on(db: Session, offer: Offer, branch_id: int) -> list[Reservation]:
+    """Confirmed reservations that hold a reserve of this item in this branch (the newest first)."""
+    return list(db.scalars(select(Reservation).where(
+        Reservation.offer_id == offer.id, Reservation.branch_id == branch_id, Reservation.reserved_qty > 0,
+        Reservation.status.in_([ReservationStatus.confirmed, ReservationStatus.ready])).order_by(Reservation.id.desc())))
+
+
+def sell(db: Session, offer: Offer, branch_id: int, qty: int, *, confirm: bool = False, **fields) -> StockMovement:
+    """A sale at the counter (phase 12.4) is never blocked: the books may be wrong, the item is in the buyer's hands.
+    The quantity does not go below 0; sold more than the books had — the offer is marked "проверьте при ревизии".
+    Selling a reserved item needs `confirm` ("товар забронирован для покупателя, продать всё равно?"): the
+    reservations lose that reserve and get "товар продан — предложите замену или отмените бронь"."""
+    from app.services.branches import recompute_offer
+
+    if qty <= 0:
+        raise StockError("qty")
+    row = _row(offer, branch_id)
+    q0, r0 = row.quantity, row.reserved or 0
+    have = q0 or 0
+    eaten = max(0, min(r0, qty - max(0, have - r0)))
+    if eaten and not confirm:
+        raise StockError("reserved", reserved=r0, available=max(0, have - r0))
+    short = max(0, qty - have)
+    row.quantity = max(0, have - qty)
+    row.reserved = max(0, min(r0 - eaten, row.quantity))
+    row.in_stock = row.quantity - row.reserved > 0
+    row.updated_at = utcnow()
+    recompute_offer(offer)
+    if eaten:
+        left = eaten
+        for r in _active_on(db, offer, branch_id):
+            if left <= 0:
+                break
+            take = min(left, r.reserved_qty)
+            r.reserved_qty -= take
+            r.sold_out_at = utcnow()
+            left -= take
+    if short:
+        offer.oversold_at = utcnow()
+    return record(offer, row, q0, r0, kind="sale", force=True, reason="oversold" if short else None, **fields)
+
+
+def give_back(offer: Offer, branch_id: int, qty: int, reason: str, restock: bool, **fields) -> StockMovement:
+    """"Возврат" from a buyer: +qty; a defective item may stay out of the stock (a journal line without +qty)."""
+    from app.services.branches import recompute_offer
+
+    if qty <= 0:
+        raise StockError("qty")
+    if reason not in RETURN_REASONS or (reason == "other" and not fields.get("comment")):
+        raise StockError("reason")
+    row = _row(offer, branch_id)
+    q0, r0 = row.quantity, row.reserved or 0
+    if restock or reason != "defect":
+        row.quantity = (q0 or 0) + qty
+        row.in_stock = row.quantity - r0 > 0
+        row.updated_at = utcnow()
+        recompute_offer(offer)
+        return record(offer, row, q0, r0, kind="return", reason=reason, **fields)
+    fields["units"] = qty  # how many defective items came back (not put into the stock)
+    return record(offer, row, q0, r0, kind="return", force=True, reason="defect_out", **fields)
+
+
+def put_out(db: Session, store: Store, offer: Offer, branch_id: int, qty: int, **fields) -> StockMovement:
+    """"Выкладка": warehouse -qty, branch +qty — two journal lines of one document; not more than the warehouse has."""
+    from app.services.branches import warehouse_of
+
+    wh = warehouse_of(db, store.id)
+    if not store.has_warehouse or wh is None:
+        raise StockError("no_warehouse")
+    if branch_id == wh.id:
+        raise StockError("branch")
+    if qty <= 0:
+        raise StockError("qty")
+    src = next((s for s in offer.stocks if s.branch_id == wh.id), None)
+    if qty > free(src):
+        raise StockError("not_enough_wh", available=free(src))
+    move(offer, wh.id, "move_out", qty, **fields)
+    return move(offer, branch_id, "move_in", qty, **fields)
 
 
 def _update_cost(offer: Offer, cost: float, qty: int, db: Session) -> None:
@@ -295,17 +385,18 @@ def operate_price_mode(db: Session, store: Store, user: User, kind: str, lines: 
     return {"doc": None, "count": len(lines)}
 
 
-def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict], scan: bool = False) -> dict:
-    """A document of one kind (receipt / sale / adjust): all lines or none (an error names the line).
-    `scan`: from "Сканирование" — a store in "Только прайс" changes its stock as a hand edit (phase 12.3)."""
+def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict], scan: bool = False,
+            confirm: bool = False) -> dict:
+    """A document of one kind (receipt / sale / adjust / move / return): all lines or none (an error names the line).
+    `scan`: a store in "Только прайс" changes its stock as a hand edit (phase 12.3). `confirm`: sell reserved items."""
     if not is_stock_mode(store) and scan:
         return operate_price_mode(db, store, user, kind, lines)
     if not is_stock_mode(store):
         raise StockError("mode_off")
-    if kind not in ("receipt", "sale", "adjust") or not lines:
+    if kind not in ("receipt", "sale", "adjust", "move", "return") or not lines:
         raise StockError("lines")
     branches = _branch_ids(db, store)
-    doc = f"{kind[:1].upper()}-{utcnow():%y%m%d}-{secrets.token_hex(2)}"
+    doc = new_doc(kind)
     done = []
     for i, line in enumerate(lines):
         try:
@@ -326,14 +417,20 @@ def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict],
             elif kind == "sale":
                 price = line.get("price")
                 price = float(price) if price not in (None, "") else offer.price
-                m = move(offer, bid, "sale", int(line["qty"]), user_id=user.id, doc=doc, comment=comment,
+                m = sell(db, offer, bid, int(line["qty"]), confirm=confirm, user_id=user.id, doc=doc, comment=comment,
                          price=price, currency=offer.currency.value)
+            elif kind == "move":
+                m = put_out(db, store, offer, bid, int(line["qty"]), user_id=user.id, doc=doc, comment=comment)
+            elif kind == "return":
+                m = give_back(offer, bid, int(line["qty"]), line.get("reason") or "other",
+                              line.get("restock", True) is not False, user_id=user.id, doc=doc, comment=comment)
             else:
                 reason = line.get("reason") or "other"
                 if reason not in REASONS or (reason == "other" and not comment):
                     raise StockError("reason")
                 m = move(offer, bid, "adjust", set_to=int(line["qty"]), user_id=user.id, doc=doc, reason=reason,
                          comment=comment, force=True)
+                offer.oversold_at = None
         except StockError as e:
             db.rollback()
             e.params["line"] = i + 1
@@ -361,6 +458,8 @@ def journal_query(store: Store, f: dict):
         q = q.where(StockMovement.branch_id == f["branch_id"])
     if f.get("kind"):
         q = q.where(StockMovement.kind.in_(f["kind"].split(",")))
+    if f.get("doc"):
+        q = q.where(StockMovement.doc == f["doc"].strip())
     if f.get("date_from"):
         q = q.where(StockMovement.created_at >= datetime.combine(f["date_from"], datetime.min.time(), timezone.utc))
     if f.get("date_to"):
@@ -376,7 +475,8 @@ def movement_out(db: Session, m: StockMovement, store: Store, names: dict, branc
             "reserved_delta": m.reserved_delta, "before": m.quantity_before, "after": m.quantity_after,
             "reserved_after": m.reserved_after, "cost": m.cost, "price": m.price, "currency": m.currency,
             "reason": m.reason, "comment": m.comment, "doc": m.doc, "who": who,
-            "reservation_id": m.reservation_id, "import_id": m.import_id, "at": _aware(m.created_at)}
+            "reservation_id": m.reservation_id, "import_id": m.import_id, "units": m.units,
+            "at": _aware(m.created_at)}
 
 
 def _names(db: Session, ids) -> dict:
@@ -388,7 +488,9 @@ def _names(db: Session, ids) -> dict:
 
 
 def _branch_names(db: Session, store: Store) -> dict:
-    return {b.id: b.name or b.address for b in db.scalars(select(Branch).where(Branch.store_id == store.id))}
+    """Branch labels of the journal; the warehouse is "@warehouse" (the cabinet says "Склад", phase 12.4)."""
+    return {b.id: "@warehouse" if b.is_warehouse else b.name or b.address
+            for b in db.scalars(select(Branch).where(Branch.store_id == store.id))}
 
 
 def list_journal(db: Session, store: Store, f: dict, page: int = 1, size: int = 50) -> dict:

@@ -125,10 +125,16 @@ class Store(Base):
     # "Stores" list, no new reservations; nothing is deleted, the seller sees the reason in the cabinet
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     block_reason: Mapped[str | None] = mapped_column(String(300))
+    # Phase 12.4: "Есть отдельный склад" — receipts go to the warehouse (a Branch with is_warehouse), branches get
+    # goods by "Выкладка"; off = receipts straight into a branch. The warehouse row stays when it is switched off
+    has_warehouse: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
-    branches: Mapped[list["Branch"]] = relationship(order_by=lambda: (Branch.is_main.desc(), Branch.id), viewonly=True)
+    # The buyer's points only: the warehouse (phase 12.4) is never shown on the storefront
+    branches: Mapped[list["Branch"]] = relationship(
+        primaryjoin=lambda: (Store.id == Branch.store_id) & Branch.is_warehouse.is_(False),
+        order_by=lambda: (Branch.is_main.desc(), Branch.id), viewonly=True)
 
 
 class Category(Base):
@@ -186,6 +192,8 @@ class Offer(Base):
     # Phase 12.2, only the seller sees them: the last purchase price and the average over receipts (offer currency)
     cost_last: Mapped[float | None] = mapped_column(Float)
     cost_avg: Mapped[float | None] = mapped_column(Float)
+    # Phase 12.4: sold more than the books had — "проверьте при ревизии" (cleared by a stocktake or an adjustment)
+    oversold_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     product: Mapped[Product] = relationship(back_populates="offers")
     store: Mapped[Store] = relationship(back_populates="offers")
@@ -630,6 +638,8 @@ class Reservation(Base):
     branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
     # Phase 12.2 ("Учёт остатков"): how many items this reservation holds in reserve in its branch (0 = none)
     reserved_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Phase 12.4: the reserved item was sold at the counter — "предложите замену или отмените бронь" (the seller only)
+    sold_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -677,6 +687,9 @@ class Branch(Base):
     map_lon: Mapped[float | None] = mapped_column(Float)
     is_main: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     demo_key: Mapped[str | None] = mapped_column(String(32))  # constant key of a demo branch (re-runs keep the id)
+    # Phase 12.4: the store's warehouse — a place of storage, not a point for buyers (no storefront, no "Stores",
+    # no reservations, not in "есть / нет", the city filter or the market)
+    is_warehouse: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", index=True)
     # Price-list column header -> this branch, as the seller confirmed it once ("Чиланзар", "Склад 2")
     columns_json: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -702,7 +715,8 @@ class OfferStock(Base):
 
 class StockMovement(Base):
     """One change of a quantity or a reserve of an offer in a branch. Never deleted or edited: an undo is a reverse
-    record. kind: initial / receipt / sale / adjust / reserve / unreserve / res_sale / import / undo / manual."""
+    record. kind: initial / receipt / sale / adjust / reserve / unreserve / res_sale / import / undo / manual;
+    phase 12.4: move_out / move_in ("Выкладка" warehouse -> branch, one doc), return, inventory (a stocktake)."""
 
     __tablename__ = "stock_movements"
 
@@ -722,10 +736,39 @@ class StockMovement(Base):
     reason: Mapped[str | None] = mapped_column(String(12))  # adjust: inventory / defect / loss / other
     comment: Mapped[str | None] = mapped_column(String(300))
     doc: Mapped[str | None] = mapped_column(String(24), index=True)  # lines of one receipt document share it
+    units: Mapped[int | None] = mapped_column(Integer)  # 12.4: items of a line that does not change the quantity
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     reservation_id: Mapped[int | None] = mapped_column(ForeignKey("reservations.id", ondelete="SET NULL"))
     import_id: Mapped[int | None] = mapped_column(ForeignKey("price_imports.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+# --- Phase 12.4: stocktake ------------------------------------------------------------------------------------------
+
+class Stocktake(Base):
+    """"Ревизия" of one place (a branch or the warehouse): the seller scans every item on the shelf. status:
+    counting (kept on the server — a reload loses nothing) -> review (the table of differences) -> applied (the
+    differences became "inventory" lines of the journal with `doc`) / cancelled. counts_json: {offer_id: counted};
+    result_json: the lines at the end of the count; excluded_json: offer ids the seller left out."""
+
+    __tablename__ = "stocktakes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(10), default="counting", index=True)
+    categories_json: Mapped[list] = mapped_column(JSON, default=list)  # category slugs; empty = everything
+    counts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    result_json: Mapped[list] = mapped_column(JSON, default=list)
+    excluded_json: Mapped[list] = mapped_column(JSON, default=list)
+    doc: Mapped[str] = mapped_column(String(24))
+    positions: Mapped[int] = mapped_column(Integer, default=0)  # summary of an applied one
+    shortage: Mapped[int] = mapped_column(Integer, default=0)
+    surplus: Mapped[int] = mapped_column(Integer, default=0)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    demo_key: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 # --- Phase 12.3: barcodes -------------------------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Branch, Offer, PriceImport, Store
-from app.services.branches import available, main_branch, recompute_offer, set_stock, store_branches
+from app.services.branches import available, main_branch, recompute_offer, set_stock, shop_rows, store_branches
 
 
 class ColumnsError(ValueError):
@@ -115,9 +115,9 @@ def apply_row_stock(db: Session, imp: PriceImport, store: Store, offer: Offer, r
             set_stock(offer, bid, quantity=q, present=present)
     elif offer.stocks:
         if not in_stock:
-            for s in list(offer.stocks):
+            for s in shop_rows(offer):
                 set_stock(offer, s.branch_id, quantity=0)
-        elif not any(available(s) for s in offer.stocks):
+        elif not any(available(s) for s in shop_rows(offer)):
             main = main_branch(db, store.id)
             set_stock(offer, main.id if main else offer.stocks[0].branch_id, present=True)
     else:

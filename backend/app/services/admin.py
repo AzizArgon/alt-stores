@@ -112,7 +112,7 @@ def _goods_counts(db: Session, ids: list[int]) -> dict:
 def list_stores(db: Session, f: dict) -> list[dict]:
     query = _shops().order_by(Store.name)
     if f.get("city"):
-        query = query.where(Store.id.in_(select(Branch.store_id).where(Branch.city == f["city"])) | (Store.city == f["city"]))
+        query = query.where(Store.id.in_(select(Branch.store_id).where(Branch.city == f["city"], Branch.is_warehouse.is_(False))) | (Store.city == f["city"]))
     for key, col in (("verified", Store.is_verified), ("demo", Store.is_demo)):
         if f.get(key) is not None:
             query = query.where(col.is_(bool(f[key])))

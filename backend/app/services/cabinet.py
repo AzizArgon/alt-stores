@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.services.branches import available, seller_stocks, set_general, set_stock
 from app.services.stock import overview as stock_overview
+from app.services.warehouse import overview_extra
 from app.services.builds import counts as build_counts
 from app.services.chat import overview_counts as chat_counts
 from app.services.reservations import store_counts as reservation_counts
@@ -97,6 +98,7 @@ def offer_row(offer: Offer, market: dict | None = None) -> dict:
         # phase 12.2, only the seller: purchase prices (offer currency) and the markup over the average one
         "cost_last": offer.cost_last, "cost_avg": offer.cost_avg, "markup": markup(offer),
         "barcodes": [{"id": b.id, "code": b.code} for b in offer.barcodes],  # phase 12.3
+        "oversold": offer.oversold_at is not None,  # phase 12.4: "продано больше, чем по учёту"
     }
 
 
@@ -192,6 +194,7 @@ def overview(db: Session, store: Store) -> dict:
         "reservations": reservation_counts(db, store),  # new ones and the ones ending today (phase 11)
         "stock_mode": store.stock_mode,
         "stock": stock_overview(db, store),  # phase 12.2: running low, reservations without a reserve, movements
+        "warehouse": overview_extra(db, store) if store.stock_mode == "stock" else None,  # phase 12.4
     }
 
 

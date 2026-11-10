@@ -37,6 +37,8 @@ class StoreOut(StoreIn):
     address: str | None = None  # stores made before phase 12 may have none yet
     branches: list[dict] = []  # phase 12.1: the main one first
     stock_mode: str = "price"  # phase 12.2: "price" (только прайс) / "stock" (учёт остатков)
+    has_warehouse: bool = False  # phase 12.4: "Есть отдельный склад"
+    warehouse: dict | None = None  # phase 12.4: {id} of the warehouse when it is on (the seller only)
     map_lat: float | None = None
     map_lon: float | None = None
     blocked_at: datetime | None = None  # phase 13: blocked by the admin, the cabinet shows the reason

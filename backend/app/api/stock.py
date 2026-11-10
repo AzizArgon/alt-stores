@@ -14,7 +14,7 @@ from app.api.seller import MAX_FILE_SIZE, _require_store, seller_only
 from app.db.database import get_db
 from app.db.models import Offer, Product, User
 from app.schemas.seller import OfferFilter
-from app.services import barcodes, cabinet, stock, stock_excel
+from app.services import barcodes, cabinet, stock, stock_excel, warehouse
 from app.services.branches import seller_stocks
 
 router = APIRouter(prefix="/seller/stock", tags=["stock"])
@@ -31,14 +31,16 @@ class LineIn(BaseModel):
     qty: int = Field(ge=0, le=1_000_000)
     cost: float | None = Field(default=None, ge=0)  # receipt: purchase price (offer currency)
     price: float | None = Field(default=None, ge=0)  # sale: the price (default the current one)
-    reason: str | None = None  # adjust: inventory / defect / loss / other
+    reason: str | None = None  # adjust: inventory / defect / loss / other; return: defect / changed_mind / other
     comment: str | None = Field(default=None, max_length=300)
+    restock: bool = True  # return: False = a defective item is not put back into the stock
 
 
 class OperationIn(BaseModel):
-    kind: Literal["receipt", "sale", "adjust"]
+    kind: Literal["receipt", "sale", "adjust", "move", "return"]
     lines: list[LineIn] = Field(min_length=1, max_length=200)
-    scan: bool = False  # "Сканирование": a price-only store changes its stock as a hand edit (12.3)
+    scan: bool = False  # a price-only store changes its stock as a hand edit (12.3)
+    confirm: bool = False  # sale: "товар забронирован — продать всё равно?" answered yes (12.4)
 
 
 def _err(e: stock.StockError):
@@ -72,12 +74,116 @@ def save_settings(data: SettingsIn, user: User = Depends(seller_only), db: Sessi
     return {"low_stock": store.low_stock}
 
 
+class WarehouseIn(BaseModel):
+    on: bool
+    action: Literal["move", "write_off"] | None = None  # switched off with stock: to a branch or written off
+    branch_id: int | None = None
+
+
+@router.get("/warehouse")
+def warehouse_state(user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Before switching the warehouse off: how much stock is there."""
+    store = _require_store(db, user)
+    rows = warehouse.warehouse_rows(db, store)
+    return {"has_warehouse": store.has_warehouse, "positions": len(rows), "units": sum(r.quantity for r, _ in rows)}
+
+
+@router.post("/warehouse")
+def set_warehouse(data: WarehouseIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Phase 12.4: "Есть отдельный склад" on / off (the stock of the warehouse goes through the journal)."""
+    try:
+        return warehouse.set_warehouse(db, _require_store(db, user), data.on, user, data.action, data.branch_id)
+    except stock.StockError as e:
+        db.rollback()
+        _err(e)
+
+
+class StocktakeIn(BaseModel):
+    branch_id: int
+    categories: list[str] = Field(default_factory=list, max_length=50)
+
+
+class CountIn(BaseModel):
+    offer_id: int
+    delta: int | None = Field(default=1, ge=-1000, le=1000)
+    set: int | None = Field(default=None, ge=0, le=1_000_000)
+
+
+class ExcludeIn(BaseModel):
+    offer_id: int
+    excluded: bool = True
+
+
+def _st(fn, *args):
+    try:
+        return fn(*args)
+    except stock.StockError as e:
+        db = args[0]
+        db.rollback()
+        _err(e)
+
+
+@router.get("/stocktakes")
+def stocktakes(user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Phase 12.4 "Ревизия": the unfinished ones and the history with results."""
+    return warehouse.list_stocktakes(db, _require_store(db, user))
+
+
+@router.post("/stocktakes", status_code=status.HTTP_201_CREATED)
+def start_stocktake(data: StocktakeIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    st = _st(warehouse.start, db, store, user, data.branch_id, data.categories)
+    return warehouse.stocktake_out(db, store, st)
+
+
+@router.get("/stocktakes/{stocktake_id}")
+def get_stocktake(stocktake_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    return warehouse.stocktake_out(db, store, _st(warehouse.get, db, store, stocktake_id))
+
+
+@router.post("/stocktakes/{stocktake_id}/count")
+def count_stocktake(stocktake_id: int, data: CountIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    st = _st(warehouse.get, db, store, stocktake_id)
+    st = _st(warehouse.count, db, store, st, data.offer_id, data.delta, data.set)
+    return warehouse.stocktake_out(db, store, st)
+
+
+@router.post("/stocktakes/{stocktake_id}/{action}")
+def stocktake_action(stocktake_id: int, action: Literal["finish", "resume", "apply"], user: User = Depends(seller_only),
+                     db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    st = _st(warehouse.get, db, store, stocktake_id)
+    if action == "finish":
+        st = _st(warehouse.finish, db, store, st)
+    elif action == "resume":
+        st = _st(warehouse.resume, db, st)
+    else:
+        st = _st(warehouse.apply, db, store, st, user)
+    return warehouse.stocktake_out(db, store, st)
+
+
+@router.put("/stocktakes/{stocktake_id}/exclude")
+def stocktake_exclude(stocktake_id: int, data: ExcludeIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    st = _st(warehouse.get, db, store, stocktake_id)
+    return warehouse.stocktake_out(db, store, _st(warehouse.exclude, db, st, data.offer_id, data.excluded))
+
+
+@router.delete("/stocktakes/{stocktake_id}")
+def cancel_stocktake(stocktake_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _st(warehouse.cancel, db, _st(warehouse.get, db, store, stocktake_id))
+    return {"ok": True}
+
+
 @router.post("/operations")
 def operate(data: OperationIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """A receipt, a sale or an adjustment document: all lines or none."""
     try:
         return stock.operate(db, _require_store(db, user), user, data.kind, [line.model_dump() for line in data.lines],
-                             data.scan)
+                             data.scan, data.confirm)
     except stock.StockError as e:
         _err(e)
 
@@ -118,8 +224,9 @@ def search(q: str = Query("", max_length=200), user: User = Depends(seller_only)
 @router.get("/journal")
 def journal(offer_id: int | None = None, branch_id: int | None = None, kind: str | None = Query(None, max_length=100),
             date_from: date | None = None, date_to: date | None = None, page: int = Query(1, ge=1),
-            user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    f = {"offer_id": offer_id, "branch_id": branch_id, "kind": kind, "date_from": date_from, "date_to": date_to}
+            doc: str | None = Query(None, max_length=24), user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    f = {"offer_id": offer_id, "branch_id": branch_id, "kind": kind, "date_from": date_from, "date_to": date_to,
+         "doc": doc}
     return stock.list_journal(db, _require_store(db, user), f, page)
 
 

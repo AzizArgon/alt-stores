@@ -81,22 +81,18 @@ def test_receipt_sale_and_adjustment(db):
         _op(db, store, "adjust", {"offer_id": a.id, "branch_id": chil.id, "qty": 1, "reason": "other"})
 
 
-def test_quantity_never_below_zero_and_sale_only_of_the_available(db):
+def test_quantity_never_below_zero_and_a_counter_sale_is_not_blocked(db):
+    """Phase 12.4: a sale of more than the books have goes through: 0 left and "проверьте при ревизии"."""
     store, chil, yunus, a, b = _world(db)
-    with pytest.raises(stock.StockError) as e:
-        _op(db, store, "sale", {"offer_id": a.id, "branch_id": yunus.id, "qty": 3})
-    assert e.value.code == "not_enough" and e.value.params == {"available": 2, "line": 1}
-    # The whole document fails: the first line is not sold either
-    with pytest.raises(stock.StockError):
-        _op(db, store, "sale", {"offer_id": a.id, "branch_id": chil.id, "qty": 1},
-            {"offer_id": a.id, "branch_id": yunus.id, "qty": 9})
-    assert _stock(a)[chil.id] == (5, True)
+    _op(db, store, "sale", {"offer_id": a.id, "branch_id": yunus.id, "qty": 3})
+    assert _stock(a)[yunus.id] == (0, False) and a.oversold_at is not None
     with pytest.raises(stock.StockError):
         stock.move(a, chil.id, "adjust", set_to=-1)
-    row = next(s for s in a.stocks if s.branch_id == yunus.id)
-    row.reserved = 2  # all reserved: nothing to sell
-    with pytest.raises(stock.StockError, match="not_enough"):
-        _op(db, store, "sale", {"offer_id": a.id, "branch_id": yunus.id, "qty": 1})
+    # The whole document fails on a bad line: the first line is not sold either
+    with pytest.raises(stock.StockError):
+        _op(db, store, "sale", {"offer_id": a.id, "branch_id": chil.id, "qty": 1},
+            {"offer_id": a.id, "branch_id": 999999, "qty": 1})
+    assert _stock(a)[chil.id] == (5, True)
 
 
 def test_operations_only_in_stock_mode_and_hand_edits_refused_there(db):
