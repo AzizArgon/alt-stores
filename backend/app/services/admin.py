@@ -232,8 +232,9 @@ def report_detail(db: Session, report_id: int) -> dict:
     if r is None:
         raise AdminError("not_found", 404)
     conv = db.get(Conversation, r.conversation_id)
-    messages = [{"id": m.id, "author": m.author.value, "text": m.text, "at": _aware(m.created_at)}
-                for m in (conv.messages if conv else [])]
+    from app.services.chat import message_out
+
+    messages = [{**message_out(m), "at": _aware(m.created_at)} for m in (conv.messages if conv else [])]
     return {**report_row(db, r), "conversation_id": conv.id if conv else None, "messages": messages}
 
 

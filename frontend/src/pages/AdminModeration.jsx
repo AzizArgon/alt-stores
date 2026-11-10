@@ -12,6 +12,7 @@ import { storeUrl } from '../config/sites'
 import api from '../services/api'
 import { adminErrorKey, dateTime, useAdminData } from '../services/admin'
 import { formatPrice } from '../services/format'
+import { systemText } from '../services/reservations'
 import { ActionModal, ChannelState, Loading, LogLine, PageTitle, adminChanged } from './AdminPage'
 
 const productLink = (id) => storeUrl(`/products/${id}`)
@@ -197,7 +198,7 @@ function ReportDetail({ id, onChanged }) {
               {r.messages.map((m) => (
                 <li key={m.id} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${m.author === 'store' ? 'justify-self-end bg-primary-soft' : 'bg-surface'}`}>
                   <span className="block text-xs text-muted">{t(`admin.reports.author.${m.author}`)} · {dateTime(m.at)}</span>
-                  <span className="break-words whitespace-pre-wrap">{m.text}</span>
+                  <span className="break-words whitespace-pre-wrap">{m.author === 'system' ? systemText(t, m) : m.text}</span>
                 </li>
               ))}
             </ul>

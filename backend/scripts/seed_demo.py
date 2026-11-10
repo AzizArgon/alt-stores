@@ -806,6 +806,7 @@ def seed_barcodes(db: Session) -> int:
 # One report, one disputed flag and one card fix, all marked is_demo: updated in place (the same ids), reset to
 # "waiting" on every run (also --builds-only).
 DEMO_REPORT_COMMENT = "Покупатель пишет грубо и требует скидку"
+DEMO_RUDE_LINE = "Если не сделаете скидку 30%, напишу везде, что вы мошенники!"
 DEMO_DISPUTE = "Это акция до конца недели: цена верная, товар новый"
 
 
@@ -821,6 +822,10 @@ def seed_moderation(db: Session) -> dict:
                                                 Conversation.topic_kind == TopicKind.reservation).order_by(Conversation.id))
     report = db.scalar(select(ChatReport).where(ChatReport.is_demo.is_(True)))
     if conv is not None:
+        # The buyer's line the store complains about (added once, it stays over re-runs)
+        if not any(m.text == DEMO_RUDE_LINE for m in conv.messages):
+            conv.messages.append(Message(author=MessageAuthor.buyer, sender_id=conv.buyer_id, text=DEMO_RUDE_LINE,
+                                         is_read=True))
         report = report or ChatReport(is_demo=True)
         report.conversation_id, report.reporter_id, report.reason = conv.id, shop.user_id, "abuse"
         report.comment, report.status, report.resolution = DEMO_REPORT_COMMENT, "new", None
