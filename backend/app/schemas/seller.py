@@ -95,6 +95,8 @@ class PreviewRow(BaseModel):
     # AI specs not found in the row text: shown to the seller, never saved to the product
     specs_guess: dict[str, str | int | float | bool] = {}  # values inferred by rules are not always text
     is_in_stock: bool = True
+    # Phase 12.1: stock by branch column header: a count, True ("+", "есть"), False ("нет") or None (empty)
+    branches: dict[str, bool | int | None] = {}
     # Pasted text: the currency of this line (None = the import's one); check = not written, default was taken
     currency: Literal["USD", "UZS"] | None = None
     currency_check: bool = False
@@ -128,6 +130,7 @@ class ImportOut(BaseModel):
     published_at: datetime | None = None
     undone_at: datetime | None = None
     can_undo: bool = False  # the store's last published file or post, not older than 7 days (phase 12)
+    branch_id: int | None = None  # phase 12.1: the price list of one branch
 
     @field_validator("created_at", "published_at", "undone_at")
     @classmethod
@@ -138,6 +141,14 @@ class ImportOut(BaseModel):
 
 class ImportDetail(ImportOut):
     rows: list[PreviewRow] = Field(validation_alias="rows_json")
+    # Phase 12.1: branch columns found, their match to branches (confirmed or suggested)
+    branch_info: dict = {}
+
+
+class ColumnsIn(BaseModel):
+    """Column header -> branch id (None = not a branch column)."""
+
+    mapping: dict[str, int | None]
 
 
 class PublishRequest(BaseModel):

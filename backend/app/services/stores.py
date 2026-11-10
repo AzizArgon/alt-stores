@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Build, Offer, Product, Store, StoreKind
+from app.services.branches import branch_public, store_in_city
 from app.services.builds import build_summary, load_builds
 from app.services.catalog import _in_group, card_specs, store_brief, visible
 from app.services.exchange import to_uzs
@@ -18,9 +19,14 @@ def _shops():
     return select(Store).where(Store.kind == StoreKind.shop, Store.is_archive.is_(False))
 
 
-def store_public(store: Store) -> dict:
-    """The store card: what store_brief has (city, address, phone, Telegram) and where to go."""
-    return {**store_brief(store), "is_demo": store.is_demo}
+def store_public(store: Store, city: str | None = None) -> dict:
+    """The store card: what store_brief has (city, address, phone, Telegram) and where to go; its branches
+    (phase 12.1), the chosen city's first, and how many of them are in that city."""
+    branches = sorted(store.branches, key=lambda b: (city is not None and b.city != city, not b.is_main, b.id))
+    return {**store_brief(store), "is_demo": store.is_demo,
+            "branches": [branch_public(b, store) for b in branches],
+            "branches_here": sum(1 for b in branches if b.city == city) if city else len(branches),
+            "cities": sorted({b.city for b in branches})}
 
 
 def _on_sale(group: str | None = None):
@@ -29,14 +35,14 @@ def _on_sale(group: str | None = None):
 
 def list_stores(db: Session, city: str | None = None) -> list[dict]:
     """Partner stores, verified ones first, then by goods in stock."""
-    query = _shops()
+    query = _shops().options(selectinload(Store.branches))
     if city:
-        query = query.where(Store.city == city)
+        query = query.where(store_in_city(city))  # a store is in every city of its branches
     stores = db.scalars(query).all()
     counts = dict(db.execute(
         select(Offer.store_id, func.count(Offer.id)).where(*_on_sale(), Offer.store_id.in_([s.id for s in stores]))
         .group_by(Offer.store_id)).all())
-    items = [{**store_public(s), "in_stock": counts.get(s.id, 0)} for s in stores]
+    items = [{**store_public(s, city), "in_stock": counts.get(s.id, 0)} for s in stores]
     items.sort(key=lambda s: (not s["is_verified"], -s["in_stock"], s["name"].lower()))
     return items
 

@@ -29,6 +29,9 @@ COLUMN_ROLES = {
     "note": ("примечание", "комментарий"),
 }
 OUT_OF_STOCK_WORDS = ("нет", "под заказ", "ожида", "0")
+# Phase 12.1: stock columns of branches ("Чиланзар | Юнусабад | Склад"): every value is a count or a mark
+_STOCK_VALUE = re.compile(r"^(?:\d{1,6}(?:[.,]0+)?|\+|да|нет|есть|yes|no|в наличии|нет в наличии)$", re.IGNORECASE)
+_YES = ("+", "да", "есть", "yes", "в наличии")
 SPECS_MAX_LEN = 120
 CELL_MAX_LEN = 200
 ARTICLE_MAX_WORDS = 5
@@ -62,6 +65,8 @@ class CleanRow:
     condition: str | None = None  # a card post with "Состояние: Б/У": read by code, wins over the AI
     category_hint: str | None = None  # a post tag (#RAM): taken when the AI could not tell the category
     note: str | None = None  # the seller's words next to the price: "Подписчикам 13$", "(только в сборках)"
+    # Phase 12.1: stock by branch column header: a count, True ("+", "есть"), False ("нет") or None (empty, "-")
+    branch_cells: dict = field(default_factory=dict)
 
     @property
     def raw_name(self) -> str:
@@ -134,6 +139,32 @@ def _column_roles(cells: list[str]) -> dict[int, str]:
     return roles
 
 
+def stock_value(cell: str) -> int | bool | None:
+    """A branch stock cell: "5" -> 5, "+" / "да" / "есть" -> True, "нет" / "0" -> 0 / False, "" or "-" -> None."""
+    cell = (cell or "").strip().lower()
+    if not cell:
+        return None
+    if cell[0].isdigit():
+        return int(float(cell.replace(",", ".")))
+    return cell in _YES
+
+
+def _branch_columns(header: list[str], roles: dict[int, str], data: list[list[str]], known: set[str]) -> dict[int, str]:
+    """Columns of branch stock under a header row: a header without another role (or "наличие / склад"), every
+    filled value a count or a mark. Two or more such columns, or a column the seller already matched to a branch;
+    one lone "Наличие" column stays the general stock column."""
+    found: dict[int, str] = {}
+    for i, title in enumerate(header):
+        if not title or roles.get(i) not in (None, "stock"):
+            continue
+        values = [r[i] for r in data if i < len(r) and r[i]]
+        if values and all(_STOCK_VALUE.match(v) for v in values):
+            found[i] = title
+    if len(found) >= 2:
+        return found
+    return {i: t for i, t in found.items() if t.lower() in known}
+
+
 def _extract_fields(row: CleanRow, cells: list[str], roles: dict[int, str]) -> None:
     by_role = {role: i for i, role in roles.items()}
     skip = {i for i, role in roles.items()
@@ -196,26 +227,37 @@ def _price_at_line_end(row: CleanRow) -> None:
         row.price, row.currency, row.currency_check, row.is_in_stock = price, currency, check, True
 
 
-def clean_markdown(md: str) -> list[CleanRow]:
-    rows: list[CleanRow] = []
-    sheet, section = "", ""
+def _table_lines(md: str) -> list[tuple[str, list[str], str]]:
+    """("sheet", [name], "") / ("row", cells, line) for every meaningful line, duplicate sheets skipped."""
+    out = []
     skip_sheet = False
-    roles: dict[int, str] = {}
-
     for line in md.splitlines():
         line = line.strip()
         if line.startswith("## "):
-            sheet = line[3:].strip()
-            section = ""
-            skip_sheet = sheet.lower() in SKIP_SHEETS
-            roles = {}
+            skip_sheet = line[3:].strip().lower() in SKIP_SHEETS
+            out.append(("sheet", [line[3:].strip()], line))
             continue
         if skip_sheet or not line or set(line) <= set("|-: "):
             continue
-
         raw_cells = line.strip("|").split("|") if line.startswith("|") else [line.lstrip("#").strip()]
         cells = [_clean_cell(c) for c in raw_cells]
-        if not any(cells):
+        if any(cells):
+            out.append(("row", cells, line))
+    return out
+
+
+def clean_markdown(md: str, known_branch_columns: set[str] | None = None) -> list[CleanRow]:
+    """`known_branch_columns`: lowercased headers the store already matched to its branches (phase 12.1)."""
+    known = known_branch_columns or set()
+    rows: list[CleanRow] = []
+    sheet, section = "", ""
+    roles: dict[int, str] = {}
+    branch_cols: dict[int, str] = {}
+    lines = _table_lines(md)
+
+    for n, (kind, cells, line) in enumerate(lines):
+        if kind == "sheet":
+            sheet, section, roles, branch_cols = cells[0], "", {}, {}
             continue
 
         if _is_header_row(cells):
@@ -223,24 +265,36 @@ def clean_markdown(md: str) -> list[CleanRow]:
             found = _column_roles(cells)
             if found:
                 roles = found
+                # Data rows of this header: up to the next sheet or table header
+                data = []
+                for k, c, _ in lines[n + 1:]:
+                    if k == "sheet" or (_is_header_row(c) and _column_roles(c)):
+                        break
+                    if not _is_header_row(c):
+                        data.append(c)
+                branch_cols = _branch_columns(cells, roles, data, known)
+                roles = {i: r for i, r in roles.items() if i not in branch_cols}
             name = _section_name(cells)
             if name:
                 section = name
             continue
 
         specs_cols = {i for i, role in roles.items() if role == "specs"}
-        cells = [
-            _truncate(c, SPECS_MAX_LEN if i in specs_cols else CELL_MAX_LEN)
-            for i, c in enumerate(cells)
-        ]
+        branch_cells = {title: stock_value(cells[i] if i < len(cells) else "") for i, title in branch_cols.items()}
+        cells = ["" if i in branch_cols else
+                 _truncate(c, SPECS_MAX_LEN if i in specs_cols else CELL_MAX_LEN)
+                 for i, c in enumerate(cells)]
         row = CleanRow(row=len(rows) + 1, sheet=sheet, section=section, cells=[c for c in cells if c])
         _extract_fields(row, cells, roles)
+        if branch_cells:
+            row.branch_cells = branch_cells
+            row.is_in_stock = row.price is not None and any(v is True or (type(v) is int and v > 0)
+                                                            for v in branch_cells.values())
         if not line.startswith("|") and row.price is None:
             _price_at_line_end(row)
         if row.name:
             rows.append(row)
     return rows
-
 
 
 def cache_key(text: str) -> str:

@@ -7,10 +7,10 @@ from app.core.limits import spend_import
 from app.db.database import get_db
 from app.db.models import Branch, Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
 from app.schemas.seller import (
-    BranchIn, BulkIn, CheckResult, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
+    BranchIn, BulkIn, CheckResult, ColumnsIn, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
     PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
-from app.services import branches, cabinet
+from app.services import branch_stock, branches, cabinet
 from app.services.cabinet import EditError
 from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
@@ -137,10 +137,13 @@ async def upload_price(
     currency: Currency = Form(...),
     # No default: the seller chooses "full price list" or "addition" every time
     mode: str = Form(..., pattern="^(full|append)$"),
+    branch_id: int | None = Form(None),  # phase 12.1: the price list of one branch; none = the whole store
     user: User = Depends(seller_only),
     db: Session = Depends(get_db),
 ):
     store = _require_store(db, user)
+    if branch_id is not None:
+        _my_branch(db, store, branch_id)
     filename = file.filename or "price"
     if not any(filename.lower().endswith(ext) for ext in ALLOWED_EXTENSIONS):
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Unsupported file type")
@@ -149,7 +152,7 @@ async def upload_price(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large")
 
     spend_import(db, store.id)
-    imp = PriceImport(store_id=store.id, filename=filename, currency=currency, mode=mode)
+    imp = PriceImport(store_id=store.id, filename=filename, currency=currency, mode=mode, branch_id=branch_id)
     db.add(imp)
     db.commit()
     db.refresh(imp)
@@ -206,7 +209,24 @@ def undo_upload(import_id: int, user: User = Depends(seller_only), db: Session =
 
 @router.get("/imports/{import_id}", response_model=ImportDetail)
 def get_import(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    return _my_import(db, user, import_id)[1]
+    imp = _my_import(db, user, import_id)[1]
+    out = ImportDetail.model_validate(imp)
+    out.branch_info = branch_stock.branch_info(db, imp)
+    return out
+
+
+@router.post("/imports/{import_id}/columns", response_model=ImportDetail)
+def confirm_import_columns(import_id: int, data: ColumnsIn, user: User = Depends(seller_only),
+                           db: Session = Depends(get_db)):
+    """"Сопоставление столбцов": which branch each stock column is; remembered for the next price list."""
+    store, imp = _my_import(db, user, import_id)
+    try:
+        branch_stock.confirm_columns(db, store, imp, data.mapping)
+    except branch_stock.ColumnsError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    db.commit()
+    return get_import(import_id, user, db)
 
 
 @router.post("/imports/{import_id}/publish", response_model=PublishResult)
@@ -215,6 +235,8 @@ def publish(import_id: int, data: PublishRequest, user: User = Depends(seller_on
     if imp.status != ImportStatus.ready:
         raise HTTPException(status.HTTP_409_CONFLICT, "Import is not ready to publish")
     rows = [r.model_dump() for r in data.rows]
+    if not branch_stock.branch_info(db, imp)["confirmed"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": "columns"})  # match the branch columns first
     if not data.confirm_drop and plan_import(db, imp, store, rows, data.mode)["large_drop"]:
         raise HTTPException(status.HTTP_409_CONFLICT, {"code": "large_drop"})
     return publish_import(db, imp, store, rows, data.mode)

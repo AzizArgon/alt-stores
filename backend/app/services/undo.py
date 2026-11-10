@@ -40,9 +40,18 @@ def _parse(value: str | None) -> datetime | None:
 
 
 def offer_state(o: Offer) -> dict:
+    from app.services.branches import stock_state
+
+    # stocks (phase 12.1): {branch_id: [quantity, in_stock, updated_at]} — undo returns the stock by branch too
     return {"price": o.price, "currency": o.currency.value, "is_in_stock": o.is_in_stock,
             "condition": o.condition.value, "note": o.note, "product_id": o.product_id,
-            "removed_at": _iso(o.removed_at), "updated_at": _iso(o.updated_at)}
+            "removed_at": _iso(o.removed_at), "updated_at": _iso(o.updated_at),
+            "stocks": stock_state(o) if o.id is not None else {}}
+
+
+def _stock_marks(state: dict) -> dict:
+    """Stock by branch without its times: the seller changed a branch by hand = a conflict."""
+    return {k: v[:2] for k, v in (state.get("stocks") or {}).items()}
 
 
 def make_snapshot(before: dict[int, dict | None], offers: list[Offer], history: list[PriceHistory],
@@ -97,6 +106,8 @@ def _changed_by_hand(offer: Offer, after: dict) -> bool:
     """The seller changed the offer after the upload: any field differs or the row was saved again later."""
     now = offer_state(offer)
     if any(now[f] != after[f] for f in STATE_FIELDS):
+        return True
+    if "stocks" in after and _stock_marks(now) != _stock_marks(after):
         return True
     then = _parse(after["updated_at"])
     return then is not None and offer.updated_at is not None and _aware(offer.updated_at) - then > SAME_SECOND
@@ -185,6 +196,10 @@ def undo_import(db: Session, imp: PriceImport) -> dict:
         offer.note = before["note"]
         offer.product_id = before["product_id"]
         offer.removed_at = _parse(before["removed_at"])
+        if "stocks" in before:
+            from app.services.branches import restore_stock
+
+            restore_stock(offer, before["stocks"])
         db.flush()
         # The freshness of "recommended" goes back too (onupdate would set "now")
         if before["updated_at"]:

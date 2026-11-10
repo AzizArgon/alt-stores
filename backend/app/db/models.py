@@ -295,6 +295,10 @@ class PriceImport(Base):
     undo_json: Mapped[dict | None] = mapped_column(JSON)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Phase 12.1: the price list of one branch (None = the whole store) and the confirmed branch columns
+    # {column header: branch id or None = not a branch}; None = not confirmed yet
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
+    columns_json: Mapped[dict | None] = mapped_column(JSON)
 
 
 class ParseCache(Base):

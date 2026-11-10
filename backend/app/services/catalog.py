@@ -10,6 +10,7 @@ from app.db.models import (
     NEW_GROUP, USED_GROUP, Category, Condition, Currency, FlagLevel, FlagStatus, FraudFlag, Offer, Product, Store,
     StoreKind,
 )
+from app.services.branches import in_city, in_stock_in, offer_branches
 from app.services.exchange import to_usd, to_uzs
 from app.services.spec_dictionary import CARD_SPECS, NUMBER, YESNO, Spec, spec_map, specs_of
 from app.services.spec_inference import INFERABLE
@@ -195,8 +196,8 @@ def _usd_price(usd_rate: float | None):
 
 
 def _in_city(city: str | None):
-    """Offers of the stores of one city; None = all of Uzbekistan."""
-    return Offer.store_id.in_(select(Store.id).where(Store.city == city)) if city else true()
+    """Offers of the stores present in a city (a branch there, phase 12.1); None = all of Uzbekistan."""
+    return in_city(city)
 
 
 AD_DAYS = 30  # a Telegram ad older than this is hidden
@@ -222,7 +223,7 @@ def _cheapest_offers(db: Session, product_ids: list[int], usd_rate: float | None
                      city: str | None = None, group: str | None = "new") -> dict[int, Offer]:
     query = select(Offer).where(Offer.product_id.in_(product_ids), visible(), _in_city(city), _in_group(group))
     if in_stock:
-        query = query.where(Offer.is_in_stock.is_(True))
+        query = query.where(in_stock_in(city))
     result: dict[int, Offer] = {}
     for o in db.scalars(query):
         best = result.get(o.product_id)
@@ -284,7 +285,7 @@ def _flag_levels(db: Session, product_ids: list[int], in_stock: bool, city: str 
                FraudFlag.status == FlagStatus.active, FraudFlag.level.in_([FlagLevel.warning, FlagLevel.danger]))
     )
     if in_stock:
-        query = query.where(Offer.is_in_stock.is_(True))
+        query = query.where(in_stock_in(city))
     result: dict[int, str] = {}
     for product_id, level in db.execute(query):
         if result.get(product_id) != FlagLevel.danger.value:
@@ -296,7 +297,7 @@ def _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition
     usd = _usd_price(usd_rate)
     offer_filter = [visible(), _in_city(city), _in_group(group)]
     if in_stock:
-        offer_filter.append(Offer.is_in_stock.is_(True))
+        offer_filter.append(in_stock_in(city))
     if condition:
         offer_filter.append(Offer.condition == condition)
     stats = (
@@ -392,7 +393,7 @@ def category_summary(db: Session, usd_rate: float | None, city: str | None = Non
         select(Category.slug, func.count(func.distinct(Offer.product_id)), func.count(func.distinct(Offer.store_id)),
                func.min(usd))
         .join(Product, Product.category_id == Category.id).join(Offer, Offer.product_id == Product.id)
-        .where(visible(), Offer.is_in_stock.is_(True), _in_city(city), _in_group("new"))
+        .where(visible(), in_stock_in(city), _in_city(city), _in_group("new"))
         .group_by(Category.slug).order_by(func.count(func.distinct(Offer.product_id)).desc())
     ).all()
     return [{"slug": slug, "products": products, "stores": stores,
@@ -482,12 +483,14 @@ def price_order(offer: dict) -> tuple:
     return (not offer["is_in_stock"], offer["price_usd"] if offer["price_usd"] is not None else float("inf"))
 
 
-def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str = "recommended") -> dict | None:
+def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str = "recommended",
+                 city: str | None = None) -> dict | None:
     product = db.scalar(
         select(Product).where(Product.id == product_id).options(
             selectinload(Product.category),
-            selectinload(Product.offers).selectinload(Offer.store),
+            selectinload(Product.offers).selectinload(Offer.store).selectinload(Store.branches),
             selectinload(Product.offers).selectinload(Offer.fraud_flags),
+            selectinload(Product.offers).selectinload(Offer.stocks),
         )
     )
     if product is None:
@@ -497,10 +500,20 @@ def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str
         if not is_visible(o):
             continue
         store: Store = o.store
+        # Phase 12.1: by branch ("есть в 2 из 3"); a store present in the city counts only its branches there
+        by_branch = offer_branches(o, store.branches, store, city) if store.kind == StoreKind.shop else None
+        here = city if by_branch and any(b["city"] == city for b in by_branch["branches"]) else None
+        if by_branch and here and by_branch["tracked"]:
+            in_stock = by_branch["available"] > 0
+        else:
+            in_stock = o.is_in_stock
+        if by_branch and city and not here:
+            by_branch = offer_branches(o, store.branches, store, None)
         offers.append({
             "id": o.id, "raw_name": o.raw_name, "price": o.price, "currency": o.currency.value,
             "price_usd": to_usd(o.price, o.currency, usd_rate), "price_uzs": to_uzs(o.price, o.currency, usd_rate),
-            "is_in_stock": o.is_in_stock, "condition": o.condition.value, "group": group_of(o.condition.value),
+            "is_in_stock": in_stock, "in_city": bool(here) if city else None, "stock": by_branch,
+            "condition": o.condition.value, "group": group_of(o.condition.value),
             "note": o.note, "updated_at": o.updated_at, "post_url": o.post_url, "posted_at": o.posted_at,
             "store": store_brief(store),
             "flags": [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
@@ -543,7 +556,7 @@ def used_offers(
     query = (
         select(Offer).join(Product, Product.id == Offer.product_id).join(Store, Store.id == Offer.store_id)
         .outerjoin(Category, Category.id == Product.category_id)
-        .where(visible(), Offer.is_in_stock.is_(True), Offer.condition.in_(conds), _in_city(city),
+        .where(visible(), in_stock_in(city), Offer.condition.in_(conds), _in_city(city),
                Store.is_archive.is_(False))
     )
     if category:

@@ -89,10 +89,11 @@ def list_categories(city: str | None = None, db: Session = Depends(get_db)):
 
 @router.get("/products/{product_id}")
 def get_product(product_id: int, sort: str = Query("recommended", pattern="^(recommended|price)$"),
-                db: Session = Depends(get_db)):
-    """Product card with store offers: "recommended" order by default, or by price."""
+                city: str | None = None, db: Session = Depends(get_db)):
+    """Product card with store offers: "recommended" order by default, or by price.
+    `city` (phase 12.1): "в наличии" and "есть в N из M филиалов" by the branches of that city."""
     usd_rate, rate_date = _rate(db)
-    card = product_card(db, product_id, usd_rate, sort)
+    card = product_card(db, product_id, usd_rate, sort, _city(city))
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")
     return {**card, "usd_rate_date": rate_date, "market": product_market(db, product_id)}

@@ -538,7 +538,9 @@ def list_builds(db: Session, usd_rate: float | None, f: dict, city: str | None =
     No market labels or ratings: builds of different stores are not compared."""
     query = select(Build).join(Build.store).where(Build.is_in_stock.is_(True))
     if city:
-        query = query.where(Store.city == city)
+        from app.services.branches import store_in_city
+
+        query = query.where(store_in_city(city))  # phase 12.1: a branch of the store in the city
     all_items = [build_summary(b, usd_rate) for b in load_builds(db, query)]
     items = [s for s in all_items if _matches(s, f)]
     if sort in ("price_asc", "price_desc"):
