@@ -1,4 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -436,3 +437,27 @@ def bulk_offers(data: BulkIn, user: User = Depends(seller_only), db: Session = D
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "branch_required"})
         _my_branch(db, store, data.branch_id)
     return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply, data.branch_id)
+
+
+# --- Phase 13: the admin's decisions in the cabinet -------------------------------------------------------------------
+
+class DisputeIn(BaseModel):
+    comment: str = Field(max_length=500)
+
+
+@router.post("/seller/flags/{flag_id}/dispute")
+def dispute_flag(flag_id: int, data: DisputeIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    from app.services.admin import AdminError, dispute_flag as dispute
+
+    try:
+        dispute(db, _require_store(db, user), flag_id, data.comment)
+    except AdminError as e:
+        raise HTTPException(e.status, {"code": e.code})
+    return {"ok": True}
+
+
+@router.get("/seller/decisions")
+def decisions(user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    from app.services.admin import seller_decisions
+
+    return seller_decisions(db, _require_store(db, user))

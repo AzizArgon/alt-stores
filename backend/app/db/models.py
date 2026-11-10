@@ -84,6 +84,9 @@ class User(Base):
     contact_name: Mapped[str | None] = mapped_column(String(100))
     contact_phone: Mapped[str | None] = mapped_column(String(16))
     contact_telegram: Mapped[str | None] = mapped_column(String(33))
+    # Phase 13: blocked on the whole site by the admin (no login, messages or reservations); the reason is shown
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    block_reason: Mapped[str | None] = mapped_column(String(300))
 
     stores: Mapped[list["Store"]] = relationship(back_populates="owner")
 
@@ -118,6 +121,10 @@ class Store(Base):
     # Phase 12.2: "price" = stock from price lists and hand edits; "stock" = only operations change quantities
     stock_mode: Mapped[str] = mapped_column(String(8), default="price", server_default="price")
     low_stock: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # "заканчивается": available <= it
+    # Phase 13: blocked by the admin — its goods, builds and branches are off the storefront, the market and the
+    # "Stores" list, no new reservations; nothing is deleted, the seller sees the reason in the cabinet
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    block_reason: Mapped[str | None] = mapped_column(String(300))
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
@@ -219,6 +226,11 @@ class ProductFix(Base):
     after: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending / accepted / rejected
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Phase 13: the admin's decision — why rejected, when, and the card it was merged into (accepted, same key)
+    reject_reason: Mapped[str | None] = mapped_column(String(300))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    merged_into: Mapped[int | None] = mapped_column(Integer)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
 
 class PriceHistory(Base):
@@ -270,6 +282,14 @@ class FraudFlag(Base):
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     source: Mapped[FlagSource] = mapped_column(str_enum(FlagSource))
     status: Mapped[FlagStatus] = mapped_column(str_enum(FlagStatus), default=FlagStatus.active)
+    # Phase 13: "Оспорить" by the seller and the admin's answer. upheld = "the flag is right" (active again, the
+    # seller sees the answer); dismissed = taken off for good (never raised again by the next uploads)
+    dispute_comment: Mapped[str | None] = mapped_column(String(500))
+    disputed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolution: Mapped[str | None] = mapped_column(String(10))
+    admin_answer: Mapped[str | None] = mapped_column(String(500))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     offer: Mapped[Offer] = relationship(back_populates="fraud_flags")
 
@@ -448,6 +468,11 @@ class TgChannel(Base):
     last_post_id: Mapped[int] = mapped_column(Integer, default=0)
     # The seller of its ads: a store of kind "telegram" (no owner can log in)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"))
+    # Phase 13: the admin's "Удалить" hides the channel and its ads (the store is blocked), nothing is erased;
+    # the last run's log ({fetched, new, parsed, offers, skipped, error}) and its error for the channel list
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_log: Mapped[dict | None] = mapped_column(JSON)
+    last_error: Mapped[str | None] = mapped_column(String(200))
 
     store: Mapped[Store] = relationship()
 
@@ -537,6 +562,11 @@ class ChatReport(Base):
     comment: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default="new")  # new / reviewed (phase 13)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Phase 13: dismissed / block_user / block_store, the admin's comment and when
+    resolution: Mapped[str | None] = mapped_column(String(16))
+    admin_comment: Mapped[str | None] = mapped_column(String(500))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
 
 class StoreBlock(Base):
@@ -715,6 +745,8 @@ class Barcode(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Phase 13: "disputed" = the admin chose another card for this code (the seller sees it; not counted)
+    admin_status: Mapped[str | None] = mapped_column(String(10))
 
 
 class BarcodeCode(Base):
@@ -731,3 +763,25 @@ class BarcodeCode(Base):
     stores: Mapped[int] = mapped_column(Integer, default=0)  # stores bound to the card (pending / confirmed)
     conflict_json: Mapped[list] = mapped_column(JSON, default=list)  # [{product_id, stores: [store_id]}]
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Phase 13, the admin's decision on a conflict: resolved (admin_product_id is the card) / rejected (no card)
+    admin_status: Mapped[str | None] = mapped_column(String(10))
+    admin_product_id: Mapped[int | None] = mapped_column(Integer)
+
+
+# --- Phase 13: the admin ---------------------------------------------------------------------------------------------
+
+class AdminAction(Base):
+    """The admin journal: who, when, what and with what. Written by every admin action, never edited."""
+
+    __tablename__ = "admin_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    admin_email: Mapped[str] = mapped_column(String(255))  # stays readable if the account goes
+    action: Mapped[str] = mapped_column(String(32), index=True)  # store_verify / user_block / fix_accept ...
+    target_type: Mapped[str] = mapped_column(String(16))  # store / user / report / flag / fix / barcode / channel
+    target_id: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str | None] = mapped_column(String(255))  # what it was about, as text: a store name, an email
+    comment: Mapped[str | None] = mapped_column(String(500))
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

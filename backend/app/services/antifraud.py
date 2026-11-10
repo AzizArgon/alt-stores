@@ -14,7 +14,7 @@ from statistics import median
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Currency, FlagLevel, FlagSource, FlagStatus, FraudFlag, Offer, Product
+from app.db.models import Currency, FlagLevel, FlagSource, FlagStatus, FraudFlag, Offer, Product, Store
 from app.services.exchange import to_usd
 from app.services.spec_normalizer import specs_as_text
 
@@ -216,7 +216,9 @@ def market_prices(db: Session, match_keys: set[str], store_id: int | None,
     q = (
         select(Product.match_key, Offer.price, Offer.currency, Offer.condition)
         .join(Offer.product)
-        .where(Product.match_key.in_(match_keys), Offer.is_in_stock.is_(True), Offer.price.is_not(None))
+        .where(Product.match_key.in_(match_keys), Offer.is_in_stock.is_(True), Offer.price.is_not(None),
+               # phase 13: a store blocked by the admin is not part of the market
+               Offer.store_id.not_in(select(Store.id).where(Store.blocked_at.is_not(None))))
     )
     if store_id is not None:
         q = q.where(Offer.store_id != store_id)
@@ -237,6 +239,14 @@ def save_offer_flags(offer: Offer, flags: list[dict]) -> None:
     """Replaces active flags; a type the seller disputed or the admin dismissed is not raised again."""
     kept = [f for f in offer.fraud_flags if f.status != FlagStatus.active]
     closed = {f.type for f in kept}
+    # Phase 13: a flag the admin upheld keeps its answer while the same check still raises it
+    raised = {f["type"]: f for f in flags}
+    upheld = [f for f in offer.fraud_flags if f.status == FlagStatus.active and f.resolution == "upheld"
+              and f.type in raised]
+    for f in upheld:
+        f.level, f.reason_key, f.params = FlagLevel(raised[f.type]["level"]), raised[f.type]["reason_key"], raised[f.type]["params"]
+    closed |= {f.type for f in upheld}
+    kept += upheld
     offer.fraud_flags = kept + [
         FraudFlag(
             type=f["type"], level=FlagLevel(f["level"]), reason_key=f["reason_key"], params=f["params"],

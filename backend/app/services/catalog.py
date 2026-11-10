@@ -207,8 +207,13 @@ GROUPS = {"new": NEW_GROUP, "used": USED_GROUP}
 def visible():
     """An offer the buyer sees: it has a price; a Telegram ad also is not sold, not gone and not older than 30 days."""
     fresh = datetime.now(timezone.utc) - timedelta(days=AD_DAYS)
-    return and_(Offer.price.is_not(None),
+    return and_(Offer.price.is_not(None), Offer.store_id.not_in(blocked_store_ids()),
                 or_(Offer.posted_at.is_(None), and_(Offer.removed_at.is_(None), Offer.posted_at >= fresh)))
+
+
+def blocked_store_ids():
+    """Phase 13: stores blocked by the admin (and deleted Telegram channels) — off the storefront and the market."""
+    return select(Store.id).where(Store.blocked_at.is_not(None)).scalar_subquery()
 
 
 def group_of(condition: str) -> str:
@@ -460,7 +465,7 @@ def recommended_order(offer: dict) -> tuple:
 
 def is_visible(o: Offer) -> bool:
     """The same as visible() for one loaded offer."""
-    if o.price is None:
+    if o.price is None or o.store.blocked_at is not None:
         return False
     if o.posted_at is None:
         return True

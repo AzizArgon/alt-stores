@@ -59,8 +59,16 @@ def store_offers(db: Session, store: Store) -> list[Offer]:
 
 
 def active_flags(offer: Offer) -> list[dict]:
-    return [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
-             "source": f.source.value} for f in offer.fraud_flags if f.status == FlagStatus.active]
+    return [{"id": f.id, "type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
+             "source": f.source.value, "resolution": f.resolution, "admin_answer": f.admin_answer}
+            for f in offer.fraud_flags if f.status == FlagStatus.active]
+
+
+def disputed_flags(offer: Offer) -> list[dict]:
+    """Phase 13: flags the seller disputed (waiting for the admin) or the admin took off — for the editor."""
+    return [{"id": f.id, "type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
+             "status": f.status.value, "resolution": f.resolution, "dispute_comment": f.dispute_comment,
+             "admin_answer": f.admin_answer} for f in offer.fraud_flags if f.status != FlagStatus.active]
 
 
 def _flag_rank(offer: Offer) -> int:
@@ -290,6 +298,7 @@ def offer_detail(db: Session, store: Store, offer: Offer) -> dict:
         **offer_row(offer, _market(market_data(db), offer)),
         "card": _card(product), "other_stores": other_stores(db, product, store),
         "history": history, "pending_fix": pending.after if pending else None,
+        "disputed_flags": disputed_flags(offer),
     }
 
 

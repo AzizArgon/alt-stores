@@ -74,6 +74,7 @@ def _cache_key(db: Session, today: date) -> tuple:
         today,
         db.scalar(select(func.max(PriceHistory.id))), db.scalar(select(func.count(PriceHistory.id))),
         db.scalar(select(func.max(Offer.updated_at))), db.scalar(select(func.count(Offer.id))),
+        tuple(db.scalars(select(Store.id).where(Store.blocked_at.is_not(None)).order_by(Store.id))),  # phase 13
     )
 
 
@@ -94,7 +95,7 @@ def build_market(db: Session, today: date) -> MarketData:
         select(Offer.id, Offer.product_id, Offer.store_id, Offer.condition, Offer.price, Offer.currency,
                Product.category_id, Store.is_demo, Store.kind)
         .select_from(Offer).join(Product).join(Store, Offer.store_id == Store.id).where(Offer.is_in_stock.is_(True), Offer.price.is_not(None),
-                                         Store.is_archive.is_(False))
+                                         Store.is_archive.is_(False), Store.blocked_at.is_(None))
     ).all()
     slugs = dict(db.execute(select(Category.id, Category.slug)).all())
     history: dict[int, list[tuple[date, float]]] = {}

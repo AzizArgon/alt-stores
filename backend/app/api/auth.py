@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import blocked_error, get_current_user
 from app.core.config import settings
 from app.core.limits import check_login_allowed, check_register_allowed, client_ip, login_failures, registrations
 from app.core.security import create_access_token, hash_password, verify_password
@@ -54,6 +54,8 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     if user is None or not verify_password(data.password, user.password_hash):
         login_failures.hit(ip)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    if user.blocked_at is not None:
+        raise blocked_error(user)
     return _token_response(user)
 
 

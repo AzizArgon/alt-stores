@@ -91,7 +91,7 @@ def list_builds(
 @router.get("/builds/{build_id}")
 def get_build(build_id: int, db: Session = Depends(get_db)):
     build = db.get(Build, build_id)
-    if build is None or not build.is_in_stock:
+    if build is None or not build.is_in_stock or build.store.blocked_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Build not found")
     usd_rate, rate_date = _rate(db)
     return {**svc.build_detail(db, build, usd_rate), "usd_rate": usd_rate, "usd_rate_date": rate_date}

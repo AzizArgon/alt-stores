@@ -544,7 +544,7 @@ def list_builds(db: Session, usd_rate: float | None, f: dict, city: str | None =
                 page: int = 1, page_size: int = PAGE_SIZE) -> dict:
     """The "Ready PCs" section: builds on sale in the city (or the whole country), filters with counts.
     No market labels or ratings: builds of different stores are not compared."""
-    query = select(Build).join(Build.store).where(Build.is_in_stock.is_(True))
+    query = select(Build).join(Build.store).where(Build.is_in_stock.is_(True), Store.blocked_at.is_(None))
     if city:
         from app.services.branches import store_in_city
 

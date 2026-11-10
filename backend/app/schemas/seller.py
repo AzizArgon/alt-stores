@@ -39,6 +39,8 @@ class StoreOut(StoreIn):
     stock_mode: str = "price"  # phase 12.2: "price" (только прайс) / "stock" (учёт остатков)
     map_lat: float | None = None
     map_lon: float | None = None
+    blocked_at: datetime | None = None  # phase 13: blocked by the admin, the cabinet shows the reason
+    block_reason: str | None = None
 
 
 class BranchIn(BaseModel):

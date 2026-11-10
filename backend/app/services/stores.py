@@ -16,7 +16,7 @@ PAGE_SIZE = 24
 
 
 def _shops():
-    return select(Store).where(Store.kind == StoreKind.shop, Store.is_archive.is_(False))
+    return select(Store).where(Store.kind == StoreKind.shop, Store.is_archive.is_(False), Store.blocked_at.is_(None))
 
 
 def store_public(store: Store, city: str | None = None) -> dict:

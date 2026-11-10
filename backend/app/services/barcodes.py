@@ -78,6 +78,8 @@ def refresh_common(db: Session, code: str) -> BarcodeCode | None:
     if common is None:
         common = BarcodeCode(code=code)
         db.add(common)
+    if common.admin_status in ("resolved", "rejected"):  # phase 13: the admin decided a conflict
+        return _apply_decision(db, common, code, by_product)
     if len(by_product) > 1:
         common.status, common.product_id, common.stores = "conflict", None, 0
         common.conflict_json = [{"product_id": p, "stores": sorted(s)} for p, s in sorted(by_product.items())]
@@ -85,6 +87,22 @@ def refresh_common(db: Session, code: str) -> BarcodeCode | None:
         (product_id, stores), = by_product.items()
         common.product_id, common.stores, common.conflict_json = product_id, len(stores), []
         common.status = "confirmed" if len(stores) >= 2 else "pending"
+    common.updated_at = utcnow()
+    return common
+
+
+def _apply_decision(db: Session, common: BarcodeCode, code: str, by_product: dict[int, set[int]]) -> BarcodeCode:
+    """"Правильная карточка — эта": the code is confirmed for that card, the other stores' bindings are marked
+    "disputed" (the seller sees it; they still work in that store). "Отклонить все": no card in the common base."""
+    chosen = common.admin_product_id if common.admin_status == "resolved" else None
+    for b, product_id in db.execute(select(Barcode, Offer.product_id).join(Offer, Barcode.offer_id == Offer.id)
+                                    .where(Barcode.code == code)):
+        b.admin_status = None if chosen is not None and product_id == chosen else "disputed"
+    common.conflict_json = [{"product_id": p, "stores": sorted(s)} for p, s in sorted(by_product.items())]
+    if chosen is not None:
+        common.status, common.product_id, common.stores = "confirmed", chosen, len(by_product.get(chosen, ()))
+    else:
+        common.status, common.product_id, common.stores = "rejected", None, 0
     common.updated_at = utcnow()
     return common
 

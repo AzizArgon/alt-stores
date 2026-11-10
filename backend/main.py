@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, barcodes, builds, catalog, chat, market, reference, reservations, seller, stock
+from app.api import admin, auth, barcodes, builds, catalog, chat, market, reference, reservations, seller, stock
 from app.core.config import settings
 from app.db.database import SessionLocal, init_db
 from app.services.importer import fail_stale_imports
@@ -51,6 +51,8 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(reservations.router, prefix="/api")
 app.include_router(stock.router, prefix="/api")
 app.include_router(barcodes.router, prefix="/api")
+app.include_router(admin.public, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 
 @app.get("/api/health")

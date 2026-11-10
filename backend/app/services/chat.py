@@ -144,6 +144,8 @@ def open_conversation(db: Session, user: User, kind: str, topic_id: int = 0, sto
         return conv
     if is_blocked(db, store.id, user.id):
         raise ChatError("blocked", 403)
+    if store.blocked_at is not None:  # phase 13: no new conversations with a blocked store (old ones stay)
+        raise ChatError("store_blocked", 403)
     day_ago = utcnow() - timedelta(days=1)
     started = db.scalar(select(func.count(Conversation.id)).where(
         Conversation.buyer_id == user.id, Conversation.created_at >= day_ago))

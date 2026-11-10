@@ -180,6 +180,8 @@ def create(db: Session, user: User, data: dict) -> Reservation:
     # A Telegram channel is not a store (only "Open the post"); an archive price list has nobody to answer
     if store.kind == StoreKind.telegram or store.is_archive:
         raise ReservationError("not_a_store")
+    if store.blocked_at is not None:  # phase 13: blocked by the admin — existing reservations stay, no new ones
+        raise ReservationError("store_blocked", 403)
     if is_blocked(db, store.id, user.id):
         raise ReservationError("blocked", 403)
     contacts = validate_contacts(data)
