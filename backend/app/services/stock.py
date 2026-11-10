@@ -116,7 +116,7 @@ def move(offer: Offer, branch_id: int, kind: str, qty: int = 0, *, set_to: int |
     row.updated_at = utcnow()
     recompute_offer(offer)
     force = fields.pop("force", False) or kind == "initial"
-    return record(offer, row, q0, r0, kind=kind, force=force, **fields)
+    return record(offer, row, None if kind == "initial" else q0, r0, kind=kind, force=force, **fields)
 
 
 # --- the store's mode -----------------------------------------------------------------------------------------------
@@ -156,8 +156,7 @@ def set_mode(db: Session, store: Store, mode: str, user: User | None) -> dict:
                     continue
                 r0 = row.reserved or 0
                 row.reserved = 0
-                record(offer, row, row.quantity, r0, kind="initial", force=True, user_id=uid,
-                       comment=None)
+                record(offer, row, None, r0, kind="initial", force=True, user_id=uid)  # +quantity from nothing
                 result["initial"] += 1
         store.stock_mode = "stock"
         db.flush()

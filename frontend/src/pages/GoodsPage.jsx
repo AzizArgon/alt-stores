@@ -367,15 +367,15 @@ export default function GoodsPage() {
                   <th className="w-10 px-3"><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
                   <SortHeader k="name" sort={sort} desc={desc} onSort={onSort}>{t('cabinet.col.name')}</SortHeader>
                   <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={columns.length ? 'w-32' : 'w-40'}>{t('cabinet.col.price')}</SortHeader>
-                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className="hidden w-32 xl:table-cell">{t('cabinet.col.condition')}</SortHeader>
+                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden w-32 ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
                   <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className="w-24">{t('cabinet.col.stock')}</SortHeader>
                   {columns.map((b) => (
                     <th key={b.id} className="w-[4.5rem] px-1 py-2 font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
                   ))}
-                  {showCost && <th className="hidden w-24 px-2 py-2 font-medium xl:table-cell">{t('warehouse.cost.column')}</th>}
-                  {showCost && <th className="hidden w-20 px-2 py-2 font-medium xl:table-cell">{t('warehouse.cost.markup')}</th>}
+                  {showCost && <th className="hidden w-24 px-2 py-2 font-medium 2xl:table-cell">{t('warehouse.cost.column')}</th>}
+                  {showCost && <th className="hidden w-20 px-2 py-2 font-medium 2xl:table-cell">{t('warehouse.cost.markup')}</th>}
                   <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`w-36 ${columns.length ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>
-                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className="hidden w-28 xl:table-cell">{t('cabinet.col.updated')}</SortHeader>
+                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className={`hidden w-28 ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.updated')}</SortHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -390,8 +390,8 @@ export default function GoodsPage() {
                         <span className="min-w-0">
                           <span className="block font-medium break-words hover:text-primary">{o.name}</span>
                           <span className="block truncate text-xs text-faint" title={o.raw_name}>{o.raw_name}</span>
-                          <span className="block text-xs text-muted xl:hidden">{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
-                          {showCost && <span className="block text-xs text-muted xl:hidden"><CostLine o={o} /></span>}
+                          <span className={`block text-xs text-muted ${columns.length ? '2xl:hidden' : 'xl:hidden'}`}>{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
+                          {showCost && <span className="block text-xs text-muted 2xl:hidden"><CostLine o={o} /></span>}
                         </span>
                       </button>
                       <div className="mt-1 flex flex-wrap gap-1 pl-7">
@@ -403,17 +403,17 @@ export default function GoodsPage() {
                       <PriceInput offer={o} onSave={patch} />
                       <Converted price={o.price} currency={o.currency} rate={rate} className="mt-0.5 px-1 text-xs text-muted" />
                     </td>
-                    <td className="hidden px-2 py-3 align-top xl:table-cell">{t(`condition.${o.condition}`)}</td>
+                    <td className={`hidden px-2 py-3 align-top ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
                     <td className="px-2 py-2.5 align-top">
                       <Switch checked={o.is_in_stock} disabled={lockStock(o)} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
                     {columns.map((b) => (
                       <td key={b.id} className="px-1 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} /></td>
                     ))}
-                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums xl:table-cell">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
-                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums xl:table-cell">{o.markup != null ? `${o.markup}%` : '—'}</td>}
+                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums 2xl:table-cell">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
+                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums 2xl:table-cell">{o.markup != null ? `${o.markup}%` : '—'}</td>}
                     <td className={`px-2 py-2.5 align-top ${columns.length ? 'hidden xl:table-cell' : ''}`}><MarketLabel info={o.market} /></td>
-                    <td className="hidden px-2 py-3 align-top text-muted xl:table-cell">{formatDate(o.updated_at)}</td>
+                    <td className={`hidden px-2 py-3 align-top text-muted ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>

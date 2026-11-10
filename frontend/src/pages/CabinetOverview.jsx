@@ -138,7 +138,7 @@ export default function CabinetOverview() {
 function StockOverview({ stock }) {
   const { t } = useTranslation()
   return (
-    <Card as="section" className="grid gap-5">
+    <Card as="section" className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <div>
         <h2 className="text-h3">{t('warehouse.overview.low')}</h2>
         <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.lowHint', { count: stock.threshold })}</p>
@@ -174,7 +174,7 @@ function StockOverview({ stock }) {
             <h2 className="text-h3">{t('warehouse.overview.last')}</h2>
             <Link to="/seller/stock?tab=journal" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">{t('warehouse.overview.openJournal')}<ArrowRight className="size-4" aria-hidden /></Link>
           </div>
-          <ul className="mt-2 grid gap-2">{stock.last.map((m) => <MovementRow key={m.id} m={m} compact />)}</ul>
+          <ul className="mt-2 grid grid-cols-[minmax(0,1fr)] gap-2">{stock.last.map((m) => <MovementRow key={m.id} m={m} compact />)}</ul>
         </div>
       )}
     </Card>

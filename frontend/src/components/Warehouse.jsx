@@ -30,7 +30,7 @@ export function stockError(t, err) {
 
 // The goods input of every operation: one field with search; Enter takes the first match. In 12.3 a barcode
 // scanner types into this same field (a scanner is a keyboard that ends with Enter).
-export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, placeholder }) {
+export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, placeholder, hint = true }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
   const [items, setItems] = useState(null)
@@ -71,7 +71,7 @@ export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, pla
 
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
+      <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-faint" aria-hidden />
       <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} aria-label={t('warehouse.search')}
         placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9`} autoComplete="off" />
       {items && (
@@ -92,7 +92,7 @@ export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, pla
           )}
         </div>
       )}
-      <p className="mt-1 text-xs text-muted">{t('warehouse.searchHint')}</p>
+      {hint && <p className="mt-1 text-xs text-muted">{t('warehouse.searchHint')}</p>}
       {catalog && <CatalogPick query={q} onClose={() => setCatalog(false)} onPicked={(o) => { setCatalog(false); pick(o) }} />}
     </div>
   )
@@ -204,6 +204,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
       }))
       const res = await api.post('/seller/stock/operations', { kind, lines: body })
       toast(t('warehouse.posted', { count: res.data.count }))
+      try { localStorage.removeItem(DRAFT(kind)) } catch { /* private mode */ }
       setLines([])
       onPosted?.()
     } catch (err) {
@@ -215,12 +216,12 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <GoodsInput onPick={add} allowCatalog={kind === 'receipt'} />
       {lines.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">{t('warehouse.empty')}</p>
       ) : (
-        <ul className="grid gap-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {lines.map((l, i) => <Line key={l.key} n={i + 1} kind={kind} line={l} branches={branches} onChange={(p) => set(l.key, p)}
             onRemove={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />)}
         </ul>
@@ -258,7 +259,7 @@ function Line({ n, kind, line, branches, onChange, onRemove }) {
           <Trash2 className="size-4" aria-hidden />
         </button>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 [&>*]:min-w-0">
         <Select label={t('warehouse.branch')} value={line.branch_id} onChange={(e) => onChange({ branch_id: Number(e.target.value) })}>
           {branches.map((b) => {
             const bs = stockOf(line.offer, b)
@@ -268,8 +269,8 @@ function Line({ n, kind, line, branches, onChange, onRemove }) {
         <Input label={kind === 'adjust' ? t('warehouse.newQty') : t('warehouse.qty')} type="number" min={kind === 'adjust' ? 0 : 1} step="1" inputMode="numeric"
           value={line.qty} onChange={(e) => onChange({ qty: e.target.value })} />
         {kind === 'receipt' && (
-          <Input label={`${t('warehouse.cost')}, ${line.offer.currency}`} hint={undefined} type="number" min="0" step="any" value={line.cost}
-            onChange={(e) => onChange({ cost: e.target.value })} placeholder={t('warehouse.costHint')} title={t('warehouse.costHint')} />
+          <Input label={`${t('warehouse.cost.column')}, ${line.offer.currency}`} hint={undefined} type="number" min="0" step="any" value={line.cost}
+            onChange={(e) => onChange({ cost: e.target.value })} placeholder={t('warehouse.costOptional')} title={t('warehouse.costHint')} />
         )}
         {kind === 'sale' && (
           <Input label={`${t('warehouse.price')}, ${line.offer.currency}`} type="number" min="0" step="any" value={line.price}

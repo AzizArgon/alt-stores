@@ -35,7 +35,7 @@ export default function WarehousePage() {
 
   const ops = tab !== 'journal'
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <div>
         <h1 className="text-h1">{t('warehouse.title')}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{t('warehouse.hint')}</p>
@@ -79,7 +79,7 @@ export function Journal({ branches }) {
   const filtered = f.offer || f.branch_id || f.kind || f.date_from || f.date_to
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Card className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto_auto]">
           {f.offer ? (
@@ -88,7 +88,7 @@ export function Journal({ branches }) {
               <button type="button" onClick={() => change({ offer: null })} aria-label={t('warehouse.journal.reset')}><X className="size-4" /></button>
             </div>
           ) : (
-            <div className="self-end"><GoodsInput autoFocus={false} onPick={(o) => change({ offer: o })} placeholder={t('warehouse.journal.anyGoods')} /></div>
+            <div className="self-end"><GoodsInput autoFocus={false} hint={false} onPick={(o) => change({ offer: o })} placeholder={t('warehouse.journal.anyGoods')} /></div>
           )}
           <Select label={t('warehouse.branch')} value={f.branch_id} onChange={(e) => change({ branch_id: e.target.value })}>
             <option value="">{t('warehouse.journal.anyBranch')}</option>
@@ -110,7 +110,7 @@ export function Journal({ branches }) {
         <EmptyState icon={FileBarChart} title={t('warehouse.journal.empty')} />
       ) : (
         <>
-          <ul className="grid gap-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {data.items.map((m) => <MovementRow key={m.id} m={m} />)}
           </ul>
           <Pagination page={data.page} pages={data.pages} onChange={setPage} />
@@ -141,7 +141,7 @@ export function MovementRow({ m, compact = false }) {
         {m.branch && <span>{m.branch}</span>}
         <span>{t('warehouse.journal.wasNow')}: {qty(m.before)} → {qty(m.after)}{m.reserved_after > 0 && ` (${t('warehouse.journal.reserve', { count: m.reserved_after })})`}</span>
         {!compact && <span>{t('warehouse.journal.who')}: {t(`warehouse.journal.whoName.${m.who}`)}</span>}
-        {m.cost != null && <span>{t('warehouse.cost')}: {formatPrice(m.cost, m.currency)}</span>}
+        {m.cost != null && <span>{t('warehouse.cost.column')}: {formatPrice(m.cost, m.currency)}</span>}
         {m.price != null && <span>{t('warehouse.price')}: {formatPrice(m.price, m.currency)}</span>}
         {m.reason && <span>{t(`warehouse.reasons.${m.reason}`)}</span>}
         {m.comment && <span className="italic">«{m.comment}»</span>}
@@ -156,7 +156,7 @@ export function MovementRow({ m, compact = false }) {
 export function ReportsPage() {
   const { t } = useTranslation()
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
       <h1 className="text-h1">{t('warehouse.reports.title')}</h1>
       <Card className="mx-auto w-full max-w-xl text-center md:!p-8">
         <FileBarChart className="mx-auto size-10 text-primary" aria-hidden />

@@ -61,11 +61,11 @@ export default function StockModeBlock({ store, onChanged }) {
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <Button variant={on ? 'secondary' : 'primary'} onClick={open}>{t(on ? 'warehouse.mode.turnOff' : 'warehouse.mode.turnOn')}</Button>
         {on && (
           <Input label={t('warehouse.mode.lowStock')} hint={t('warehouse.mode.lowStockHint')} type="number" min="0" max="1000" inputMode="numeric"
-            value={low} onChange={(e) => setLow(e.target.value)} onBlur={saveLow} onKeyDown={(e) => e.key === 'Enter' && saveLow()} className="w-full sm:w-72" />
+            value={low} onChange={(e) => setLow(e.target.value)} onBlur={saveLow} onKeyDown={(e) => e.key === 'Enter' && saveLow()} className="w-full sm:w-64" />
         )}
       </div>
       {ask && (
