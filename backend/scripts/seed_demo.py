@@ -655,6 +655,7 @@ def seed_stock_journal(db: Session) -> int:
                         .order_by(Product.normalized_name)).all()
     for o in offers:
         o.cost_last = o.cost_avg = None
+        o.oversold_at = None
         for s in o.stocks:
             s.reserved = 0
             if s.quantity is None:
