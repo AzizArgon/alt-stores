@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { Monitor } from 'lucide-react'
 import { ErrorText } from '../components/AuthForm'
 import { Button, Card, Checkbox, Pagination, Skeleton, inputClass } from '../components/ui'
 import Flags from '../components/Flags'
 import ImportSummary, { ModeChoice } from '../components/ImportSummary'
+import { ColumnsMatch } from '../components/BranchColumns'
+import { branchLabel } from '../components/BranchStock'
 import { Modal } from '../components/overlays'
 import api, { errorKey } from '../services/api'
 import { formatDayMonth, importTitle, formatPrice, roundSum, roundUsd } from '../services/format'
@@ -221,6 +223,7 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
 export default function ImportPage() {
   const { id } = useParams()
   const { t } = useTranslation()
+  const branches = useOutletContext()?.store?.branches || []
   const [imp, setImp] = useState(null)
   const [rows, setRows] = useState([])
   const [categories, setCategories] = useState([])
@@ -257,6 +260,10 @@ export default function ImportPage() {
 
   // "What will change" is counted again after every edit of the rows or a change of the mode
   const ready = imp?.status === 'ready'
+  // Phase 12.1: branch columns are matched before publishing; the summary follows the match
+  const columnsKey = JSON.stringify(imp?.branch_info?.mapping || null)
+  const needColumns = ready && imp?.branch_info?.headers?.length > 0 && !imp.branch_info.confirmed
+  const scopeBranch = branches.find((b) => b.id === imp?.branch_id)
   useEffect(() => {
     if (!ready || rows.length === 0) return undefined
     setSummaryLoading(true)
@@ -266,7 +273,7 @@ export default function ImportPage() {
         .catch(() => {})
         .finally(() => setSummaryLoading(false)), SUMMARY_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [id, ready, rows, mode])
+  }, [id, ready, rows, mode, columnsKey])
 
   const publish = async (confirmed = false) => {
     setError('')
@@ -312,7 +319,7 @@ export default function ImportPage() {
           <h1 className="mt-1 text-h2 break-words md:text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
         {imp?.status === 'ready' && (
-          <Button size="lg" className="w-full md:w-auto" onClick={() => publish()} disabled={busy || rows.length === 0}>
+          <Button size="lg" className="w-full md:w-auto" onClick={() => publish()} disabled={busy || rows.length === 0 || needColumns}>
             {busy ? t('import.publishing') : t('import.publish')}
           </Button>
         )}
@@ -352,11 +359,16 @@ export default function ImportPage() {
           )}
           <p className="text-sm text-muted">{t('import.hint')}</p>
           {imp.source === 'file' && (
-            <Card><ModeChoice mode={mode} onChange={setMode} name="import-mode" /></Card>
+            <Card>
+              {scopeBranch && <p className="text-sm font-medium text-primary">{t('branchImport.scopeLine', { branch: branchLabel(scopeBranch) })}</p>}
+              <ModeChoice mode={mode} onChange={setMode} name="import-mode" />
+            </Card>
           )}
+          <ColumnsMatch key={columnsKey} imp={imp} branches={branches} onConfirmed={(data) => setImp(data)} />
+          {needColumns && <p className="text-sm text-warning">{t('branchImport.needConfirm')}</p>}
           <ImportSummary summary={summary} loading={summaryLoading} />
           {summary && (
-            <Button size="lg" className="w-full md:w-auto md:justify-self-end" onClick={() => publish()} disabled={busy || rows.length === 0}>
+            <Button size="lg" className="w-full md:w-auto md:justify-self-end" onClick={() => publish()} disabled={busy || rows.length === 0 || needColumns}>
               {busy ? t('import.publishing') : t('import.publish')}
             </Button>
           )}

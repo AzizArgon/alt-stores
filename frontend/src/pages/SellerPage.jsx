@@ -4,6 +4,7 @@ import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 're
 import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
+import { ScopeChoice } from '../components/BranchColumns'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
@@ -115,6 +116,8 @@ function UploadBox({ defaultCurrency }) {
   const [file, setFile] = useState(null)
   const [currency, setCurrency] = useState(defaultCurrency)
   const [mode, setMode] = useState(null) // "full" / "append": the seller always chooses
+  const [scope, setScope] = useState('') // phase 12.1: '' = the whole store, else the branch id
+  const branches = useOutletContext()?.store?.branches || []
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -132,6 +135,7 @@ function UploadBox({ defaultCurrency }) {
     body.append('file', file)
     body.append('currency', currency)
     body.append('mode', mode)
+    if (scope) body.append('branch_id', scope)
     try {
       const res = await api.post('/imports', body)
       navigate(`/seller/imports/${res.data.id}`)
@@ -157,6 +161,7 @@ function UploadBox({ defaultCurrency }) {
           onChange={(e) => e.target.files[0] && setFile(e.target.files[0])} />
       </div>
       <CurrencyChoice currency={currency} onChange={setCurrency} label="upload.currency" />
+      <ScopeChoice branches={branches} value={scope} onChange={setScope} />
       <ModeChoice mode={mode} onChange={setMode} />
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
       {file && !mode && <p className="mb-2 text-sm text-warning">{t('upload.modeRequired')}</p>}

@@ -1,5 +1,6 @@
 import { ChevronRight, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { BranchChanges } from './BranchColumns'
 import { Card } from './ui'
 import { formatPrice } from '../services/format'
 
@@ -117,6 +118,7 @@ export default function ImportSummary({ summary, loading }) {
           {t('importSummary.unchanged', { count: summary.unchanged })}
         </p>
       </div>
+      <BranchChanges items={summary.branches} />
     </Card>
   )
 }
