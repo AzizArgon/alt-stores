@@ -7,6 +7,7 @@ import { formatDate, formatPrice } from '../services/format'
 import { specsText, useSpecDictionary } from '../services/specs'
 import { ProductLine } from './AddFromCatalog'
 import { StockEditor } from './BranchStock'
+import { BarcodeField } from './Barcode'
 import { ErrorText } from './AuthForm'
 import { CategoryIcon } from './CategoryIcon'
 import Flags from './Flags'
@@ -305,6 +306,9 @@ export default function OfferEditor({ offerId, rate, branches = [], onClose, onC
               <StockEditor offer={detail} branches={branches} onSaved={(row) => { setDetail((d) => ({ ...d, ...row })); onChanged(row) }} />
             </Section>
           )}
+          <Section title={t('barcode.field.title')}>
+            <div className="mt-2"><BarcodeField offer={detail} onChanged={() => onChanged(null)} /></div>
+          </Section>
           <CardSection key={`card-${detail.id}-${reloadKey}`} detail={detail} onApplied={() => refresh(null)}
             onMerge={(product) => api.post(`/seller/offers/${detail.id}/relink`, { product_id: product.id }).then(moved)
               .catch((err) => toast(t(errorKey(err, { 409: 'cabinet.error.offer_exists' })), 'danger'))} />

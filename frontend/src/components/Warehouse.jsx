@@ -7,6 +7,8 @@ import { ProductLine } from './AddFromCatalog'
 import { branchLabel, stockOf } from './BranchStock'
 import { Modal, useToast } from './overlays'
 import { Badge, Button, Input, Select, inputClass } from './ui'
+import { checkBarcode, feedback, looksLikeBarcode, useScanner } from '../services/barcode'
+import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 
 // Downloads a file of the API (the token goes in a header, so a plain link can't do it)
 export async function download(url, params, fallbackName) {
@@ -28,9 +30,10 @@ export function stockError(t, err) {
   return d.line ? t('warehouse.lineError', { line: d.line, text }) : text
 }
 
-// The goods input of every operation: one field with search; Enter takes the first match. In 12.3 a barcode
-// scanner types into this same field (a scanner is a keyboard that ends with Enter).
-export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, placeholder, hint = true }) {
+// The goods input of every operation: one field with search; Enter takes the first match. A barcode scanner types
+// into this same field (a scanner is a keyboard that ends with Enter): the search finds the store's own codes; a
+// code it doesn't know goes to `onCode` ("Привязать штрихкод"), a misread EAN/UPC is said at once (phase 12.3).
+export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = false, placeholder, hint = true, big = false }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
   const [items, setItems] = useState(null)
@@ -63,17 +66,29 @@ export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, pla
     e.preventDefault()
     const text = q.trim()
     if (!text) return
+    if (onCode && /^\d+$/.test(text) && checkBarcode(text).error === 'checksum') {
+      setQ('')
+      setItems(null)
+      onCode(text) // the caller says "код считан с ошибкой"
+      return
+    }
     // Enter right after typing (a scanner is faster than the search delay): ask now
     const found = items ?? (await api.get('/seller/stock/search', { params: { q: text } }).then((r) => r.data).catch(() => []))
-    if (found.length) pick(found[0])
-    else setItems([])
+    if (found.length) {
+      if (onCode && looksLikeBarcode(text)) feedback(true)
+      pick(found[0])
+    } else if (onCode && looksLikeBarcode(text)) {
+      setQ('')
+      setItems(null)
+      onCode(text)
+    } else setItems([])
   }
 
   return (
     <div className="relative">
       <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-faint" aria-hidden />
       <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} aria-label={t('warehouse.search')}
-        placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9`} autoComplete="off" />
+        placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9 ${big ? 'min-h-14 text-base' : ''}`} autoComplete="off" />
       {items && (
         <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-surface shadow-pop">
           {items.length === 0 && <p className="px-3 py-2.5 text-sm text-muted">{t('warehouse.notFoundMine')}</p>}
@@ -93,17 +108,18 @@ export function GoodsInput({ onPick, autoFocus = true, allowCatalog = false, pla
         </div>
       )}
       {hint && <p className="mt-1 text-xs text-muted">{t('warehouse.searchHint')}</p>}
-      {catalog && <CatalogPick query={q} onClose={() => setCatalog(false)} onPicked={(o) => { setCatalog(false); pick(o) }} />}
+      {catalog && <CatalogPick query={looksLikeBarcode(q) ? '' : q} onClose={() => setCatalog(false)} onPicked={(o) => { setCatalog(false); pick(o) }} />}
     </div>
   )
 }
 
-// "Нет у вас? Найти в каталоге": a card of the catalog becomes the store's offer (its price), then a receipt line
-function CatalogPick({ query, onClose, onPicked }) {
+// "Нет у вас? Найти в каталоге": a card of the catalog becomes the store's offer (its price), then a receipt line.
+// `product`: the card is already chosen (a barcode of the common base, a new card) — only the price is asked
+export function CatalogPick({ query = '', product = null, onClose, onPicked }) {
   const { t } = useTranslation()
   const [q, setQ] = useState(query)
   const [items, setItems] = useState([])
-  const [chosen, setChosen] = useState(null)
+  const [chosen, setChosen] = useState(product)
   const [price, setPrice] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [error, setError] = useState('')
@@ -159,33 +175,55 @@ const readDraft = (kind) => {
 }
 
 // A document of one kind: receipt (many lines, purchase price), sale (price), adjustment (new quantity, reason).
-// The draft is kept in the browser: a reload does not lose it.
-export function OperationForm({ kind, branches, onPosted, initialOffer }) {
+// The draft is kept in the browser: a reload does not lose it. Phase 12.3: a scan (the USB scanner even with no
+// field focused, the camera, a code typed into the goods input) adds a line; the same goods again — its quantity +1;
+// an unknown code opens "Привязать штрихкод". "Сканирование" passes its branch, `scan` and `priceOnly` (a store in
+// "Только прайс": the stock changes as a hand edit), `big` — large controls for a finger.
+export function OperationForm({ kind, branches, onPosted, initialOffer, branchId, scan = false, priceOnly = false, big = false, draftKey }) {
   const { t } = useTranslation()
   const toast = useToast()
-  const [lines, setLines] = useState(() => readDraft(kind))
+  const dk = draftKey || kind
+  const [lines, setLines] = useState(() => readDraft(dk))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [fresh, setFresh] = useState(null) // the key of the line the last scan touched
+  const [binding, setBinding] = useState(null)
   const lastBranch = useRef(lines.at(-1)?.branch_id || branches[0]?.id)
 
   useEffect(() => {
-    try { localStorage.setItem(DRAFT(kind), JSON.stringify(lines)) } catch { /* private mode */ }
-  }, [kind, lines])
+    try { localStorage.setItem(DRAFT(dk), JSON.stringify(lines)) } catch { /* private mode */ }
+  }, [dk, lines])
 
   const add = (offer) => {
     setError('')
     const stocks = offer.stocks || {}
-    // The branch of the last line; for a sale — the first branch where it is available
-    const branch = kind === 'sale'
+    // The chosen branch of "Сканирование"; else the branch of the last line; for a sale — the first branch where
+    // it is available
+    const branch = branchId || (kind === 'sale'
       ? branches.find((b) => (stocks[b.id]?.quantity ?? 0) - (stocks[b.id]?.reserved ?? 0) > 0)?.id || lastBranch.current
-      : lastBranch.current
+      : lastBranch.current)
     const now = stocks[branch]?.quantity
+    const same = kind !== 'adjust' && lines.find((l) => l.offer.id === offer.id && Number(l.branch_id) === Number(branch))
+    if (same) {
+      setFresh(same.key)
+      setLines((ls) => ls.map((l) => (l.key === same.key ? { ...l, qty: (Number(l.qty) || 0) + 1 } : l)))
+      return
+    }
+    const key = `${Date.now()}-${Math.random()}`
+    setFresh(key)
     setLines((ls) => [...ls, {
-      key: `${Date.now()}-${Math.random()}`, offer: { id: offer.id, name: offer.name, price: offer.price, currency: offer.currency, stocks },
+      key, offer: { id: offer.id, name: offer.name, price: offer.price, currency: offer.currency, stocks },
       branch_id: branch, qty: kind === 'adjust' ? (now ?? '') : 1, cost: offer.cost_last ?? '', price: offer.price ?? '',
       reason: 'inventory', comment: '',
     }])
   }
+  const onCode = async (code) => {
+    const res = await resolveCode(t, code)
+    if (res.error) setError(res.error)
+    else if (res.offer) add(res.offer)
+    else setBinding(res.unknown)
+  }
+  useScanner(onCode, !binding)
   useEffect(() => { if (initialOffer) add(initialOffer) }, [initialOffer?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key, patch) => {
@@ -198,13 +236,13 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
     try {
       const body = lines.map((l) => ({
         offer_id: l.offer.id, branch_id: Number(l.branch_id), qty: Number(l.qty) || 0,
-        cost: kind === 'receipt' && l.cost !== '' ? Number(l.cost) : null,
+        cost: kind === 'receipt' && l.cost !== '' && !priceOnly ? Number(l.cost) : null,
         price: kind === 'sale' && l.price !== '' ? Number(l.price) : null,
         reason: kind === 'adjust' ? l.reason : null, comment: l.comment || null,
       }))
-      const res = await api.post('/seller/stock/operations', { kind, lines: body })
+      const res = await api.post('/seller/stock/operations', { kind, lines: body, scan })
       toast(t('warehouse.posted', { count: res.data.count }))
-      try { localStorage.removeItem(DRAFT(kind)) } catch { /* private mode */ }
+      try { localStorage.removeItem(DRAFT(dk)) } catch { /* private mode */ }
       setLines([])
       onPosted?.()
     } catch (err) {
@@ -217,12 +255,18 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      <GoodsInput onPick={add} allowCatalog={kind === 'receipt'} />
+      <div className="flex flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
+        <GoodsInput onPick={add} onCode={onCode} allowCatalog={kind === 'receipt'} big={big} hint={!big} />
+        <CameraButton onCode={onCode} size={big ? 'lg' : 'md'} className={big ? 'min-h-14 w-full sm:w-auto' : ''} />
+      </div>
+      {binding && <BindBarcode code={binding.code} suggestion={binding.suggestion} onClose={() => setBinding(null)}
+        onBound={(offer) => { setBinding(null); add(offer) }} />}
       {lines.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">{t('warehouse.empty')}</p>
       ) : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {lines.map((l, i) => <Line key={l.key} n={i + 1} kind={kind} line={l} branches={branches} onChange={(p) => set(l.key, p)}
+            fresh={l.key === fresh} big={big} priceOnly={priceOnly} fixedBranch={Boolean(branchId)}
             onRemove={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />)}
         </ul>
       )}
@@ -231,8 +275,8 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted">{kind !== 'adjust' && <span className="mr-3 font-medium text-ink">{t('warehouse.total', { qty: total })}</span>}{t('warehouse.draftKept')}</p>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setLines([])}>{t('warehouse.clear')}</Button>
-            <Button onClick={post} disabled={busy}>{t('warehouse.post')}</Button>
+            <Button variant="secondary" size={big ? 'lg' : 'md'} onClick={() => setLines([])}>{t('warehouse.clear')}</Button>
+            <Button size={big ? 'lg' : 'md'} onClick={post} disabled={busy}>{t('warehouse.post')}</Button>
           </div>
         </div>
       )}
@@ -240,12 +284,15 @@ export function OperationForm({ kind, branches, onPosted, initialOffer }) {
   )
 }
 
-function Line({ n, kind, line, branches, onChange, onRemove }) {
+function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOnly, fixedBranch }) {
   const { t } = useTranslation()
+  const ref = useRef(null)
   const s = line.offer.stocks?.[line.branch_id]
   const free = s && s.quantity != null ? s.quantity - (s.reserved || 0) : null
+  useEffect(() => { if (fresh) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [fresh, line.qty])
+  const qty = Number(line.qty) || 0
   return (
-    <li className="rounded-lg border border-line bg-surface p-3">
+    <li ref={ref} className={`rounded-lg border p-3 transition-colors ${fresh ? 'border-primary bg-primary-soft ring-2 ring-primary' : 'border-line bg-surface'}`}>
       <div className="flex items-start gap-2">
         <span className="mt-0.5 text-xs text-faint">{n}.</span>
         <div className="min-w-0 flex-1">
@@ -260,19 +307,35 @@ function Line({ n, kind, line, branches, onChange, onRemove }) {
         </button>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 [&>*]:min-w-0">
-        <Select label={t('warehouse.branch')} value={line.branch_id} onChange={(e) => onChange({ branch_id: Number(e.target.value) })}>
-          {branches.map((b) => {
-            const bs = stockOf(line.offer, b)
-            return <option key={b.id} value={b.id}>{branchLabel(b)}{bs?.quantity != null ? ` (${bs.quantity})` : ''}</option>
-          })}
-        </Select>
-        <Input label={kind === 'adjust' ? t('warehouse.newQty') : t('warehouse.qty')} type="number" min={kind === 'adjust' ? 0 : 1} step="1" inputMode="numeric"
-          value={line.qty} onChange={(e) => onChange({ qty: e.target.value })} />
-        {kind === 'receipt' && (
+        {!fixedBranch && (
+          <Select label={t('warehouse.branch')} value={line.branch_id} onChange={(e) => onChange({ branch_id: Number(e.target.value) })}>
+            {branches.map((b) => {
+              const bs = stockOf(line.offer, b)
+              return <option key={b.id} value={b.id}>{branchLabel(b)}{bs?.quantity != null ? ` (${bs.quantity})` : ''}</option>
+            })}
+          </Select>
+        )}
+        {big && kind !== 'adjust' ? (
+          <div className="col-span-2 sm:col-span-1">
+            <span className="mb-1.5 block text-sm font-medium">{t('warehouse.qty')}</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => onChange({ qty: Math.max(1, qty - 1) })} aria-label={t('barcode.scan.minus')}
+                className="grid size-12 shrink-0 place-items-center rounded-md border border-line-strong text-xl font-semibold hover:bg-surface-2">−</button>
+              <input type="number" min="1" step="1" inputMode="numeric" value={line.qty} aria-label={t('warehouse.qty')}
+                onChange={(e) => onChange({ qty: e.target.value })} className={`${inputClass} min-h-12 min-w-0 flex-1 text-center text-base font-semibold`} />
+              <button type="button" onClick={() => onChange({ qty: qty + 1 })} aria-label={t('barcode.scan.plus')}
+                className="grid size-12 shrink-0 place-items-center rounded-md border border-line-strong text-xl font-semibold hover:bg-surface-2">+</button>
+            </div>
+          </div>
+        ) : (
+          <Input label={kind === 'adjust' ? t('warehouse.newQty') : t('warehouse.qty')} type="number" min={kind === 'adjust' ? 0 : 1} step="1" inputMode="numeric"
+            value={line.qty} onChange={(e) => onChange({ qty: e.target.value })} />
+        )}
+        {kind === 'receipt' && !priceOnly && (
           <Input label={`${t('warehouse.cost.column')}, ${line.offer.currency}`} hint={undefined} type="number" min="0" step="any" value={line.cost}
             onChange={(e) => onChange({ cost: e.target.value })} placeholder={t('warehouse.costOptional')} title={t('warehouse.costHint')} />
         )}
-        {kind === 'sale' && (
+        {kind === 'sale' && !priceOnly && (
           <Input label={`${t('warehouse.price')}, ${line.offer.currency}`} type="number" min="0" step="any" value={line.price}
             onChange={(e) => onChange({ price: e.target.value })} />
         )}

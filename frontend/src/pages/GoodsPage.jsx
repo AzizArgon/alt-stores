@@ -390,6 +390,7 @@ export default function GoodsPage() {
                         <span className="min-w-0">
                           <span className="block font-medium break-words hover:text-primary">{o.name}</span>
                           <span className="block truncate text-xs text-faint" title={o.raw_name}>{o.raw_name}</span>
+                          <Codes o={o} />
                           <span className={`block text-xs text-muted ${columns.length ? '2xl:hidden' : 'xl:hidden'}`}>{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
                           {showCost && <span className="block text-xs text-muted 2xl:hidden"><CostLine o={o} /></span>}
                         </span>
@@ -430,6 +431,7 @@ export default function GoodsPage() {
                       <span className="min-w-0">
                         <span className="block font-medium break-words">{o.name}</span>
                         <span className="block truncate text-xs text-faint">{o.raw_name}</span>
+                        <Codes o={o} />
                       </span>
                     </button>
                     <div className="mt-2 flex flex-wrap items-center gap-1"><MarketLabel info={o.market} /><FlagBadges flags={o.flags} /></div>
@@ -476,6 +478,13 @@ function CostLine({ o }) {
 }
 
 // Excel both ways (phase 12.2): "Скачать в Excel" with the current filters; "Загрузить остатки из Excel"
+// Phase 12.3: the store's barcodes of the offer (the search of "My goods" finds them too)
+function Codes({ o }) {
+  const { t } = useTranslation()
+  if (!o.barcodes?.length) return null
+  return <span className="block truncate font-mono text-xs text-muted" title={t('barcode.column')}>▮ {o.barcodes.map((b) => b.code).join(', ')}</span>
+}
+
 function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
   const { t } = useTranslation()
   const toast = useToast()

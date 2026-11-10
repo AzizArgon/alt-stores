@@ -5,6 +5,8 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CITIES } from '../config/cities'
 import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
+import api from '../services/api'
+import { checkBarcode, looksLikeBarcode } from '../services/barcode'
 import { useUnread } from '../services/chat'
 import { useUnseenReservations } from '../services/reservations'
 import { useCity } from '../services/city.jsx'
@@ -50,9 +52,15 @@ function HeaderSearch({ className = '' }) {
     return () => clearTimeout(timer)
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const onSubmit = (e) => {
+  // Phase 12.3: a code from a box opens its card — only a code confirmed in the common base (two stores bound it)
+  const onSubmit = async (e) => {
     e.preventDefault()
-    openResults(value.trim(), onCatalog)
+    const text = value.trim()
+    if (looksLikeBarcode(text) && !checkBarcode(text).error) {
+      const id = await api.get(`/catalog/barcode/${encodeURIComponent(checkBarcode(text).code)}`).then((r) => r.data.product_id).catch(() => null)
+      if (id) { navigate(`/products/${id}`); return }
+    }
+    openResults(text, onCatalog)
   }
 
   return (

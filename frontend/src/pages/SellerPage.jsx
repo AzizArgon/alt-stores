@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, FileBarChart, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store, Boxes } from 'lucide-react'
+import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, FileBarChart, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store, Boxes, ScanBarcode } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
 import StockModeBlock from '../components/StockMode'
@@ -266,6 +266,7 @@ const SECTIONS = [
   { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
   { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
   { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true },  // phase 12.2
+  { to: '/seller/scan', key: 'scan', icon: ScanBarcode, tab: true },  // phase 12.3
   { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
   { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
   { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
