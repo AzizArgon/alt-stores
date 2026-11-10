@@ -143,6 +143,14 @@ def plan_branch_stock(db: Session, imp: PriceImport, store: Store, matched: list
                       unseen: list[Offer], mode: str) -> dict:
     """"What will change" by branch: per branch how many goods appear ("есть") and run out ("нет"); and the
     general "в наличии" after the upload for tracked offers {offer id: bool}."""
+    if imp.columns_json is None and (imp.stats_json or {}).get("branch_columns"):
+        # Not confirmed yet: the summary follows the suggested match (publishing waits for the confirmation)
+        suggested = branch_info(db, imp)["mapping"]
+        imp.columns_json = suggested
+        try:
+            return plan_branch_stock(db, imp, store, matched, unseen, mode)
+        finally:
+            imp.columns_json = None
     branches = {b.id: b for b in store_branches(db, store.id)}
     counts = {bid: {"appear": 0, "run_out": 0} for bid in branches}
     general: dict[int, bool] = {}

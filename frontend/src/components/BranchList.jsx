@@ -46,7 +46,8 @@ export function BranchAvailability({ stock, city }) {
   if (!stock.tracked && !many) return null
   const where = city && city !== 'all' && stock.branches.some((b) => b.city === city) ? t(`cities.${city}`) : null
   const summary = stock.tracked
-    ? t(where ? 'stock.buyer.inCity' : 'stock.buyer.summary', { available: stock.available, total: stock.total, city: where, count: stock.total })
+    ? t(stock.available > 0 ? (where ? 'stock.buyer.inCity' : 'stock.buyer.summary') : (where ? 'stock.buyer.noneInCity' : 'stock.buyer.none'),
+      { available: stock.available, total: stock.total, city: where, count: stock.total })
     : t('stock.buyer.notTracked')
   return (
     <div className="mt-2 min-w-0 rounded-lg border border-line">

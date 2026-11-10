@@ -1548,7 +1548,15 @@
       "branchCount_one": "{{count}} филиал",
       "branchCount_few": "{{count}} филиала",
       "branchCount_many": "{{count}} филиалов",
-      "branchCount_other": "{{count}} филиалов"
+      "branchCount_other": "{{count}} филиалов",
+      "none_one": "Нет в наличии ни в одном филиале",
+      "none_few": "Нет в наличии ни в одном из {{total}} филиалов",
+      "none_many": "Нет в наличии ни в одном из {{total}} филиалов",
+      "none_other": "Нет в наличии ни в одном из {{total}} филиалов",
+      "noneInCity_one": "{{city}}: нет в филиале",
+      "noneInCity_few": "{{city}}: нет ни в одном из {{total}} филиалов",
+      "noneInCity_many": "{{city}}: нет ни в одном из {{total}} филиалов",
+      "noneInCity_other": "{{city}}: нет ни в одном из {{total}} филиалов"
     }
   },
   "branchImport": {

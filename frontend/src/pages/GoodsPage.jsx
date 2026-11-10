@@ -359,13 +359,13 @@ export default function GoodsPage() {
                 <tr>
                   <th className="w-10 px-3"><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
                   <SortHeader k="name" sort={sort} desc={desc} onSort={onSort}>{t('cabinet.col.name')}</SortHeader>
-                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className="w-40">{t('cabinet.col.price')}</SortHeader>
+                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={columns.length ? 'w-32' : 'w-40'}>{t('cabinet.col.price')}</SortHeader>
                   <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className="hidden w-32 xl:table-cell">{t('cabinet.col.condition')}</SortHeader>
                   <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className="w-24">{t('cabinet.col.stock')}</SortHeader>
                   {columns.map((b) => (
-                    <th key={b.id} className="w-20 px-2 py-2 font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
+                    <th key={b.id} className="w-[4.5rem] px-1 py-2 font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
                   ))}
-                  <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className="w-36">{t('cabinet.col.market')}</SortHeader>
+                  <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`w-36 ${columns.length ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>
                   <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className="hidden w-28 xl:table-cell">{t('cabinet.col.updated')}</SortHeader>
                 </tr>
               </thead>
@@ -384,7 +384,10 @@ export default function GoodsPage() {
                           <span className="block text-xs text-muted xl:hidden">{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
                         </span>
                       </button>
-                      <div className="mt-1 pl-7"><FlagBadges flags={o.flags} /></div>
+                      <div className="mt-1 flex flex-wrap gap-1 pl-7">
+                        {columns.length > 0 && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
+                        <FlagBadges flags={o.flags} />
+                      </div>
                     </td>
                     <td className="px-2 py-2 align-top">
                       <PriceInput offer={o} onSave={patch} />
@@ -395,9 +398,9 @@ export default function GoodsPage() {
                       <Switch checked={o.is_in_stock} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
                     {columns.map((b) => (
-                      <td key={b.id} className="px-2 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} /></td>
+                      <td key={b.id} className="px-1 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} /></td>
                     ))}
-                    <td className="px-2 py-2.5 align-top"><MarketLabel info={o.market} /></td>
+                    <td className={`px-2 py-2.5 align-top ${columns.length ? 'hidden xl:table-cell' : ''}`}><MarketLabel info={o.market} /></td>
                     <td className="hidden px-2 py-3 align-top text-muted xl:table-cell">{formatDate(o.updated_at)}</td>
                   </tr>
                 ))}
