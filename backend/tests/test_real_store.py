@@ -84,3 +84,34 @@ def test_real_store_survives_export_and_restore(db):
         assert [h.price for h in changed.price_history] == [99]
         seed_demo(clean, 12_000)  # the demo is rebuilt from the restored store
         assert real_store(clean).id == restored.id
+
+
+def test_real_store_branches_and_stock_survive_export_and_restore(db):
+    """Phase 12.1: the owner's branches (with the remembered columns) and the stock by branch come back."""
+    from app.db.models import Branch
+    from app.services.branches import save_branch, set_stock
+
+    store = _real(db)
+    store.address, store.hours = "ул. Навои, 12", "Пн–Сб 10–19"
+    main = save_branch(db, store, {"city": "tashkent", "address": "ул. Навои, 12", "landmark": "ЦУМ",
+                                   "hours": "Пн–Сб 10–19"})
+    other = save_branch(db, store, {"city": "tashkent", "address": "ул. Бабура, 5", "landmark": "рынок", "name": "Б"})
+    other.columns_json = ["Склад Б"]
+    set_stock(store.offers[0], other.id, quantity=3)
+    set_stock(store.offers[0], main.id, quantity=0)
+    db.commit()
+    data = json.loads(json.dumps(real_store_data(db)))
+    engine = create_engine("sqlite://")
+    event.listen(engine, "connect", lambda c, _: c.execute("PRAGMA foreign_keys=ON"))
+    Base.metadata.create_all(engine)
+    with sessionmaker(bind=engine, expire_on_commit=False)() as clean:
+        seed_categories(clean)
+        restore_real_store(clean, data[0])
+        branches = clean.scalars(select(Branch).order_by(Branch.id)).all()
+        assert [(b.address, b.is_main, b.columns_json) for b in branches] == [
+            ("ул. Навои, 12", True, []), ("ул. Бабура, 5", False, ["Склад Б"])]
+        restored = clean.scalar(select(Store))
+        assert restored.hours == "Пн–Сб 10–19"
+        offer = clean.scalar(select(Offer).where(Offer.raw_name == store.offers[0].raw_name))
+        assert {s.branch_id: s.quantity for s in offer.stocks} == {branches[0].id: 0, branches[1].id: 3}
+        assert offer.is_in_stock
