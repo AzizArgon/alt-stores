@@ -52,7 +52,8 @@
 Статус: готовы фазы 1–8.5 (импорт и стандартизация, Anti-Fraud, каталог, мониторинг `/market`, замер точности `docs/experiment.md`, демо, VPS) и бета Б1–Б4 (дизайн `index.css`/`components/ui.jsx`, витрина `layouts/StoreLayout.jsx`, кабинет `/seller/*` на `layouts/Workspace.jsx`, сборки `services/builds.py`); сервер в Docker (`v0.3-beta`).
 Фаза 9 готова: б/у отдельно от новых (`NEW_GROUP`/`USED_GROUP`, `/used`, вкладки карточки), автопарсер Telegram (`services/telegram.py`, `scripts/tg_channels.py`, `scripts/tg_fetch.py`; продавец `stores.kind = telegram`, личные данные не хранятся).
 Фаза 10 готова: чат покупателя с магазином по теме (товар, сборка, вопрос магазину; `services/chat.py`, `/api/chat`, `components/Chat.jsx`, `/messages`, `/seller/messages`), опрос без WebSocket, жалобы, блокировка.
-Фаза 11 готова: бронь без оплаты и доставки (`services/reservations.py`, `/api/reservations`, `components/Reservation.jsx`, `/reservations`, `/seller/reservations`), снимок цены, статусы по порядку, срок с подтверждения, системные строки в чате; демо-сборки и демо-брони обновляются на месте (id не меняются). Далее — фазы 12–20 (`docs/roadmap.md`).
+Фаза 11 готова: бронь без оплаты и доставки (`services/reservations.py`, `/api/reservations`, `components/Reservation.jsx`, `/reservations`, `/seller/reservations`), снимок цены, статусы по порядку, срок с подтверждения, системные строки в чате; демо-сборки и демо-брони обновляются на месте (id не меняются).
+Фаза 12 готова: адрес, часы и ссылка Яндекс Карт магазина (`services/maps.py`, `config/maps.js`), страницы `/store/<id>` и `/stores` (`services/stores.py`), отмена последней загрузки (`services/undo.py`, снимок в `price_imports.undo_json`, 7 дней, ручные правки не трогаются). Далее — фазы 13–20 (`docs/roadmap.md`).
 
 ## Открытые вопросы
 - Нет.
