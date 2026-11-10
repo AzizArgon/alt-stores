@@ -79,8 +79,16 @@ def _value_stock(value) -> tuple[int | None, bool | None]:
     return 0, None
 
 
-def row_targets(imp: PriceImport, r: dict, in_stock: bool) -> dict[int, tuple[int | None, bool | None]] | None:
-    """What the row sets per branch: {branch_id: (quantity, present)}; None = no branch info (the general flag)."""
+def row_targets(imp: PriceImport, r: dict, in_stock: bool, stock_mode: bool = False) -> dict | None:
+    """What the row sets per branch: {branch_id: (quantity, present)}; None = no branch info (the general flag).
+    "Учёт остатков" (phase 12.2): only numbers set a quantity ("+", "да", empty change nothing), and without
+    numbers nothing changes ({})."""
+    if stock_mode:
+        cells = r.get("branches") or {}
+        if imp.branch_id:
+            vals = [v for v in cells.values() if type(v) is int]
+            return {imp.branch_id: (max(0, vals[0]), None)} if len(cells) == 1 and vals else {}
+        return {bid: (max(0, cells[h]), None) for h, bid in _mapped(imp).items() if type(cells.get(h)) is int}
     if imp.branch_id:
         cells = r.get("branches") or {}
         if in_stock and len(cells) == 1:
@@ -96,8 +104,13 @@ def row_targets(imp: PriceImport, r: dict, in_stock: bool) -> dict[int, tuple[in
 
 def apply_row_stock(db: Session, imp: PriceImport, store: Store, offer: Offer, r: dict, in_stock: bool) -> bool:
     """Sets the offer's stock from one row; returns the general "в наличии" after it."""
-    targets = row_targets(imp, r, in_stock)
-    if targets is not None:
+    stock_mode = store.stock_mode == "stock"
+    targets = row_targets(imp, r, in_stock, stock_mode)
+    if stock_mode and not targets and offer.stocks:
+        pass  # "Учёт остатков": a tracked offer changes only by numbers of its branches
+    elif stock_mode and not targets:
+        offer.is_in_stock = in_stock
+    elif targets is not None:
         for bid, (q, present) in targets.items():
             set_stock(offer, bid, quantity=q, present=present)
     elif offer.stocks:
@@ -116,8 +129,13 @@ def apply_row_stock(db: Session, imp: PriceImport, store: Store, offer: Offer, r
     return offer.is_in_stock
 
 
-def take_off_sale(imp: PriceImport, offer: Offer) -> bool:
-    """A full price list without this offer. Returns True when something changed (to remember it for undo first)."""
+def take_off_sale(imp: PriceImport, offer: Offer, stock_mode: bool = False) -> bool:
+    """A full price list without this offer. Returns True when something changed (to remember it for undo first).
+    "Учёт остатков": a tracked offer is not touched (its quantities change only by operations)."""
+    if stock_mode and offer.stocks:
+        return False
+    if imp.branch_id and stock_mode:
+        return False
     if imp.branch_id:
         row = next((s for s in offer.stocks if s.branch_id == imp.branch_id), None)
         if row is None or not available(row):
@@ -154,14 +172,15 @@ def plan_branch_stock(db: Session, imp: PriceImport, store: Store, matched: list
     branches = {b.id: b for b in store_branches(db, store.id)}
     counts = {bid: {"appear": 0, "run_out": 0} for bid in branches}
     general: dict[int, bool] = {}
+    stock_mode = store.stock_mode == "stock"
     for offer, r, in_stock in matched:
-        targets = row_targets(imp, r, in_stock)
+        targets = row_targets(imp, r, in_stock, stock_mode)
         rows = {s.branch_id: available(s) for s in (offer.stocks if offer is not None else [])}
         after = dict(rows)
         if targets is not None:
             for bid, (q, present) in targets.items():
                 after[bid] = _avail_after(q, present)
-        elif rows:
+        elif rows and not stock_mode:
             if not in_stock:
                 after = {b: False for b in rows}
         for bid in set(after) | set(rows):
@@ -171,7 +190,7 @@ def plan_branch_stock(db: Session, imp: PriceImport, store: Store, matched: list
             general[offer.id] = (any(after.values()) or (targets is None and in_stock)) and r.get("price") is not None
     if mode == "full":
         for offer in unseen:
-            if take_off_sale(imp, offer):
+            if take_off_sale(imp, offer, stock_mode):
                 for s in offer.stocks:
                     if (not imp.branch_id or s.branch_id == imp.branch_id) and available(s) and s.branch_id in counts:
                         counts[s.branch_id]["run_out"] += 1

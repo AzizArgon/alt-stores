@@ -169,10 +169,13 @@ def is_stale(stock: OfferStock) -> bool:
 
 def set_stock(offer: Offer, branch_id: int, quantity: int | None = None, present: bool | None = None) -> OfferStock:
     """Set one branch: a quantity (>= 0), or only "есть / нет" (quantity unknown). Recomputes the offer."""
+    from app.services.stock import record  # the journal of movements (phase 12.2)
+
     row = next((s for s in offer.stocks if s.branch_id == branch_id), None)
     if row is None:
         row = OfferStock(branch_id=branch_id, reserved=0)
         offer.stocks.append(row)
+    q0, r0 = row.quantity, row.reserved or 0
     if quantity is not None:
         row.quantity = max(0, int(quantity))
     elif present is not None:
@@ -181,6 +184,7 @@ def set_stock(offer: Offer, branch_id: int, quantity: int | None = None, present
     row.in_stock = available(row) if row.quantity is not None else bool(row.in_stock)
     row.updated_at = utcnow()
     recompute_offer(offer)
+    record(offer, row, q0, r0)
     return row
 
 
@@ -206,6 +210,7 @@ def seller_stocks(offer: Offer) -> dict:
 
 def clear_stock(offer: Offer, branch_id: int) -> None:
     """"Не указано": the branch row goes away (the offer is not tracked there)."""
+    _journal_gone(offer, [s for s in offer.stocks if s.branch_id == branch_id])
     offer.stocks[:] = [s for s in offer.stocks if s.branch_id != branch_id]
     recompute_offer(offer)
 
@@ -222,16 +227,36 @@ def stock_state(offer: Offer) -> dict:
             for s in offer.stocks}
 
 
+def _journal_gone(offer: Offer, rows: list[OfferStock]) -> None:
+    """A branch row removed ("не указано", undo): a journal line "the quantity is no longer known"."""
+    from app.services.stock import record
+
+    for s in rows:
+        if s.quantity is not None or s.reserved:
+            q0, r0 = s.quantity, s.reserved or 0
+            gone = OfferStock(branch_id=s.branch_id, quantity=None, reserved=s.reserved or 0)
+            record(offer, gone, q0, r0)
+
+
 def restore_stock(offer: Offer, state: dict) -> None:
+    """Undo of an upload: the branch rows go back to the snapshot; the journal gets reverse lines (the kind and
+    the upload come from the caller's journal(...)). Reserves stay as they are."""
+    from app.services.stock import record
+
     keep = {int(k) for k in state}
+    _journal_gone(offer, [s for s in offer.stocks if s.branch_id not in keep])
     offer.stocks[:] = [s for s in offer.stocks if s.branch_id in keep]
     for key, (quantity, present, at) in state.items():
         row = next((s for s in offer.stocks if s.branch_id == int(key)), None)
         if row is None:
             row = OfferStock(branch_id=int(key), reserved=0)
             offer.stocks.append(row)
+        q0, r0 = row.quantity, row.reserved or 0
         row.quantity, row.in_stock = quantity, present
+        if quantity is not None:
+            row.in_stock = quantity - (row.reserved or 0) > 0
         row.updated_at = datetime.fromisoformat(at) if at else utcnow()
+        record(offer, row, q0, r0)
 
 
 def offer_branches(offer: Offer, branches: list[Branch], store: Store, city: str | None = None) -> dict:

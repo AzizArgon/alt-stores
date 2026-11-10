@@ -16,6 +16,7 @@ from app.db.models import (
     ProductFix, Store, utcnow,
 )
 from app.services.branches import available, seller_stocks, set_general, set_stock
+from app.services.stock import overview as stock_overview
 from app.services.builds import counts as build_counts
 from app.services.chat import overview_counts as chat_counts
 from app.services.reservations import store_counts as reservation_counts
@@ -85,7 +86,15 @@ def offer_row(offer: Offer, market: dict | None = None) -> dict:
         "is_in_stock": offer.is_in_stock, "note": offer.note, "updated_at": _aware(offer.updated_at),
         "flags": active_flags(offer), "market": market,
         "stocks": seller_stocks(offer),  # phase 12.1: by branch id; empty = the store does not track it by branch
+        # phase 12.2, only the seller: purchase prices (offer currency) and the markup over the average one
+        "cost_last": offer.cost_last, "cost_avg": offer.cost_avg, "markup": markup(offer),
     }
+
+
+def markup(offer: Offer) -> float | None:
+    if not offer.cost_avg or offer.price is None:
+        return None
+    return round((offer.price - offer.cost_avg) / offer.cost_avg * 100, 1)
 
 
 def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
@@ -161,6 +170,8 @@ def overview(db: Session, store: Store) -> dict:
         "builds": build_counts(db, store),  # ready PCs live apart from the goods (phase B4)
         "chat": chat_counts(db, store),  # new messages and buyers waiting longer than a day (phase 10)
         "reservations": reservation_counts(db, store),  # new ones and the ones ending today (phase 11)
+        "stock_mode": store.stock_mode,
+        "stock": stock_overview(db, store),  # phase 12.2: running low, reservations without a reserve, movements
     }
 
 
@@ -217,6 +228,8 @@ def apply_changes(offer: Offer, changes: dict, source: str) -> None:
     if changes.get("is_in_stock") is not None and changes["is_in_stock"] != offer.is_in_stock:
         if changes["is_in_stock"] and offer.price is None:
             raise EditError("price_required")
+        if offer.stocks and offer.store is not None and offer.store.stock_mode == "stock":
+            raise EditError("stock_mode")  # "Учёт остатков": quantities change only by operations (phase 12.2)
         set_general(object_session(offer), offer, changes["is_in_stock"])  # by branch too (phase 12.1)
         offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source=source))
     if offer.price is not None and (offer.price != old_price or offer.currency != old_currency):
@@ -323,8 +336,24 @@ def set_branch_stock(db: Session, store: Store, offer: Offer, items: list[dict])
     """The editor and the inline cell of "My goods": a quantity per branch, "есть / нет", or "не указано"."""
     from app.services.branches import clear_stock, store_branches
 
+    from app.services.stock import journal
+
+    if store.stock_mode == "stock":
+        raise EditError("stock_mode")
     ids = {b.id for b in store_branches(db, store.id)}
     was = offer.is_in_stock
+    with journal("manual", user_id=store.user_id):
+        _set_branch_items(offer, items, ids)
+    if was != offer.is_in_stock:
+        offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source="edit"))
+    offer.updated_at = utcnow()
+    db.commit()
+    return offer_row(offer, _market(market_data(db), offer))
+
+
+def _set_branch_items(offer: Offer, items: list[dict], ids: set[int]) -> None:
+    from app.services.branches import clear_stock
+
     for it in items:
         if it["branch_id"] not in ids:
             raise EditError("branch")
@@ -334,11 +363,6 @@ def set_branch_stock(db: Session, store: Store, offer: Offer, items: list[dict])
             if offer.price is None and (it.get("present") or (it.get("quantity") or 0) > 0):
                 raise EditError("price_required")
             set_stock(offer, it["branch_id"], quantity=it.get("quantity"), present=it.get("present"))
-    if was != offer.is_in_stock:
-        offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source="edit"))
-    offer.updated_at = utcnow()
-    db.commit()
-    return offer_row(offer, _market(market_data(db), offer))
 
 
 def _branch_changes(offer: Offer, branch_id: int, present: bool) -> bool:
@@ -352,6 +376,10 @@ def bulk(db: Session, store: Store, offers: list[Offer], action: str, percent: f
          branch_id: int | None = None) -> dict:
     """Bulk actions: off sale, back on sale (only priced offers), price +-N%, "в филиале …: есть / нет" (phase
     12.1). apply=False is the preview."""
+    from app.services.stock import journal
+
+    if action in ("branch_on", "branch_off") and store.stock_mode == "stock":
+        raise EditError("stock_mode")
     changed: list[tuple[Offer, dict]] = []
     for offer in offers:
         if action in ("branch_on", "branch_off"):
@@ -372,7 +400,8 @@ def bulk(db: Session, store: Store, offers: list[Offer], action: str, percent: f
         for offer, c in changed:
             if "branch" in c:
                 was = offer.is_in_stock
-                set_stock(offer, branch_id, present=c["branch"])
+                with journal("manual", user_id=store.user_id):
+                    set_stock(offer, branch_id, present=c["branch"])
                 if was != offer.is_in_stock:
                     offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source="bulk"))
                 offer.updated_at = utcnow()

@@ -160,7 +160,15 @@ def plan_undo(db: Session, imp: PriceImport) -> dict:
 
 
 def undo_import(db: Session, imp: PriceImport) -> dict:
-    """Returns the store's offers to the state before the upload (see the module doc). Counts as in plan_undo."""
+    """Returns the store's offers to the state before the upload (see the module doc). Counts as in plan_undo.
+    Stock goes back by reverse "undo" lines of the journal (phase 12.2): the upload's lines are never deleted."""
+    from app.services.stock import journal
+
+    with journal("undo", import_id=imp.id):
+        return _undo_import(db, imp)
+
+
+def _undo_import(db: Session, imp: PriceImport) -> dict:
     from app.services.cabinet import recheck_flags  # cabinet imports the importer that imports this module
 
     plan = plan_undo(db, imp)

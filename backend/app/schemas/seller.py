@@ -19,6 +19,7 @@ class StoreIn(BaseModel):
     reservation_days: int = Field(default=2, ge=1, le=7)  # how long a confirmed reservation waits (phase 11)
     hours: str | None = Field(default=None, max_length=100)  # "Mon-Sat 10:00-19:00", as the store writes it
     map_url: str | None = Field(default=None, max_length=500)  # only Yandex Maps (app.services.maps)
+    low_stock: int | None = Field(default=None, ge=0, le=1000)  # phase 12.2: "заканчивается" threshold
 
     @field_validator("city")
     @classmethod
@@ -35,6 +36,7 @@ class StoreOut(StoreIn):
     is_verified: bool
     address: str | None = None  # stores made before phase 12 may have none yet
     branches: list[dict] = []  # phase 12.1: the main one first
+    stock_mode: str = "price"  # phase 12.2: "price" (только прайс) / "stock" (учёт остатков)
     map_lat: float | None = None
     map_lon: float | None = None
 

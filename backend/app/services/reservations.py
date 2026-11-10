@@ -20,6 +20,7 @@ from app.db.models import (
     Branch, Build, Conversation, Message, MessageAuthor, Offer, Reservation, ReservationEvent, ReservationStatus as S, Store,
     StoreKind, TopicKind, User, UserRole, utcnow,
 )
+from app.services import stock  # phase 12.2: reserves in "Учёт остатков"
 from app.services.branches import available, branch_public, store_branches
 from app.services.chat import ChatError, _aware, _price, is_blocked
 
@@ -222,6 +223,7 @@ def expire_due(db: Session) -> int:
     due = db.scalars(select(Reservation).where(Reservation.status.in_((S.confirmed, S.ready)),
                                                Reservation.expires_at.is_not(None), Reservation.expires_at < now)).all()
     for r in due:
+        stock.release_reserve(db, r.store, r, None)
         _set_status(db, r, S.expired, "system", None)
         _system_line(db, r, "expired", None)
     if due:
@@ -260,6 +262,16 @@ def advance(db: Session, user: User, res_id: int) -> Reservation:
         raise ReservationError("bad_status")
     if nxt == S.confirmed:
         r.expires_at = utcnow() + timedelta(days=r.store.reservation_days or 2)
+        # Phase 12.2, "Учёт остатков": the confirmation reserves the items in the branch (not enough — refused)
+        if not stock.take_reserve(db, r.store, r, user.id):
+            db.rollback()
+            raise ReservationError("reserve_short")
+    if nxt == S.issued:
+        try:
+            stock.issue(db, r.store, r, user.id)  # a sale by the reservation
+        except stock.StockError:
+            db.rollback()
+            raise ReservationError("reserve_short")
     _set_status(db, r, nxt, "store", user)
     _system_line(db, r, nxt.value, user, until=_until(r))
     db.commit()
@@ -278,6 +290,11 @@ def change_branch(db: Session, user: User, res_id: int, branch_id: int) -> Reser
         raise ReservationError("branch")
     if branch.id == r.branch_id:
         return r
+    try:
+        stock.transfer(db, r.store, r, branch.id, user.id)  # phase 12.2: the reserve moves with it
+    except stock.StockError:
+        db.rollback()
+        raise ReservationError("branch_no_stock")
     r.branch_id, r.updated_at, r.buyer_seen = branch.id, utcnow(), False
     _system_line(db, r, "branch_changed", user, branch=branch.name or "", address=branch.address,
                  city=branch.city)
@@ -300,6 +317,7 @@ def cancel(db: Session, user: User, res_id: int, reason: str | None = None, text
             raise ReservationError("reason_text")
         r.cancel_reason, r.cancel_text = reason, text
     r.cancelled_by = side
+    stock.release_reserve(db, r.store, r, user.id)  # phase 12.2: the reserve goes back
     _set_status(db, r, S.cancelled, side, user)
     _system_line(db, r, f"cancelled_{side}", user, reason=reason or "", text=text or "")
     db.commit()

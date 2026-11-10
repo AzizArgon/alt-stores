@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime, timezone
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, WriteOnlyMapped, mapped_column, relationship
 
 from app.db.database import Base
 
@@ -115,6 +115,9 @@ class Store(Base):
     map_url: Mapped[str | None] = mapped_column(String(500))
     map_lat: Mapped[float | None] = mapped_column(Float)
     map_lon: Mapped[float | None] = mapped_column(Float)
+    # Phase 12.2: "price" = stock from price lists and hand edits; "stock" = only operations change quantities
+    stock_mode: Mapped[str] = mapped_column(String(8), default="price", server_default="price")
+    low_stock: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # "заканчивается": available <= it
 
     owner: Mapped[User] = relationship(back_populates="stores")
     offers: Mapped[list["Offer"]] = relationship(back_populates="store")
@@ -173,6 +176,9 @@ class Offer(Base):
     # An ad of a Telegram channel (phase 9): the link to its post and when it was posted (older than 30 days = hidden)
     post_url: Mapped[str | None] = mapped_column(String(255))
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Phase 12.2, only the seller sees them: the last purchase price and the average over receipts (offer currency)
+    cost_last: Mapped[float | None] = mapped_column(Float)
+    cost_avg: Mapped[float | None] = mapped_column(Float)
 
     product: Mapped[Product] = relationship(back_populates="offers")
     store: Mapped[Store] = relationship(back_populates="offers")
@@ -180,6 +186,7 @@ class Offer(Base):
     fraud_flags: Mapped[list["FraudFlag"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     events: Mapped[list["OfferEvent"]] = relationship(back_populates="offer", cascade="all, delete-orphan")
     stocks: Mapped[list["OfferStock"]] = relationship(cascade="all, delete-orphan")
+    movements: WriteOnlyMapped["StockMovement"] = relationship(cascade="all, delete-orphan", passive_deletes=True)
 
 
 class OfferEvent(Base):
@@ -590,6 +597,8 @@ class Reservation(Base):
     demo_key: Mapped[str | None] = mapped_column(String(32))  # constant key of a demo reservation (re-runs keep the id)
     # Where the buyer picks it up (phase 12.1); old reservations are moved to the main branch
     branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
+    # Phase 12.2 ("Учёт остатков"): how many items this reservation holds in reserve in its branch (0 = none)
+    reserved_qty: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -656,3 +665,33 @@ class OfferStock(Base):
     reserved: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     in_stock: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# --- Phase 12.2: the stock journal ---------------------------------------------------------------------------------
+
+class StockMovement(Base):
+    """One change of a quantity or a reserve of an offer in a branch. Never deleted or edited: an undo is a reverse
+    record. kind: initial / receipt / sale / adjust / reserve / unreserve / res_sale / import / undo / manual."""
+
+    __tablename__ = "stock_movements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    offer_id: Mapped[int] = mapped_column(ForeignKey("offers.id", ondelete="CASCADE"), index=True)
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"), index=True)
+    kind: Mapped[str] = mapped_column(String(12), index=True)
+    delta: Mapped[int] = mapped_column(Integer, default=0)  # quantity change (unknown quantity counts as 0)
+    reserved_delta: Mapped[int] = mapped_column(Integer, default=0)
+    quantity_before: Mapped[int | None] = mapped_column(Integer)  # None = "есть, количество не указано" / no row
+    quantity_after: Mapped[int | None] = mapped_column(Integer)
+    reserved_after: Mapped[int] = mapped_column(Integer, default=0)
+    cost: Mapped[float | None] = mapped_column(Float)  # purchase price of a receipt (offer currency)
+    price: Mapped[float | None] = mapped_column(Float)  # sale price (sale / sale by a reservation)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    reason: Mapped[str | None] = mapped_column(String(12))  # adjust: inventory / defect / loss / other
+    comment: Mapped[str | None] = mapped_column(String(300))
+    doc: Mapped[str | None] = mapped_column(String(24), index=True)  # lines of one receipt document share it
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    reservation_id: Mapped[int | None] = mapped_column(ForeignKey("reservations.id", ondelete="SET NULL"))
+    import_id: Mapped[int | None] = mapped_column(ForeignKey("price_imports.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

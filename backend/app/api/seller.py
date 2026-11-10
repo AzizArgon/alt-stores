@@ -71,7 +71,7 @@ def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session 
     store = store or Store(user_id=user.id)
     location = {"address", "district", "city", "hours", "map_url"}
     for field, value in data.model_dump().items():
-        if has_branches and field in location:
+        if has_branches and field in location or field == "low_stock" and value is None:
             continue
         if isinstance(value, str):
             value = value.strip() or None

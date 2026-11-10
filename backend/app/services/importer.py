@@ -499,7 +499,7 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
             groups["price_down" if old is not None and new is not None and new < old else "price_up"].append(item)
     if mode == "full":
         for offer in unseen:
-            if take_off_sale(imp, offer) and not by_branch["general"].get(offer.id, False):
+            if take_off_sale(imp, offer, store.stock_mode == "stock") and not by_branch["general"].get(offer.id, False):
                 groups["out_of_stock"].append({
                     "name": offer.product.normalized_name, "raw_name": offer.raw_name, "price": None,
                     "currency": offer.currency.value, "old_price": offer.price, "old_currency": offer.currency.value,
@@ -514,7 +514,16 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
 
 def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None,
                    touched: list[int] | None = None) -> dict:
-    """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock"."""
+    """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock".
+    Stock changes go to the journal as "import" lines of this upload (phase 12.2)."""
+    from app.services.stock import journal
+
+    with journal("import", import_id=imp.id):
+        return _publish_import(db, imp, store, rows, mode, touched)
+
+
+def _publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None,
+                    touched: list[int] | None = None) -> dict:
     mode = import_mode(imp, mode)
     store_offers = db.scalars(select(Offer).where(Offer.store_id == store.id)).all()
     offers_by_raw = {o.raw_name: o for o in store_offers}
@@ -593,7 +602,7 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
 
     # Only a full price list file says "everything else is sold out"; an addition or a post lists just a few goods
     for offer in offers_by_raw.values() if mode == "full" else ():
-        if offer.id not in seen and take_off_sale(imp, offer):
+        if offer.id not in seen and take_off_sale(imp, offer, store.stock_mode == "stock"):
             remember(offer)
             was = offer.is_in_stock
             do_take_off_sale(imp, offer)  # a branch price list: "нет" in this branch only
