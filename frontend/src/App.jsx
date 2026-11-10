@@ -22,7 +22,6 @@ import SellerAnalyticsPage from './pages/SellerAnalyticsPage'
 import CabinetOverview from './pages/CabinetOverview'
 import GoodsPage from './pages/GoodsPage'
 import WarehousePage, { ReportsPage } from './pages/WarehousePage'
-import ScanPage from './pages/ScanPage'
 import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import AdminLayout, { AdminAuthLayout, AdminLog, AdminLoginPage, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
@@ -38,6 +37,13 @@ function Redirect({ to }) {
 }
 
 // Pages for guests only: a logged-in user goes to his own interface (a seller to the cabinet)
+// The old "Сканирование" page (phase 12.3) -> "Склад" in the same mode ("Найти" -> "Приёмка")
+export const scanTarget = (search) => `/seller/stock?tab=${new URLSearchParams(search).get('mode') === 'sale' ? 'sale' : 'receipt'}`
+
+function ScanRedirect() {
+  return <Navigate to={scanTarget(useLocation().search)} replace />
+}
+
 function GuestOnly({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
@@ -128,7 +134,8 @@ export default function App() {
         <Route index element={<CabinetOverview />} />
         <Route path="goods" element={<GoodsPage />} />
         <Route path="stock" element={<WarehousePage />} />
-        <Route path="scan" element={<ScanPage />} />
+        {/* Phase 12.4: scanning is everywhere — the old page opens "Склад" in the same mode */}
+        <Route path="scan" element={<ScanRedirect />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="builds" element={<SellerBuildsPage />} />
         <Route path="builds/new" element={<SellerBuildEditPage />} />

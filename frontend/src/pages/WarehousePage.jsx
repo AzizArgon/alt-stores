@@ -2,28 +2,52 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import { Download, FileBarChart, X } from 'lucide-react'
-import { branchLabel } from '../components/BranchStock'
+import Stocktake from '../components/Stocktake'
+import { ModeSwitch } from '../components/StockMode'
 import { GoodsInput, OperationForm, download } from '../components/Warehouse'
 import { useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Pagination, Select, Skeleton, Tabs } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Pagination, Select, Skeleton } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
+import { placeFor, placeLabel } from '../services/place'
 
-const TABS = ['receipt', 'sale', 'adjust', 'journal']
-const KINDS = ['initial', 'receipt', 'sale', 'adjust', 'reserve', 'unreserve', 'res_sale', 'import', 'undo', 'manual']
+const KINDS = ['initial', 'receipt', 'move_out', 'move_in', 'sale', 'return', 'inventory', 'adjust', 'reserve', 'unreserve', 'res_sale', 'import', 'undo', 'manual']
+const TAB_KEY = 'alt_stock_tab'
+const BRANCHES_ONLY = ['move', 'sale', 'return']
 
 const when = (iso) => new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 
+// The modes of "Склад" (phase 12.4): Приёмка · Выкладка (only with a warehouse) · Продажа · Возврат · Ревизия ·
+// Журнал. A scan (the USB scanner even with no field focused, the camera) works in every mode. The chosen mode is
+// kept (the address and the browser); the place is the cabinet's "Я сейчас в: …" (some modes allow only branches).
+export function stockTabs(store) {
+  return ['receipt', ...(store?.warehouse ? ['move'] : []), 'sale', 'return', 'stocktake', 'journal']
+}
+
 export default function WarehousePage() {
   const { t } = useTranslation()
-  const { store } = useOutletContext()
+  const { store, setStore, place, setPlace, places } = useOutletContext()
   const [params, setParams] = useSearchParams()
-  const tab = TABS.includes(params.get('tab')) ? params.get('tab') : (store.stock_mode === 'stock' ? 'receipt' : 'journal')
-  const branches = store.branches || []
+  const tabs = stockTabs(store)
+  const priceOnly = store.stock_mode !== 'stock'
+  const asked = params.get('tab')
+  const tab = [...tabs, 'adjust'].includes(asked) ? asked : null
   const [start, setStart] = useState(null)
   const [version, setVersion] = useState(0)
 
-  // "Приход" from the overview's "заканчивается": the item is the first line
+  // No mode in the address: the last one (or "Приёмка")
+  useEffect(() => {
+    if (priceOnly) return
+    if (tab) {
+      if (tab !== 'adjust') { try { localStorage.setItem(TAB_KEY, tab) } catch { /* private mode */ } }
+      return
+    }
+    let saved = null
+    try { saved = localStorage.getItem(TAB_KEY) } catch { /* private mode */ }
+    setParams((p) => { p.set('tab', tabs.includes(saved) ? saved : 'receipt'); return p }, { replace: true })
+  }, [tab, priceOnly]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Приёмка" / "Продажа" from the overview or the scanner's panel: the item is the first line
   const offerId = params.get('offer')
   useEffect(() => {
     if (!offerId) return
@@ -33,42 +57,76 @@ export default function WarehousePage() {
     }).catch(() => {})
   }, [offerId])
 
-  const ops = tab !== 'journal'
+  const branches = store.branches || []
+  const allowed = BRANCHES_ONLY.includes(tab) ? branches : places
+  const here = placeFor(allowed, place?.id)
+
+  if (priceOnly) {
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+        <h1 className="text-h1">{t('warehouse.title')}</h1>
+        <Card className="grid max-w-2xl gap-3">
+          <h2 className="text-h2">{t('warehouse.priceOnly.title')}</h2>
+          <p className="text-sm text-muted">{t('warehouse.priceOnly.text')}</p>
+          <div><ModeSwitch store={store} onChanged={setStore} size="lg" /></div>
+        </Card>
+        <h2 className="text-h3">{t('warehouse.priceOnly.journal')}</h2>
+        <Journal branches={places} />
+      </div>
+    )
+  }
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div>
         <h1 className="text-h1">{t('warehouse.title')}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{t('warehouse.hint')}</p>
       </div>
-      <Tabs tabs={TABS.map((v) => ({ value: v, label: t(`warehouse.tabs.${v}`) }))} value={tab} label={t('warehouse.title')}
-        onChange={(v) => setParams({ tab: v })} />
-      {ops && store.stock_mode !== 'stock' && (
-        <Card className="grid gap-3">
-          <p className="text-sm">{t('warehouse.modeOff')}</p>
-          <div><Button to="/seller/profile#stock-mode" variant="secondary">{t('warehouse.toProfile')}</Button></div>
-        </Card>
+      {/* Large buttons for a finger: three in a row on a phone, all in one row on a computer */}
+      <div role="tablist" aria-label={t('warehouse.title')} className={`grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1 ${tabs.length === 6 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+        {tabs.map((m) => (
+          <button key={m} type="button" role="tab" aria-selected={tab === m} onClick={() => { setStart(null); setParams({ tab: m }) }}
+            className={`min-h-12 rounded-md px-1 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-base ${
+              tab === m ? 'bg-surface text-primary shadow-sm' : 'text-muted hover:text-ink'}`}>
+            {t(`warehouse.tabs.${m}`)}
+          </button>
+        ))}
+      </div>
+      {!branches.length ? <Card><p className="text-sm">{t('warehouse.noBranches')}</p></Card> : tab === 'journal' ? (
+        <Journal branches={places} doc={params.get('doc')} />
+      ) : !tab ? null : (
+        <>
+          {allowed.length > 1 && (
+            <Select label={t(`warehouse.placeFor.${tab}`)} value={here?.id} selectClassName="min-h-12 text-base"
+              onChange={(e) => setPlace(Number(e.target.value))}>
+              {allowed.map((p) => <option key={p.id} value={p.id}>{placeLabel(t, p)}</option>)}
+            </Select>
+          )}
+          {tab === 'stocktake' ? <Stocktake key={here?.id} place={here} places={places} /> : (
+            <Card>
+              {tab === 'adjust' && <h2 className="mb-1 text-h3">{t('warehouse.tabs.adjust')}</h2>}
+              <p className="mb-3 text-sm text-muted">{t(`warehouse.modeHints.${tab}`)}</p>
+              <OperationForm key={`${tab}-${here?.id}-${version}`} kind={tab} branches={allowed} branchId={here?.id} big
+                warehouseId={tab === 'move' ? store.warehouse?.id : undefined} draftKey={`${tab}_${here?.id}`}
+                initialOffer={['receipt', 'sale'].includes(tab) ? start : null}
+                onPosted={() => { setStart(null); setVersion((v) => v + 1) }} />
+            </Card>
+          )}
+        </>
       )}
-      {ops && store.stock_mode === 'stock' && !branches.length && <Card><p className="text-sm">{t('warehouse.noBranches')}</p></Card>}
-      {ops && store.stock_mode === 'stock' && branches.length > 0 && (
-        <Card>
-          <OperationForm key={`${tab}-${version}`} kind={tab} branches={branches} initialOffer={tab === 'receipt' ? start : null}
-            onPosted={() => setVersion((v) => v + 1)} />
-        </Card>
-      )}
-      {tab === 'journal' && <Journal branches={branches} />}
     </div>
   )
 }
 
-export function Journal({ branches }) {
+export function Journal({ branches, doc = null }) {
   const { t } = useTranslation()
   const toast = useToast()
-  const [f, setF] = useState({ offer: null, branch_id: '', kind: '', date_from: '', date_to: '' })
+  const [f, setF] = useState({ offer: null, branch_id: '', kind: '', date_from: '', date_to: '', doc })
+  useEffect(() => setF((x) => ({ ...x, doc })), [doc])
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const params = useCallback(() => ({
     offer_id: f.offer?.id, branch_id: f.branch_id || undefined, kind: f.kind || undefined,
-    date_from: f.date_from || undefined, date_to: f.date_to || undefined,
+    date_from: f.date_from || undefined, date_to: f.date_to || undefined, doc: f.doc || undefined,
   }), [f])
   useEffect(() => {
     setData(null)
@@ -76,7 +134,7 @@ export function Journal({ branches }) {
   }, [params, page])
   const change = (patch) => { setF((x) => ({ ...x, ...patch })); setPage(1) }
   const dl = () => download('/seller/stock/journal.xlsx', params(), 'journal.xlsx').catch((err) => toast(t(errorKey(err)), 'danger'))
-  const filtered = f.offer || f.branch_id || f.kind || f.date_from || f.date_to
+  const filtered = f.offer || f.branch_id || f.kind || f.date_from || f.date_to || f.doc
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
@@ -92,7 +150,7 @@ export function Journal({ branches }) {
           )}
           <Select label={t('warehouse.branch')} value={f.branch_id} onChange={(e) => change({ branch_id: e.target.value })}>
             <option value="">{t('warehouse.journal.anyBranch')}</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
+            {branches.map((b) => <option key={b.id} value={b.id}>{placeLabel(t, b)}</option>)}
           </Select>
           <Select label={t('warehouse.journal.kind')} value={f.kind} onChange={(e) => change({ kind: e.target.value })}>
             <option value="">{t('warehouse.journal.anyKind')}</option>
@@ -102,8 +160,9 @@ export function Journal({ branches }) {
           <Input label={t('warehouse.journal.to')} type="date" value={f.date_to} onChange={(e) => change({ date_to: e.target.value })} />
         </div>
         <div className="flex flex-wrap gap-2">
+          {f.doc && <Badge tone="info" className="self-center">{t('warehouse.journal.docFilter', { doc: f.doc })}</Badge>}
           <Button variant="secondary" size="sm" onClick={dl}><Download className="size-4" aria-hidden />{t('warehouse.journal.download')}</Button>
-          {filtered && <Button variant="text" size="sm" onClick={() => change({ offer: null, branch_id: '', kind: '', date_from: '', date_to: '' })}>{t('warehouse.journal.reset')}</Button>}
+          {filtered && <Button variant="text" size="sm" onClick={() => change({ offer: null, branch_id: '', kind: '', date_from: '', date_to: '', doc: null })}>{t('warehouse.journal.reset')}</Button>}
         </div>
       </Card>
       {data === null ? <Skeleton className="h-48 w-full rounded-xl" /> : data.items.length === 0 ? (
@@ -120,7 +179,7 @@ export function Journal({ branches }) {
   )
 }
 
-const TONE = { receipt: 'success', initial: 'neutral', sale: 'primary', res_sale: 'primary', adjust: 'warning', reserve: 'info', unreserve: 'info', import: 'neutral', undo: 'danger', manual: 'neutral' }
+const TONE = { receipt: 'success', initial: 'neutral', sale: 'primary', res_sale: 'primary', adjust: 'warning', reserve: 'info', unreserve: 'info', import: 'neutral', undo: 'danger', manual: 'neutral', move_out: 'info', move_in: 'success', return: 'success', inventory: 'warning' }
 
 export function MovementRow({ m, compact = false }) {
   const { t } = useTranslation()
@@ -138,14 +197,15 @@ export function MovementRow({ m, compact = false }) {
       </div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
         <span>{when(m.at)}</span>
-        {m.branch && <span>{m.branch}</span>}
+        {m.branch && <span>{placeLabel(t, m.branch)}</span>}
+        {m.units != null && <span>{t('warehouse.journal.units', { count: m.units })}</span>}
         <span>{t('warehouse.journal.wasNow')}: {qty(m.before)} → {qty(m.after)}{m.reserved_after > 0 && ` (${t('warehouse.journal.reserve', { count: m.reserved_after })})`}</span>
         {!compact && <span>{t('warehouse.journal.who')}: {t(`warehouse.journal.whoName.${m.who}`)}</span>}
         {m.cost != null && <span>{t('warehouse.cost.column')}: {formatPrice(m.cost, m.currency)}</span>}
         {m.price != null && <span>{t('warehouse.price')}: {formatPrice(m.price, m.currency)}</span>}
         {m.reason && <span>{t(`warehouse.reasons.${m.reason}`)}</span>}
         {m.comment && <span className="italic">«{m.comment}»</span>}
-        {!compact && m.doc && <span>{t('warehouse.journal.doc', { doc: m.doc })}</span>}
+        {!compact && m.doc && <Link className="hover:underline" to={`/seller/stock?tab=journal&doc=${m.doc}`}>{t('warehouse.journal.doc', { doc: m.doc })}</Link>}
         {m.reservation_id && <Link className="text-primary hover:underline" to={`/seller/reservations?id=${m.reservation_id}`}>{t('warehouse.journal.res', { id: m.reservation_id })}</Link>}
         {m.import_id && <Link className="text-primary hover:underline" to={`/seller/imports/${m.import_id}`}>{t('warehouse.journal.upload', { id: m.import_id })}</Link>}
       </div>

@@ -6,7 +6,7 @@ import { formatPrice } from '../services/format'
 import { ProductLine } from './AddFromCatalog'
 import { branchLabel, stockOf } from './BranchStock'
 import { Modal, useToast } from './overlays'
-import { Badge, Button, Input, Select, inputClass } from './ui'
+import { Badge, Button, Checkbox, Input, Select, inputClass } from './ui'
 import { checkBarcode, feedback, looksLikeBarcode, useScanner } from '../services/barcode'
 import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 
@@ -179,7 +179,10 @@ const readDraft = (kind) => {
 // field focused, the camera, a code typed into the goods input) adds a line; the same goods again — its quantity +1;
 // an unknown code opens "Привязать штрихкод". "Сканирование" passes its branch, `scan` and `priceOnly` (a store in
 // "Только прайс": the stock changes as a hand edit), `big` — large controls for a finger.
-export function OperationForm({ kind, branches, onPosted, initialOffer, branchId, scan = false, priceOnly = false, big = false, draftKey }) {
+// Phase 12.4: `move` ("Выкладка": `branchId` is the branch, `warehouseId` the source), `return` (reason; a defect may
+// stay out of the stock), a sale is never blocked: more than the books — a warning; a reserved item — "продать всё
+// равно?" and the document goes again with `confirm`.
+export function OperationForm({ kind, branches, onPosted, initialOffer, branchId, warehouseId, scan = false, priceOnly = false, big = false, draftKey }) {
   const { t } = useTranslation()
   const toast = useToast()
   const dk = draftKey || kind
@@ -188,6 +191,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
   const [busy, setBusy] = useState(false)
   const [fresh, setFresh] = useState(null) // the key of the line the last scan touched
   const [binding, setBinding] = useState(null)
+  const [askReserved, setAskReserved] = useState(false)
   const lastBranch = useRef(lines.at(-1)?.branch_id || branches[0]?.id)
 
   useEffect(() => {
@@ -214,7 +218,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
     setLines((ls) => [...ls, {
       key, offer: { id: offer.id, name: offer.name, price: offer.price, currency: offer.currency, stocks },
       branch_id: branch, qty: kind === 'adjust' ? (now ?? '') : 1, cost: offer.cost_last ?? '', price: offer.price ?? '',
-      reason: 'inventory', comment: '',
+      reason: kind === 'return' ? 'changed_mind' : 'inventory', restock: true, comment: '',
     }])
   }
   const onCode = async (code) => {
@@ -230,23 +234,26 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
     if (patch.branch_id) lastBranch.current = patch.branch_id
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
   }
-  const post = async () => {
+  const post = async (confirm = false) => {
     setBusy(true)
     setError('')
+    setAskReserved(false)
     try {
       const body = lines.map((l) => ({
         offer_id: l.offer.id, branch_id: Number(l.branch_id), qty: Number(l.qty) || 0,
         cost: kind === 'receipt' && l.cost !== '' && !priceOnly ? Number(l.cost) : null,
         price: kind === 'sale' && l.price !== '' ? Number(l.price) : null,
-        reason: kind === 'adjust' ? l.reason : null, comment: l.comment || null,
+        reason: kind === 'adjust' || kind === 'return' ? l.reason : null, comment: l.comment || null,
+        restock: kind === 'return' ? l.reason !== 'defect' || Boolean(l.restock) : true,
       }))
-      const res = await api.post('/seller/stock/operations', { kind, lines: body, scan })
+      const res = await api.post('/seller/stock/operations', { kind, lines: body, scan, confirm })
       toast(t('warehouse.posted', { count: res.data.count }))
       try { localStorage.removeItem(DRAFT(dk)) } catch { /* private mode */ }
       setLines([])
       onPosted?.()
     } catch (err) {
-      setError(stockError(t, err))
+      if (err.response?.data?.detail?.code === 'reserved') setAskReserved(true)
+      else setError(stockError(t, err))
     } finally {
       setBusy(false)
     }
@@ -266,7 +273,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
       ) : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {lines.map((l, i) => <Line key={l.key} n={i + 1} kind={kind} line={l} branches={branches} onChange={(p) => set(l.key, p)}
-            fresh={l.key === fresh} big={big} priceOnly={priceOnly} fixedBranch={Boolean(branchId)}
+            fresh={l.key === fresh} big={big} priceOnly={priceOnly} fixedBranch={Boolean(branchId)} warehouseId={warehouseId}
             onRemove={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} />)}
         </ul>
       )}
@@ -276,18 +283,27 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
           <p className="text-sm text-muted">{kind !== 'adjust' && <span className="mr-3 font-medium text-ink">{t('warehouse.total', { qty: total })}</span>}{t('warehouse.draftKept')}</p>
           <div className="flex gap-2">
             <Button variant="secondary" size={big ? 'lg' : 'md'} onClick={() => setLines([])}>{t('warehouse.clear')}</Button>
-            <Button size={big ? 'lg' : 'md'} onClick={post} disabled={busy}>{t('warehouse.post')}</Button>
+            <Button size={big ? 'lg' : 'md'} onClick={() => post(false)} disabled={busy}>{t('warehouse.post')}</Button>
           </div>
         </div>
+      )}
+      {askReserved && (
+        <Modal open onClose={() => setAskReserved(false)} title={t('warehouse.reservedTitle')}
+          footer={<><Button variant="secondary" onClick={() => setAskReserved(false)}>{t('branches.cancel')}</Button>
+            <Button onClick={() => post(true)} disabled={busy}>{t('warehouse.sellAnyway')}</Button></>}>
+          <p className="text-sm">{t('warehouse.reservedText')}</p>
+        </Modal>
       )}
     </div>
   )
 }
 
-function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOnly, fixedBranch }) {
+function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOnly, fixedBranch, warehouseId }) {
   const { t } = useTranslation()
   const ref = useRef(null)
   const s = line.offer.stocks?.[line.branch_id]
+  const wh = warehouseId ? line.offer.stocks?.[warehouseId] : null
+  const whFree = wh && wh.quantity != null ? wh.quantity - (wh.reserved || 0) : 0
   const free = s && s.quantity != null ? s.quantity - (s.reserved || 0) : null
   useEffect(() => { if (fresh) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [fresh, line.qty])
   const qty = Number(line.qty) || 0
@@ -300,6 +316,7 @@ function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOn
           <p className="text-xs text-muted">
             {s?.quantity != null ? t('warehouse.now', { qty: s.quantity }) : t('warehouse.nowUnknown')}
             {free != null && s.reserved > 0 && ` · ${t('warehouse.free', { count: free })}`}
+            {kind === 'move' && ` · ${t('warehouse.inWarehouse', { qty: whFree })}`}
           </p>
         </div>
         <button type="button" onClick={onRemove} aria-label={t('warehouse.remove')} className="grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-danger">
@@ -339,15 +356,28 @@ function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOn
           <Input label={`${t('warehouse.price')}, ${line.offer.currency}`} type="number" min="0" step="any" value={line.price}
             onChange={(e) => onChange({ price: e.target.value })} />
         )}
+        {kind === 'return' && (
+          <Select label={t('warehouse.returnReason')} value={line.reason} onChange={(e) => onChange({ reason: e.target.value, restock: e.target.value !== 'defect' })}>
+            {['changed_mind', 'defect', 'other'].map((r) => <option key={r} value={r}>{t(`warehouse.returnReasons.${r}`)}</option>)}
+          </Select>
+        )}
         {kind === 'adjust' && (
           <Select label={t('warehouse.reason')} value={line.reason} onChange={(e) => onChange({ reason: e.target.value })}>
             {['inventory', 'defect', 'loss', 'other'].map((r) => <option key={r} value={r}>{t(`warehouse.reasons.${r}`)}</option>)}
           </Select>
         )}
         <Input label={t('warehouse.comment')} value={line.comment} maxLength={300} onChange={(e) => onChange({ comment: e.target.value })}
-          placeholder={kind === 'adjust' && line.reason === 'other' ? t('warehouse.commentRequired') : ''} />
+          placeholder={(kind === 'adjust' || kind === 'return') && line.reason === 'other' ? t('warehouse.commentRequired') : ''} />
       </div>
-      {kind === 'sale' && free != null && Number(line.qty) > free && <Badge tone="warning" className="mt-2">{t('warehouse.error.not_enough', { available: free })}</Badge>}
+      {kind === 'return' && line.reason === 'defect' && (
+        <div className="mt-2">
+          <Checkbox label={t('warehouse.restock')} checked={Boolean(line.restock)} onChange={(e) => onChange({ restock: e.target.checked })} />
+          {!line.restock && <p className="mt-1 text-xs text-muted">{t('warehouse.restockHint')}</p>}
+        </div>
+      )}
+      {kind === 'sale' && !priceOnly && qty > (s?.quantity ?? 0) && <Badge tone="warning" className="mt-2 whitespace-normal">{t('warehouse.oversoldWarn', { qty: s?.quantity ?? 0 })}</Badge>}
+      {kind === 'sale' && !priceOnly && s?.reserved > 0 && qty > (free ?? 0) && qty <= (s?.quantity ?? 0) && <Badge tone="info" className="mt-2 whitespace-normal">{t('warehouse.reservedWarn', { count: s.reserved })}</Badge>}
+      {kind === 'move' && qty > whFree && <Badge tone="warning" className="mt-2">{t('warehouse.error.not_enough_wh', { available: whFree })}</Badge>}
     </li>
   )
 }

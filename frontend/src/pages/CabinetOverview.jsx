@@ -1,3 +1,4 @@
+import { placeLabel } from '../services/place'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext } from 'react-router-dom'
@@ -111,6 +112,7 @@ export default function CabinetOverview() {
         </Link>
       )}
 
+      {data?.warehouse && <WarehouseOverview w={data.warehouse} />}
       {data?.stock && <StockOverview stock={data.stock} />}
 
       <Card as="section">
@@ -136,6 +138,65 @@ export default function CabinetOverview() {
   )
 }
 
+const day = (iso) => new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+
+// Phase 12.4: what needs the seller's eyes — sold more than the books had, reservations whose item was sold, an
+// unfinished stocktake, the last one, goods only in the warehouse
+function WarehouseOverview({ w }) {
+  const { t } = useTranslation()
+  const last = w.last_stocktake
+  const placeName = (s) => (s.is_warehouse ? t('place.warehouse') : s.branch)
+  const List = ({ items, link, label }) => (
+    <ul className="mt-2 divide-y divide-line">
+      {items.map((i) => (
+        <li key={i.offer_id ?? i.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+          <span className="min-w-0 truncate font-medium" title={i.name || i.title}>{i.name || i.title}{i.quantity != null && <span className="font-normal text-muted"> · {i.quantity}</span>}</span>
+          {link && <Button size="sm" variant="secondary" to={link(i)} className="shrink-0">{label}</Button>}
+        </li>
+      ))}
+    </ul>
+  )
+  return (
+    <Card as="section" className="grid grid-cols-[minmax(0,1fr)] gap-5">
+      {w.open_stocktakes.map((s) => (
+        <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning-line bg-warning-soft p-3">
+          <span className="text-sm"><span className="font-semibold">{t('warehouse.overview.openStocktake')}</span> · {placeName(s)} · {t('warehouse.stocktake.units', { count: s.counted_units })}</span>
+          <Button size="sm" to="/seller/stock?tab=stocktake">{t('warehouse.overview.continue')}</Button>
+        </div>
+      ))}
+      {w.oversold.length > 0 && (
+        <div>
+          <h2 className="text-h3 text-warning">{t('warehouse.overview.oversold')}</h2>
+          <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.oversoldHint')}</p>
+          <List items={w.oversold} link={() => '/seller/stock?tab=stocktake'} label={t('warehouse.tabs.stocktake')} />
+          {w.oversold_total > w.oversold.length && <p className="mt-1 text-xs text-muted">{t('warehouse.overview.more', { count: w.oversold_total - w.oversold.length })}</p>}
+        </div>
+      )}
+      {w.sold_reservations.length > 0 && (
+        <div>
+          <h2 className="text-h3 text-danger">{t('warehouse.overview.soldRes')}</h2>
+          <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.soldResHint')}</p>
+          <List items={w.sold_reservations} link={(r) => `/seller/reservations?id=${r.id}`} label={t('cabinet.nav.reservations')} />
+        </div>
+      )}
+      {w.only_warehouse.length > 0 && (
+        <div>
+          <h2 className="text-h3">{t('warehouse.overview.onlyWarehouse')}</h2>
+          <p className="mt-0.5 text-xs text-muted">{t('warehouse.overview.onlyWarehouseHint')}</p>
+          <List items={w.only_warehouse} link={(i) => `/seller/stock?tab=move&offer=${i.offer_id}`} label={t('warehouse.overview.toMove')} />
+          {w.only_warehouse_total > w.only_warehouse.length && <p className="mt-1 text-xs text-muted">{t('warehouse.overview.more', { count: w.only_warehouse_total - w.only_warehouse.length })}</p>}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <span><span className="font-semibold">{t('warehouse.overview.lastStocktake')}:</span> {last
+          ? t('warehouse.overview.lastStocktakeLine', { ...last, date: day(last.finished_at), place: placeName(last) })
+          : <span className="text-muted">{t('warehouse.overview.noStocktake')}</span>}</span>
+        <Link to="/seller/stock?tab=stocktake" className="flex items-center gap-1 font-medium text-primary hover:underline">{t('warehouse.tabs.stocktake')}<ArrowRight className="size-4" aria-hidden /></Link>
+      </div>
+    </Card>
+  )
+}
+
 // Phase 12.2, "Учёт остатков": running low (with a receipt link), reservations without a reserve, last movements
 function StockOverview({ stock }) {
   const { t } = useTranslation()
@@ -150,7 +211,7 @@ function StockOverview({ stock }) {
               <li key={`${i.offer_id}-${i.branch_id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="min-w-0">
                   <span className="block truncate font-medium" title={i.name}>{i.name}</span>
-                  <span className="text-xs text-muted">{i.branch} · <span className={i.available === 0 ? 'text-danger' : 'text-warning'}>{t('warehouse.overview.available', { count: i.available })}</span></span>
+                  <span className="text-xs text-muted">{placeLabel(t, i.branch)} ·<span className={i.available === 0 ? 'text-danger' : 'text-warning'}>{t('warehouse.overview.available', { count: i.available })}</span></span>
                 </span>
                 <Button size="sm" variant="secondary" to={`/seller/stock?tab=receipt&offer=${i.offer_id}`} className="shrink-0">{t('warehouse.overview.toReceipt')}</Button>
               </li>

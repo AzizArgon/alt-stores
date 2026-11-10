@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Outlet, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { CalendarCheck, ChartLine, CirclePlus, ExternalLink, FileBarChart, History, LayoutDashboard, LogOut, MessageSquare, Monitor, Package, Store, Boxes, ScanBarcode } from 'lucide-react'
+import { Link, Outlet, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { Boxes, ChartLine, ExternalLink, LayoutDashboard, LogOut, MapPin, Package, Store, Users } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
-import StockModeBlock from '../components/StockMode'
+import StockModeBlock, { WarehouseBlock } from '../components/StockMode'
+import { ScanBox, ScanPanel } from '../components/ScanPanel'
+import { stockTabs } from './WarehousePage'
+import { placeFor, placeLabel, placesOf, readPlace, savePlace } from '../services/place'
 import { ScopeChoice } from '../components/BranchColumns'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
-import { Avatar } from '../components/Header'
+import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
 import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
-import Workspace from '../layouts/Workspace'
+import Workspace, { pageActive } from '../layouts/Workspace'
 import { BlockedNotice } from '../components/AdminDecisions'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
@@ -208,16 +211,16 @@ function TextBox({ defaultCurrency }) {
   )
 }
 
-const METHODS = ['file', 'text', 'catalog']
+const METHODS = ['scan', 'catalog', 'file', 'text']
 
-// Three ways to add goods side by side, with a hint when each one is handy
+// The ways to add goods side by side, with a hint when each one is handy; phase 12.4: "Отсканировать коробку" first
 function AddGoods({ defaultCurrency, onAdded, initialMethod }) {
   const { t } = useTranslation()
-  const [method, setMethod] = useState(METHODS.includes(initialMethod) ? initialMethod : 'file')
+  const [method, setMethod] = useState(METHODS.includes(initialMethod) ? initialMethod : 'scan')
   return (
     <Card>
       <h2 className="text-h2">{t('manual.title')}</h2>
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {METHODS.map((m) => (
           <button key={m} type="button" onClick={() => setMethod(m)}
             className={`rounded-lg border p-3 text-left transition-colors ${
@@ -228,6 +231,7 @@ function AddGoods({ defaultCurrency, onAdded, initialMethod }) {
         ))}
       </div>
       <div className="mt-6">
+        {method === 'scan' && <ScanBox onAdded={onAdded} />}
         {method === 'file' && <UploadBox defaultCurrency={defaultCurrency} />}
         {method === 'text' && <TextBox defaultCurrency={defaultCurrency} />}
         {method === 'catalog' && <AddFromCatalog defaultCurrency={defaultCurrency} onAdded={onAdded} />}
@@ -263,21 +267,64 @@ function ImportHistory({ items, onChanged }) {
   )
 }
 
-const SECTIONS = [
-  { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
-  { to: '/seller/goods', key: 'goods', icon: Package, tab: true },
-  { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true },  // phase 12.2
-  { to: '/seller/scan', key: 'scan', icon: ScanBarcode, tab: true },  // phase 12.3
-  { to: '/seller/builds', key: 'builds', icon: Monitor, tab: true },
-  { to: '/seller/add', key: 'add', icon: CirclePlus, tab: true },
-  { to: '/seller/messages', key: 'messages', icon: MessageSquare, tab: true },
-  { to: '/seller/reservations', key: 'reservations', icon: CalendarCheck, tab: true },
-  // Not in the phone bar (8 tabs do not fit 360 px): the history opens from the overview's last upload
-  { to: '/seller/imports', key: 'imports', icon: History },
-  { to: '/seller/analytics', key: 'analytics', icon: ChartLine, tab: true },
-  { to: '/seller/reports', key: 'reports', icon: FileBarChart },  // a placeholder: revenue and reports later
-  { to: '/seller/profile', key: 'profile', icon: Store },
-]
+// Phase 12.4: five sections instead of thirteen items — groups on the left on a computer, five tabs at the bottom on
+// a phone, the pages of a section as tabs at the top. The store profile is in the avatar menu.
+export function sellerSections(store, badges = {}) {
+  const stock = store?.stock_mode === 'stock'
+    ? stockTabs(store).map((k) => ({ to: `/seller/stock?tab=${k}`, key: `stock_${k}` }))
+    : [{ to: '/seller/stock', key: 'stock_about' }]
+  const buyers = (badges.messages || 0) + (badges.reservations || 0)
+  return [
+    { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
+    { to: '/seller/goods', key: 'goodsGroup', icon: Package, tab: true, children: [
+      { to: '/seller/goods', key: 'goods' }, { to: '/seller/add', key: 'add' },
+      { to: '/seller/builds', key: 'builds', deep: true }, { to: '/seller/imports', key: 'imports', deep: true }] },
+    { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true, children: stock },
+    { to: '/seller/messages', key: 'buyers', icon: Users, tab: true, badge: buyers || undefined, children: [
+      { to: '/seller/messages', key: 'messages', deep: true, badge: badges.messages },
+      { to: '/seller/reservations', key: 'reservations', badge: badges.reservations }] },
+    { to: '/seller/analytics', key: 'analyticsGroup', icon: ChartLine, tab: true, children: [
+      { to: '/seller/analytics', key: 'analytics' }, { to: '/seller/reports', key: 'reports' }] },
+  ]
+}
+
+// The pages of the open section as tabs at the top ("Склад" has its own large mode buttons)
+function SectionTabs({ sections }) {
+  const { t } = useTranslation()
+  const location = useLocation()
+  const group = sections.find((s) => s.children && s.key !== 'stock' && s.children.some((c) => pageActive(c, location)))
+  if (!group) return null
+  return (
+    <nav aria-label={t('cabinet.sectionTabs')} className="mb-4 inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1">
+      {group.children.map((c) => {
+        const active = pageActive(c, location)
+        return (
+          <Link key={c.key} to={c.to} aria-current={active ? 'page' : undefined}
+            className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              active ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
+            {t(`cabinet.nav.${c.key}`)}<UnreadBadge count={c.badge} />
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
+// "Я сейчас в: Юнусабад / Склад" — the place of every mode of "Склад" and of the scanner's panel
+function PlacePicker({ places, place, setPlace }) {
+  const { t } = useTranslation()
+  if (places.length < 2) return null
+  return (
+    <label className="mb-4 flex flex-wrap items-center gap-2 text-sm" title={t('place.iAmInHint')}>
+      <MapPin className="size-4 text-primary" aria-hidden />
+      <span className="text-muted">{t('place.iAmIn')}</span>
+      <select value={place?.id || ''} onChange={(e) => setPlace(Number(e.target.value))}
+        className="min-h-9 max-w-full min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        {places.map((p) => <option key={p.id} value={p.id}>{placeLabel(t, p)}</option>)}
+      </select>
+    </label>
+  )
+}
 
 // The storefront always opens in a new tab: the cabinet stays where the seller left it
 function OpenStoreButton() {
@@ -312,12 +359,12 @@ function AccountMenu({ store }) {
 }
 
 // The frame of every seller page apart from the storefront; `sections` only for a logged-in seller with a store
-function SellerFrame({ store, sections, children }) {
+function SellerFrame({ store, sections, top, children }) {
   const { t } = useTranslation()
   const { user } = useAuth()
   return (
     <Workspace home="/seller" subtitle={t('seller.subtitle')} sections={sections} navKey="cabinet.nav" tabKey="cabinet.tab"
-      menuLabel={t('cabinet.menu')} sideTitle={store?.name}
+      menuLabel={t('cabinet.menu')} sideTitle={store?.name} top={top}
       actions={<>
         {store && <span className="hidden max-w-56 truncate text-sm font-semibold lg:block" title={store.name}>{store.name}</span>}
         <OpenStoreButton />
@@ -360,6 +407,13 @@ export default function SellerLayout() {
   const unread = useUnread(!!store)
   const newReservations = useNewReservations(!!store)
   const badges = { messages: unread, reservations: newReservations }
+  const location = useLocation()
+  const places = placesOf(store)
+  const [placeId, setPlaceId] = useState(readPlace)
+  const place = placeFor(places, placeId)
+  const setPlace = (id) => { setPlaceId(id); savePlace(id) }
+  // The scanner's panel: on every page without its own scanning ("Склад" modes, "Отсканировать коробку")
+  const ownScan = location.pathname.startsWith('/seller/stock') || location.pathname.startsWith('/seller/add')
 
   useEffect(() => {
     api.get('/stores/me').then((res) => setStore(res.data)).catch(() => setStore(null))
@@ -375,8 +429,23 @@ export default function SellerLayout() {
   // Without a store profile goods can't be added in any way
   else if (!store) content = <div className="mx-auto max-w-3xl"><StoreForm store={store} onSaved={setStore} /></div>
   // The currency the seller chose last time is the default everywhere
-  else content = <><BlockedNotice store={store} /><Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD' }} /></>
-  return <SellerFrame store={store} sections={store ? SECTIONS.map((s) => (badges[s.key] != null ? { ...s, badge: badges[s.key] } : s)) : null}>{content}</SellerFrame>
+  else {
+    content = (
+      <>
+        <BlockedNotice store={store} />
+        <Outlet context={{ store, setStore, imports, loadImports, defaultCurrency: imports[0]?.currency || 'USD', place, setPlace, places }} />
+        <ScanPanel enabled={!ownScan} place={place} stockMode={store.stock_mode === 'stock'} />
+      </>
+    )
+  }
+  const sections = store ? sellerSections(store, badges) : null
+  const top = sections && (
+    <div className="flex flex-wrap-reverse items-start justify-between gap-x-4">
+      <SectionTabs sections={sections} />
+      <PlacePicker places={places} place={place} setPlace={setPlace} />
+    </div>
+  )
+  return <SellerFrame store={store} sections={sections} top={top}>{content}</SellerFrame>
 }
 
 export function AddSection() {
@@ -397,6 +466,7 @@ export function ProfileSection() {
       <StoreForm key={store.branches?.length ? 'b' : 's'} store={store} onSaved={setStore} />
       <BranchesBlock store={store} onChanged={setStore} />
       <StockModeBlock store={store} onChanged={setStore} />
+      <WarehouseBlock store={store} onChanged={setStore} />
     </div>
   )
 }

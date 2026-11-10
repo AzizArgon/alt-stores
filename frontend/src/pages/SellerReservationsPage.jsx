@@ -138,6 +138,8 @@ function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
                 {r.reserved_qty ? t('warehouse.reservation.reserved', { count: r.reserved_qty }) : t('warehouse.reservation.notReserved')}
               </span>
             )}
+            {/* Phase 12.4: the item was sold at the counter */}
+            {r.sold_out && <span className="mt-1 block text-xs font-semibold text-danger">{t('warehouse.reservation.soldOut')}</span>}
           </Row>
         )}
         {pickupText(r) && <Row label={t('reservation.pickupDate')}>{pickupText(r)}</Row>}

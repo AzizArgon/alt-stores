@@ -217,6 +217,9 @@ export default function GoodsPage() {
   const [busy, setBusy] = useState(false)
   // ?edit=<offer id>: opened from a reservation ("Take it off sale" - the seller decides, the site changes nothing)
   const [editing, setEditing] = useState(() => Number(params.get('edit')) || null)
+  // Phase 12.4: "Открыть товар" of the scanner's panel on this same page
+  const editParam = Number(params.get('edit')) || null
+  useEffect(() => { if (editParam) setEditing(editParam) }, [editParam])
   const [reloadKey, setReloadKey] = useState(0)
   const [showCost, setShowCost] = useState(() => { try { return localStorage.getItem('alt_goods_cost') === '1' } catch { return false } })
   useEffect(() => { try { localStorage.setItem('alt_goods_cost', showCost ? '1' : '0') } catch { /* private mode */ } }, [showCost])
@@ -481,8 +484,13 @@ function CostLine({ o }) {
 // Phase 12.3: the store's barcodes of the offer (the search of "My goods" finds them too)
 function Codes({ o }) {
   const { t } = useTranslation()
-  if (!o.barcodes?.length) return null
-  return <span className="block truncate font-mono text-xs text-muted" title={t('barcode.column')}>▮ {o.barcodes.map((b) => b.code).join(', ')}</span>
+  return (
+    <>
+      {o.barcodes?.length > 0 && <span className="block truncate font-mono text-xs text-muted" title={t('barcode.column')}>▮ {o.barcodes.map((b) => b.code).join(', ')}</span>}
+      {/* Phase 12.4: sold at the counter more than the books had */}
+      {o.oversold && <span className="mt-0.5 block text-xs font-medium text-warning">{t('cabinet.oversold')}</span>}
+    </>
+  )
 }
 
 function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
