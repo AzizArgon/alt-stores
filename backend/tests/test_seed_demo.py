@@ -156,3 +156,36 @@ def test_demo_reservations_survive_builds_only_reruns(db):
     # A demo build reservation points at a build that still exists
     assert all(db.get(Build, b) is not None for _, _, b in first.values() if b)
     assert not db.scalars(select(Reservation).where(Reservation.store_id == age.id)).all()
+
+
+def test_demo_branches_and_stock_rerun_without_duplicates_and_keep_ids(db):
+    """Phase 12.1: demo1 — 3 branches in Tashkent with different stock, demo2 — two cities, demo3 — no stock by
+    branch; re-runs (also --builds-only) keep the branch ids and do not add rows; the real store is not touched."""
+    from app.db.models import Branch, OfferStock
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [{**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+            *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)]]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+
+    def state():
+        by_store = {}
+        for b in db.scalars(select(Branch).order_by(Branch.id)):
+            by_store.setdefault(b.store_id, []).append((b.id, b.city, b.is_main))
+        return by_store, _count(db, OfferStock)
+
+    first = state()
+    stores = {s.owner.email: s for s in db.scalars(select(Store))}
+    demo1, demo2, demo3 = (first[0][stores[f"demo{i}@example.com"].id] for i in (1, 2, 3))
+    assert [c for _, c, _ in demo1] == ["tashkent"] * 3 and sum(m for *_, m in demo1) == 1
+    assert {c for _, c, _ in demo2} == {"samarkand", "tashkent"} and len(demo3) == 1
+    assert stores["seller1@example.com"].id not in first[0]  # no address: nothing invented
+    assert first[1] > 0 and not db.scalar(select(OfferStock.id).join(Offer).where(
+        Offer.store_id == stores["demo3@example.com"].id))
+    seed_demo(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first

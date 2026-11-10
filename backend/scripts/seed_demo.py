@@ -53,6 +53,32 @@ STORES = [
      "hours": "Пн–Пт 09:30–18:30, Сб 10:00–16:00",
      "currency": Currency.USD, "days_old": 25, "below_market": ["Ryzen 5 7500F", "RTX 5060 TWIN EDGE OC", "990 PRO 1TB"]},
 ]
+# Phase 12.1: branches (demo_key keeps the ids over re-runs, also with --builds-only) and stock by branch.
+# Silicon Plus: three branches in Tashkent with different stock; Byte Market: Samarkand + Tashkent;
+# PC Galaxy: one branch, no stock by branch (the general flag, "уточняйте у магазина")
+DEMO_BRANCHES = {
+    "demo1@example.com": {
+        "main": ("d1-yunusabad", "Юнусабад", "ЦУМ, 2 этаж"),
+        "more": [("d1-chilanzar", "Чиланзар", "tashkent", "ул. Бунёдкор, 15", "напротив метро «Чиланзар»",
+                  "Пн–Сб 10:00–20:00", "+998900000111"),
+                 ("d1-sergeli", "Сергели", "tashkent", "ул. Янги Сергели, 3", "рынок «Сергели», вход 2",
+                  "Ежедневно 09:00–19:00", None)],
+    },
+    "demo2@example.com": {
+        "main": ("d2-samarkand", "Самарканд", "у Сиабского базара"),
+        "more": [("d2-tashkent", "Ташкент, Мирабад", "tashkent", "ул. Шахрисабз, 22", "рядом с «Мирабадским рынком»",
+                  "Пн–Сб 10:00–19:00", "+998900000222")],
+    },
+    "demo3@example.com": {"main": ("d3-main", None, "напротив хокимията")},
+}
+# Quantities by branch (in the order above) for the first goods of the store; None = "есть, количество не указано"
+STOCK_PATTERNS = {
+    "demo1@example.com": [(5, 2, 0), (0, 0, 3), (1, None, 4)],
+    "demo2@example.com": [(3, 0), (0, 2)],
+}
+SHOWCASE_STOCK = {"demo1@example.com": (3, 0, 2), "demo2@example.com": (2, 1)}
+STOCK_GOODS = 24  # how many goods of the store get stock by branch (the rest: the general flag)
+STALE_EVERY = 7  # every 7th of them: the data of one branch is 4 days old ("давно не обновлялось")
 LIVE_EMAIL = "live@example.com"  # empty demo store for the live upload (scripts/demo_reset.py)
 LIVE_CITY, LIVE_DISTRICT = "fergana", "Центр"
 LIVE_ADDRESS, LIVE_HOURS = "ул. Ал-Фергани, 25, ориентир — ТЦ «Фергана Сити»", "Пн–Сб 10:00–19:00"
@@ -74,7 +100,62 @@ def _store(db: Session, spec: dict) -> Store:
     store.map_url = store.map_lat = store.map_lon = None
     store.is_demo = True
     db.commit()
+    seed_branches(db, store, spec["email"])
     return store
+
+
+def seed_branches(db: Session, store: Store, email: str) -> list:
+    """The store's address is its main branch; the other demo branches by their constant keys."""
+    from app.db.models import Branch
+    from app.services.branches import ensure_main_branch, make_main
+
+    spec = DEMO_BRANCHES.get(email)
+    if spec is None:
+        return []
+    key, name, landmark = spec["main"]
+    main = db.scalar(select(Branch).where(Branch.store_id == store.id, Branch.demo_key == key)) \
+        or ensure_main_branch(db, store)
+    main.demo_key, main.name, main.landmark = key, name, landmark
+    main.city, main.address, main.hours = store.city, store.address, store.hours
+    main.map_url = main.map_lat = main.map_lon = None
+    make_main(db, store, main)
+    branches = [main]
+    for key, name, city, address, landmark, hours, phone in spec.get("more", []):
+        b = db.scalar(select(Branch).where(Branch.store_id == store.id, Branch.demo_key == key))
+        if b is None:
+            b = Branch(store_id=store.id, demo_key=key)
+            db.add(b)
+        b.name, b.city, b.address, b.landmark, b.hours, b.phone = name, city, address, landmark, hours, phone
+        b.is_main, b.map_url, b.map_lat, b.map_lon = False, None, None, None
+        branches.append(b)
+    db.commit()
+    return branches
+
+
+def seed_stock(db: Session, store: Store, email: str) -> int:
+    """Stock by branch for the first goods of the store (the showcase ones always); the same on every run."""
+    from app.db.models import Branch, OfferStock
+    from app.services.branches import set_stock
+
+    pattern = STOCK_PATTERNS.get(email)
+    if not pattern:
+        return 0
+    keys = [DEMO_BRANCHES[email]["main"][0]] + [b[0] for b in DEMO_BRANCHES[email].get("more", [])]
+    ids = [db.scalar(select(Branch.id).where(Branch.store_id == store.id, Branch.demo_key == k)) for k in keys]
+    offers = db.scalars(select(Offer).join(Offer.product).where(Offer.store_id == store.id, Offer.price.is_not(None),
+                                                              Offer.removed_at.is_(None))
+                        .order_by(Product.normalized_name)).all()
+    showcase = [o for o in offers if any(s in o.product.normalized_name for s in SHOWCASE)]
+    chosen = showcase + [o for o in offers if o not in showcase][:STOCK_GOODS]
+    stale = utcnow() - timedelta(days=4)
+    for i, offer in enumerate(chosen):
+        values = SHOWCASE_STOCK[email] if offer in showcase else pattern[i % len(pattern)]
+        for bid, q in zip(ids, values):
+            row = set_stock(offer, bid, quantity=q, present=True if q is None else None)
+            if i % STALE_EVERY == STALE_EVERY - 1 and bid == ids[-1]:
+                row.updated_at = stale
+    db.commit()
+    return db.scalar(select(func.count(OfferStock.id)).join(Offer).where(Offer.store_id == store.id))
 
 
 def _demo_import(db: Session, store: Store, currency: Currency) -> PriceImport:
@@ -182,7 +263,7 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     Offers, price history and passwords are not touched (the server has its own demo passwords and live data).
     """
     for spec in STORES:
-        _store(db, spec)
+        seed_stock(db, _store(db, spec), spec["email"])
     _live_store(db)
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
             {"demo_reservations": seed_reservations(db)}]
@@ -203,7 +284,8 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
         for offer in db.scalars(select(Offer).where(Offer.store_id == store.id)):
             offer.updated_at = updated
         db.commit()
-        report.append({"store": spec["name"], "rows": len(rows), **stats})
+        stock = seed_stock(db, store, spec["email"])
+        report.append({"store": spec["name"], "rows": len(rows), **stats, "branch_stock_rows": stock})
     _live_store(db)
     store_ids = [db.scalar(select(Store.id).join(Store.owner).where(User.email == s["email"])) for s in STORES]
     report.append({"demo_history_points": seed_history(db, store_ids, fetch_rates)})
@@ -448,6 +530,17 @@ def _reservation_item(db: Session, store: Store, topic: tuple):
     return db.get(Offer, item_id) if kind == TopicKind.offer else db.get(Build, item_id)
 
 
+def _pickup_branch_id(db: Session, store: Store, offer: Offer | None) -> int | None:
+    """Phase 12.1: a demo reservation waits in a branch where the item is (else the main branch)."""
+    from app.services.branches import available, main_branch
+
+    for s in sorted(offer.stocks if offer is not None else [], key=lambda s: s.branch_id):
+        if available(s):
+            return s.branch_id
+    main = main_branch(db, store.id)
+    return main.id if main else None
+
+
 def seed_reservations(db: Session) -> int:
     from app.services.reservations import TZ, system_text
 
@@ -472,6 +565,7 @@ def seed_reservations(db: Session) -> int:
         for field, value in DEMO_CONTACT.items():
             setattr(r, field, value)
         r.pickup_date, r.pickup_time = None, None
+        r.branch_id = _pickup_branch_id(db, store, item if is_offer else None)
         r.comment = "Заеду после работы, если можно — отложите до вечера." if key == "new" else None
         r.status, r.created_at, r.updated_at = status, created, created + timedelta(hours=len(path) - 1)
         r.cancelled_by = "store" if reason else None

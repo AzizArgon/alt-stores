@@ -23,7 +23,7 @@ from app.services.price_cleaner import cache_key, clean_markdown  # noqa: E402
 from app.services.text_import import text_to_rows  # noqa: E402
 
 DEMO = Path(__file__).resolve().parents[2] / "samples" / "demo"
-FILES = ["dirty_price.xlsx", "national_currency.xlsx"]
+FILES = ["dirty_price.xlsx", "national_currency.xlsx", "branches_price.xlsx"]
 
 
 def demo_posts() -> list[str]:
