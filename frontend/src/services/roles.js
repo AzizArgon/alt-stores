@@ -29,3 +29,15 @@ export function returnTo(user, from) {
     : user?.role === 'admin' ? from?.startsWith('/admin') : buyerBack(from)
   return back ? from : homeFor(user)
 }
+
+// The admin entrance (/admin/login) for anyone: an admin logs in there; a seller or a buyer (the server answers
+// "not_admin" — the password was right) is logged in the usual way and goes to his own section. The server still
+// gives the /admin data only to an admin.
+export async function loginAtAdminDoor(adminLogin, login, email, password) {
+  try {
+    return await adminLogin(email, password)
+  } catch (err) {
+    if (err.response?.data?.detail?.code !== 'not_admin') throw err
+    return login(email, password)
+  }
+}

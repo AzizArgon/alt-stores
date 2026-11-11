@@ -3,20 +3,20 @@
 import {
   Barcode, BookOpenText, Flag, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
 } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AuthCard, ErrorText, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
 import { Modal, useToast } from '../components/overlays'
 import { Badge, Button, Card, EmptyState, FieldBox, Input, PasswordInput, Select, Skeleton, inputClass } from '../components/ui'
-import { storeUrl } from '../config/sites'
+import { goTo, storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
 import api, { errorKey } from '../services/api'
 import { LOG_GROUPS, actionGroup, adminErrorKey, dateTime, useAdminData } from '../services/admin'
 import { useAuth } from '../services/auth.jsx'
 import { formatDate } from '../services/format'
-import { returnTo } from '../services/roles'
+import { loginAtAdminDoor, returnTo } from '../services/roles'
 
 // `tab`: in the phone bar (six fit 360 px); the rest open from the overview's list of sections
 export const ADMIN_SECTIONS = [
@@ -35,12 +35,14 @@ function AdminFrame({ sections, children }) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  // One transition: the router navigates in a transition, so a plain logout would let the admin guard send to
+  // /admin/login first
   return (
     <Workspace home="/admin" subtitle={t('admin.subtitle')} sections={sections} navKey="admin.nav" tabKey="admin.tab"
       menuLabel={t('admin.menu')} sideTitle={user?.role === 'admin' ? user.email : null}
       actions={user?.role === 'admin' && (<>
         <NotificationBell allPath="/admin/notifications" />
-        <Button variant="secondary" size="sm" onClick={() => { logout(); navigate('/admin/login') }}
+        <Button variant="secondary" size="sm" onClick={() => startTransition(() => { logout(); navigate('/login') })}
           aria-label={t('admin.logout')} title={user.email} className="shrink-0 max-sm:!px-2.5">
           <LogOut className="size-4" aria-hidden /><span className="hidden sm:inline">{t('admin.logout')}</span>
         </Button>
@@ -96,7 +98,7 @@ export function NoAccessPage() {
 
 export function AdminLoginPage() {
   const { t } = useTranslation()
-  const { adminLogin } = useAuth()
+  const { adminLogin, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -114,8 +116,8 @@ export function AdminLoginPage() {
     if (Object.keys(found).length) return
     setBusy(true)
     try {
-      const user = await adminLogin(email, password)
-      navigate(returnTo(user, location.state?.from), { replace: true })
+      const user = await loginAtAdminDoor(adminLogin, login, email, password)
+      goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
       const detail = err.response?.data?.detail
@@ -136,6 +138,7 @@ export function AdminLoginPage() {
           <ErrorText>{errors.form}</ErrorText>
           <SubmitButton busy={busy} busyText={t('auth.loading')}>{t('auth.submitLogin')}</SubmitButton>
         </div>
+        <Link to="/login" className="text-center text-sm text-muted hover:text-primary">{t('admin.toSite')}</Link>
       </form>
     </AuthCard>
   )
