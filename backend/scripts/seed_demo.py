@@ -9,6 +9,7 @@ Demo ready PCs (phase B4): 8 builds of the demo stores in three cities, every pr
 Re-running updates the same stores, offers and demo builds in place (ids stay), no duplicates. Usage (from backend/):
   .venv/Scripts/python.exe scripts/seed_demo.py
   .venv/Scripts/python.exe scripts/seed_demo.py --builds-only   # only store details and demo builds (server update)
+  --no-photos: no demo placeholder photos (the server: demo cards may be cards of the real store)
 """
 
 import random
@@ -258,7 +259,7 @@ def _live_store(db: Session) -> None:
     db.commit()
 
 
-def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]:
+def refresh_stores_and_builds(db: Session, usd_rate: float | None, photos: bool = True) -> list[dict]:
     """--builds-only: demo stores get their details (city, address...) and the demo builds are recreated.
 
     Offers, price history and passwords are not touched (the server has its own demo passwords and live data).
@@ -266,10 +267,13 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     for spec in STORES:
         seed_stock(db, _store(db, spec), spec["email"])
     _live_store(db)
-    return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
-            {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
-            {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)},
-            {"demo_notifications": seed_notifications(db)}, {"demo_photos": _seed_photos(db)}]
+    report = [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
+              {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
+              {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)},
+              {"demo_notifications": seed_notifications(db)}]
+    if photos:
+        report.append({"demo_photos": _seed_photos(db)})
+    return report
 
 
 def _seed_photos(db: Session) -> dict:
@@ -278,7 +282,7 @@ def _seed_photos(db: Session) -> dict:
     return seed_photos(db)  # phase 14: placeholder pictures marked «демо», no duplicates on a rerun
 
 
-def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
+def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False, photos: bool = True) -> list[dict]:
     from app.services.importer import publish_import
 
     usd_rate = usd_rate or FALLBACK_USD_RATE
@@ -305,7 +309,8 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_barcodes": seed_barcodes(db)})
     report.append({"demo_moderation": seed_moderation(db)})
     report.append({"demo_notifications": seed_notifications(db)})
-    report.append({"demo_photos": _seed_photos(db)})
+    if photos:
+        report.append({"demo_photos": _seed_photos(db)})
     return report
 
 
@@ -1104,9 +1109,10 @@ if __name__ == "__main__":
     init_db()
     with SessionLocal() as db:
         rate = get_usd_rate(db)
+        photos = "--no-photos" not in sys.argv
         if "--builds-only" in sys.argv:
-            report = refresh_stores_and_builds(db, rate.rate if rate else None)
+            report = refresh_stores_and_builds(db, rate.rate if rate else None, photos=photos)
         else:
-            report = seed_demo(db, rate.rate if rate else None, fetch_rates=True)
+            report = seed_demo(db, rate.rate if rate else None, fetch_rates=True, photos=photos)
         for line in report:
             print(line)

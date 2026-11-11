@@ -361,3 +361,17 @@ def test_demo_notifications_of_demo1_and_buyer1_rerun_without_duplicates(db):
     refresh_stores_and_builds(db, 12_000)
     seed_demo(db, 12_000)
     assert {e: [(n.id, n.kind) for n in by(e)] for e in first} == first
+
+
+def test_no_photos_option_adds_no_demo_photos(db):
+    from app.db.models import Photo
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    publish_import(db, _import(db, age), age, [_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(1, 30)])
+    report = seed_demo(db, 12_000, photos=False)
+    report += refresh_stores_and_builds(db, 12_000, photos=False)
+    assert not any("demo_photos" in line for line in report)  # the server: placeholders would reach real cards
+    assert _count(db, Photo) == 0
