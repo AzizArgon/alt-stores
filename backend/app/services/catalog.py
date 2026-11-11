@@ -135,6 +135,9 @@ def rebuild_match_keys(db: Session) -> dict:
             offer.product = keeper
         keeper.brand = keeper.brand or p.brand
         keeper.specs_json = {**(p.specs_json or {}), **(keeper.specs_json or {})}
+        from app.services.photos import move_owner
+
+        move_owner(db, "product", p.id, keeper.id)
         db.delete(p)
         merged += 1
     db.commit()
@@ -365,6 +368,9 @@ def search_products(
     cheapest = _cheapest_offers(db, ids, usd_rate, in_stock, city, group)
     used = _cheapest_offers(db, ids, usd_rate, True, city, "used") if group == "new" else {}
     flags = _flag_levels(db, ids, in_stock, city)
+    from app.services.photos import main_thumbs
+
+    thumbs = main_thumbs(db, "product", ids)  # phase 14: the main card photo instead of the category icon
     items = []
     for p, min_usd, n in rows:
         slug = p.category.slug if p.category else "other"
@@ -375,7 +381,7 @@ def search_products(
             "min_price": cheapest[p.id].price if p.id in cheapest else None,
             "min_currency": cheapest[p.id].currency.value if p.id in cheapest else None,
             "specs": card_specs(slug, p.specs_json or {}),
-            "flag_level": flags.get(p.id),
+            "flag_level": flags.get(p.id), "image": thumbs.get(p.id),
             "used_from": ({"price": used[p.id].price, "currency": used[p.id].currency.value,
                            "price_uzs": to_uzs(used[p.id].price, used[p.id].currency, usd_rate)}
                           if p.id in used else None),
@@ -524,11 +530,18 @@ def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str
             "flags": [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
                        "source": f.source.value} for f in o.fraud_flags if f.status == FlagStatus.active],
         })
+    from app.services.photos import published
+
+    own = published(db, "offer", [o["id"] for o in offers])
+    for o in offers:
+        o["photos"] = own.get(o["id"], [])  # phase 14: «Фото продавца» — the store's real item
     offers.sort(key=price_order if sort == "price" else recommended_order)
+    card_photos = published(db, "product", [product.id]).get(product.id, [])
     slug = product.category.slug if product.category else "other"
     return {
         "id": product.id, "name": product.normalized_name, "brand": product.brand, "model": product.model,
         "category": product.category.slug if product.category else "other",
+        "photos": card_photos, "image": card_photos[0]["thumb"] if card_photos else None,  # «Фото модели»
         "mxik_code": product.category.mxik_code if product.category else None,
         # Specs in dictionary order, with units and the source: "inferred" = the rule that added a value the
         # seller did not write (the page marks it), None = written by the seller
@@ -580,8 +593,16 @@ def used_offers(
                       selectinload(Offer.fraud_flags))
         .order_by(*order).offset((page - 1) * page_size).limit(page_size)
     ).all()
+    from app.services.photos import published
+
+    own = published(db, "offer", [o.id for o in offers])
+    cards = published(db, "product", {o.product_id for o in offers})
     items = [{
-        "id": o.id, "product_id": o.product_id, "name": o.product.normalized_name, "raw_name": o.raw_name,
+        "id": o.id, "product_id": o.product_id,
+        # Phase 14: the photo of the item itself if there is one, else the card's, else the icon
+        "photos": own.get(o.id, []),
+        "image": (own[o.id][0]["thumb"] if o.id in own else cards[o.product_id][0]["thumb"] if o.product_id in cards
+                  else None), "name": o.product.normalized_name, "raw_name": o.raw_name,
         "category": o.product.category.slug if o.product.category else "other",
         "price": o.price, "currency": o.currency.value, "price_usd": to_usd(o.price, o.currency, usd_rate),
         "price_uzs": to_uzs(o.price, o.currency, usd_rate), "condition": o.condition.value, "note": o.note,

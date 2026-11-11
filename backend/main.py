@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.api import (admin, auth, barcodes, builds, catalog, chat, market, notifications, reference, reservations, seller,
-                     stock)
+from app.api import (admin, auth, barcodes, builds, catalog, chat, market, notifications, photos, reference, reservations,
+                     seller, stock)
 from app.core.config import settings
 from app.db.database import SessionLocal, init_db
 from app.services.importer import fail_stale_imports
@@ -14,6 +15,7 @@ from app.services.importer import fail_stale_imports
 async def expire_reservations_hourly() -> None:
     """Phase 11: reservations whose term has passed become "expired" (the lists also check it when opened)."""
     from app.services.notifications import purge
+    from app.services.photos import purge_drafts
     from app.services.reservations import expire_due, remind_expiring
 
     while True:
@@ -21,6 +23,7 @@ async def expire_reservations_hourly() -> None:
             expire_due(db)
             remind_expiring(db)  # phase 12.5: "бронь истекает сегодня" to the buyer
             purge(db)  # notifications older than 30 days
+            purge_drafts(db)  # phase 14: photos uploaded but never saved
         await asyncio.sleep(3600)
 
 
@@ -56,8 +59,17 @@ app.include_router(reservations.router, prefix="/api")
 app.include_router(stock.router, prefix="/api")
 app.include_router(barcodes.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(photos.router, prefix="/api")
 app.include_router(admin.public, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+
+
+if settings.serve_media:
+    # On the laptop the backend serves the photos itself; in Docker the web container does (docs/deploy.md)
+    from app.services.storage import media_root
+
+    media_root().mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=media_root()), name="media")
 
 
 @app.get("/api/health")

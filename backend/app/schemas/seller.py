@@ -220,6 +220,7 @@ class OfferFilter(BaseModel):
     stale: bool = False
     market: Literal["above", "below", "at"] | None = None
     branch: int | None = None  # phase 12.1: the stock filter applies to this branch
+    no_photo: bool = False  # phase 14: neither a card photo nor an own photo
 
 
 class BulkIn(BaseModel):

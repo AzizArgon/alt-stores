@@ -68,6 +68,10 @@ def store_offers(db: Session, store: Store, usd_rate: float | None, group: str =
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     offers = db.scalars(query.options(selectinload(Offer.product).selectinload(Product.category))
                         .offset((page - 1) * page_size).limit(page_size)).all()
+    from app.services.photos import published
+
+    own = published(db, "offer", [o.id for o in offers])
+    cards = published(db, "product", {o.product_id for o in offers})
     items = []
     for o in offers:
         p = o.product
@@ -76,5 +80,6 @@ def store_offers(db: Session, store: Store, usd_rate: float | None, group: str =
             "id": p.id, "offer_id": o.id, "name": p.normalized_name, "brand": p.brand, "category": slug,
             "min_price": o.price, "min_currency": o.currency.value, "price_uzs": to_uzs(o.price, o.currency, usd_rate),
             "condition": o.condition.value, "specs": card_specs(slug, p.specs_json or {}), "own": True,
+            "image": (own[o.id][0]["thumb"] if o.id in own else cards[p.id][0]["thumb"] if p.id in cards else None),
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size}

@@ -847,3 +847,43 @@ class Notification(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     demo_key: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+# --- Phase 14: photos ------------------------------------------------------------------------------------------------
+
+class Photo(Base):
+    """A photo of a card (one set for all stores, moderated when several stores sell it), of an offer (the real item,
+    above all used goods) or of a build. Files are in the storage (app/services/storage.py) under random keys:
+    `key` (1500×1500), `thumb_key` (400), `src_key` (the upright source ≤2000 px to re-render after the cropper).
+
+    status: draft (uploaded, not saved yet) / published / pending (waits for the admin) / rejected."""
+
+    __tablename__ = "photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_type: Mapped[str] = mapped_column(String(8), index=True)  # product / offer / build
+    owner_id: Mapped[int] = mapped_column(Integer, index=True)
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(10), default="draft", index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    is_main: Mapped[bool] = mapped_column(Boolean, default=False)
+    key: Mapped[str] = mapped_column(String(64))
+    thumb_key: Mapped[str] = mapped_column(String(64))
+    src_key: Mapped[str] = mapped_column(String(64))
+    orig_w: Mapped[int] = mapped_column(Integer)  # the resolution of the file as the seller had it
+    orig_h: Mapped[int] = mapped_column(Integer)
+    src_w: Mapped[int] = mapped_column(Integer)
+    src_h: Mapped[int] = mapped_column(Integer)
+    mode: Mapped[str] = mapped_column(String(8), default="white")  # white / blur background
+    auto_mode: Mapped[str] = mapped_column(String(8), default="white")
+    zoom: Mapped[float] = mapped_column(Float, default=1.0)
+    ox: Mapped[float] = mapped_column(Float, default=0.0)
+    oy: Mapped[float] = mapped_column(Float, default=0.0)
+    # Card photos: "У меня есть право использовать это фото" — when and by which account
+    rights_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rights_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    reject_reason: Mapped[str | None] = mapped_column(String(300))
+    source: Mapped[str] = mapped_column(String(10), default="upload")  # upload / telegram / demo
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

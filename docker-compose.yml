@@ -18,6 +18,9 @@ services:
     environment:
       ALT_LOCAL_DIR: /data
       DATABASE_URL: sqlite:////data/database.db
+      # Phase 14: photos are files in data/media (not in the image); the web container serves them
+      MEDIA_URL: /media
+      SERVE_MEDIA: "false"
       # X-Real-IP is believed only from the web container (the network below)
       TRUSTED_PROXIES: '["172.31.250.0/24"]'
     # Owner of data/ on the server (user azi), so backups can be read without sudo; not root
@@ -47,6 +50,8 @@ services:
     pull_policy: never
     ports:
       - "127.0.0.1:8095:8080"
+    volumes:
+      - ./data/media:/srv/media:ro  # photos only (read-only), nothing else of data/
     depends_on:
       backend:
         condition: service_healthy

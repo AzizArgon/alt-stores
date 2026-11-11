@@ -23,6 +23,7 @@ ACTIONS = (
     "barcode_resolve", "barcode_reject",
     "channel_add", "channel_edit", "channel_enable", "channel_disable", "channel_delete", "channel_fetch",
     "user_block", "user_unblock",
+    "photo_accept", "photo_reject", "photo_main",
 )
 ACTIVE_RES = (ReservationStatus.new, ReservationStatus.confirmed, ReservationStatus.ready)
 
@@ -427,7 +428,10 @@ def _merge_offer_into(db: Session, src: Offer, dst: Offer) -> None:
 def merge_products(db: Session, source: Product, target: Product) -> dict:
     from app.services.barcodes import refresh_common
 
+    from app.services.photos import move_owner
+
     preview = merge_preview(db, source, target)
+    move_owner(db, "product", source.id, target.id)  # phase 14: card photos go to the kept card
     codes = set()
     for offer in db.scalars(select(Offer).where(Offer.product_id == source.id)).all():
         codes |= {b.code for b in offer.barcodes}
@@ -435,6 +439,7 @@ def merge_products(db: Session, source: Product, target: Product) -> dict:
         if dst is None:
             offer.product_id = target.id  # its stock, barcodes, reservations and conversations move with it
         else:
+            move_owner(db, "offer", offer.id, dst.id)
             _merge_offer_into(db, offer, dst)
     db.flush()
     # The ended duplicates keep their price history on the old card: it stays, out of the catalog (no offers on sale)

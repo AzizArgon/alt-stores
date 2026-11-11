@@ -128,6 +128,8 @@ def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
         return False
     if f.get("market") and (row["market"] or {}).get("label") != f["market"]:
         return False
+    if f.get("no_photo") and row.get("photo"):
+        return False
     return True
 
 
@@ -159,8 +161,17 @@ def filtered_offers(db: Session, store: Store, f: dict) -> list[tuple[Offer, dic
     md = market_data(db)
     stale_before = utcnow() - timedelta(days=STALE_DAYS)
     rows = []
-    for offer in store_offers(db, store):
+    offers = store_offers(db, store)
+    from app.services.photos import own_counts, published
+
+    cards = published(db, "product", {o.product_id for o in offers})
+    own = own_counts(db, store, [o.id for o in offers])
+    for offer in offers:
         row = offer_row(offer, _market(md, offer))
+        # Phase 14: the row's picture (own photo, else the card's) and how many there are
+        mine = own.get(offer.id, {})
+        row["photo"] = mine.get("thumb") or (cards[offer.product_id][0]["thumb"] if offer.product_id in cards else None)
+        row["photos"] = {"own": mine.get("count", 0), "card": len(cards.get(offer.product_id, []))}
         if _matches(offer, row, f, stale_before):
             rows.append((offer, row))
     return rows
@@ -273,6 +284,9 @@ def remove_offer(db: Session, offer: Offer) -> None:
     offer.removed_at = utcnow()
     offer.is_in_stock = False
     offer.price = None
+    from app.services.photos import delete_owner
+
+    delete_owner(db, "offer", offer.id)  # phase 14: the store's photos of the item go with it
     db.commit()
 
 

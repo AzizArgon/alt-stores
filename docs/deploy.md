@@ -40,6 +40,7 @@
 | База | `data/database.db` |
 | Прайсы и кэш для демо | `data/samples/` — по ссылке не открываются |
 | Резервные копии базы и их журнал | `data/backups/` |
+| Фото товаров (фаза 14) | `data/media/` — в образе фото нет; контейнер `web` раздаёт папку только для чтения по `/media/` |
 | Конфиг nginx сервера | `/etc/nginx/sites-available/pcmarket` + `/etc/nginx/snippets/pcmarket-app.conf` (шаблоны — `deploy/nginx/`) |
 | Образы | `alt-stores-backend` и `alt-stores-web`, у каждого метки `current` (работает сейчас) и `previous` (для отката) |
 
@@ -100,6 +101,28 @@ ssh pcmarket "cd /opt/alt-stores && docker compose logs --tail 200 backend"
 - **Скачать копию вручную:** `get_backup.bat`.
 - **Сделать копию прямо сейчас:** `ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/backup_db.py manual 5"`.
 - ⏰ **Напоминание: после 04.12.2026 удалить** архив старой установки (до Docker) `data/backups/2026-11-04_0632_old_pcmarket_install.tar.gz` (147 МБ: старая база, прайсы, копии и старый `.env`). Ротация его не трогает: `backup_db.py` удаляет только файлы своей метки (`*_daily.db.gz`, `*_before_deploy.db.gz` …), `get_backup` скачивает только `*.db.gz`. Удалить (без sudo): `ssh pcmarket "rm /opt/alt-stores/data/backups/2026-11-04_0632_old_pcmarket_install.tar.gz"`.
+
+### Фото (фаза 14): копия отдельно от базы
+
+Ежедневная копия базы фото **не включает** (иначе копии стали бы большими). В базе — только записи о фото (`photos`), сами файлы — в `data/media/` (имена случайные, по две буквы в подпапках). Копировать папку целиком, без sudo:
+
+- **Скачать на ноутбук** (из Git Bash, папка `_localackups\server\media\`; повторный запуск докачивает только новые файлы):
+  ```bash
+  mkdir -p /f/claudy/diplom/_local/backups/server/media && ssh pcmarket "cd /opt/alt-stores/data && tar -cf - media" | tar -xf - -C /f/claudy/diplom/_local/backups/server
+  ```
+- **Копия на сервере** (архив рядом с копиями базы): `ssh pcmarket "cd /opt/alt-stores/data && tar -czf backups/$(date +%F)_media.tar.gz media"`; ротация `backup_db.py` его не трогает — старые удалять вручную.
+- **Вернуть:** остановить сайт не нужно — распаковать архив в `data/` (`tar -xzf backups/<дата>_media.tar.gz -C data`). Фото без записи в базе не видны, запись без файла показывает серую плитку.
+- Размер: одно фото ≈ 150–400 КБ (большое 1500×1500 + превью 400 + исходник до 2000 px).
+
+### На будущее: S3-хранилище для фото (не подключено)
+
+Вся работа с файлами — через `backend/app/services/storage.py` (три действия: сохранить, ссылка, удалить; ещё «прочитать» исходник для окна кадрирования). Сейчас там один класс `LocalStorage` (папка на диске). Чтобы перейти на S3-совместимое хранилище (Cloudflare R2, Backblaze B2):
+
+1. Создать бакет и ключ доступа (Access Key ID + Secret) с правом только на этот бакет; включить публичный доступ на чтение через свой поддомен (например `media.pcmarket.khudoberdi.uz` через Cloudflare) — тогда фото отдаёт CDN, а не наш сервер.
+2. Добавить в `requirements.txt` библиотеку `boto3` и написать класс `S3Storage` с теми же методами (`put_object` с `CacheControl: public, max-age=31536000, immutable`, `delete_object`, `get_object`; ссылка = `MEDIA_URL` + ключ).
+3. В `.env` сервера: `STORAGE_BACKEND=s3`, `MEDIA_URL=https://media.<домен>`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (секреты — только в `.env`).
+4. Перенести старые фото: `rclone copy data/media r2:<бакет>` (ключи те же — база не меняется).
+5. Убрать из `docker-compose.yml` том `./data/media` у `web`. Копии фото тогда делает само хранилище (версии объектов).
 
 ### Как восстановить базу из копии
 

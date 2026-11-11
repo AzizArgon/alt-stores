@@ -473,10 +473,21 @@ def _ram_gb(build: Build) -> int | None:
     return total or None
 
 
+def _build_photos(build: Build) -> list[dict]:
+    from sqlalchemy.orm import object_session
+
+    from app.services.photos import published
+
+    db = object_session(build)
+    return published(db, "build", [build.id]).get(build.id, []) if db is not None and build.id else []
+
+
 def build_summary(build: Build, usd_rate: float | None) -> dict:
     flags = build_flags(build)
     store = build.store
+    photos = _build_photos(build)  # phase 14: up to 6, the seller uploads them in «Мои сборки»
     return {
+        "photos": photos, "image": photos[0]["thumb"] if photos else None,
         "id": build.id, "name": build.name, "price": build.price, "currency": build.currency.value,
         "price_usd": to_usd(build.price, build.currency, usd_rate),
         "price_uzs": to_uzs(build.price, build.currency, usd_rate),

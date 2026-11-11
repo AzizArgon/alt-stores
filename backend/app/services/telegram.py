@@ -27,6 +27,7 @@ from app.db.models import (
 )
 from app.services.catalog import AD_DAYS
 from app.services.importer import parse_clean_rows, publish_import
+from app.services.photos import attach_from_url, delete_owner, fetch_image
 from app.services.text_import import _is_ad as is_ad
 from app.services.text_import import condition_of, find_price, no_rows_reason, text_to_rows
 
@@ -86,6 +87,7 @@ class Post:
     text: str = ""
     posted_at: datetime | None = None
     has_media: bool = False
+    image_url: str | None = None  # phase 14: the first picture of the post (background-image of t.me/s)
 
 
 class _FeedParser(HTMLParser):
@@ -121,6 +123,10 @@ class _FeedParser(HTMLParser):
             self.text_depth = depth
         if "tgme_widget_message_photo" in cls or "tgme_widget_message_video" in cls or "message_document" in cls:
             self.post.has_media = True
+        if "tgme_widget_message_photo_wrap" in cls and self.post.image_url is None:
+            m = re.search(r"background-image:\s*url\(['\"]?([^'\")]+)", a.get("style") or "")
+            if m:
+                self.post.image_url = m.group(1)
         if tag == "time" and a.get("datetime") and self._in("tgme_widget_message_date"):
             try:
                 self.post.posted_at = datetime.fromisoformat(a["datetime"])
@@ -226,6 +232,7 @@ def _take_off(db: Session, channel: TgChannel, post: TgPost, status: str) -> int
         if offer.post_url == url and offer.removed_at is None:
             offer.is_in_stock, offer.removed_at = False, utcnow()
             offer.events.append(OfferEvent(field="removed", value=status, source="telegram"))
+            delete_owner(db, "offer", offer.id)  # phase 14: the photo of a sold ad is not kept
             n += 1
     post.status = status
     return n
@@ -302,7 +309,7 @@ def _new_posts(channel: TgChannel, fetch, pause) -> tuple[list[Post], list[Post]
 
 
 async def _publish_posts(db: Session, channel: TgChannel, items: list[tuple[Post, TgPost]], log_: ChannelLog,
-                         parse) -> None:
+                         parse, fetch_photo=None) -> None:
     """All new posts of a channel through one parse (cache -> rules -> AI), then one publication per post."""
     rows_by_post: dict[int, list] = {}
     all_rows = []
@@ -359,6 +366,8 @@ async def _publish_posts(db: Session, channel: TgChannel, items: list[tuple[Post
         url = post_url(channel, post.id)
         for offer in changed:
             offer.post_url, offer.posted_at = url, post.posted_at or utcnow()
+            if fetch_photo is not None and post.image_url:
+                attach_from_url(db, offer, post.image_url, fetch_photo)  # phase 14; no photo if it fails
         record.status, record.reason, record.offer_ids = "parsed", None, [o.id for o in changed]
         published.extend(rows)
         log_.parsed += 1
@@ -368,8 +377,10 @@ async def _publish_posts(db: Session, channel: TgChannel, items: list[tuple[Post
 
 
 async def run_channel(db: Session, channel: TgChannel, budget: int, fetch=fetch_page, parse=parse_clean_rows,
-                      pause=lambda: time.sleep(PAUSE_SECONDS)) -> ChannelLog:
+                      pause=lambda: time.sleep(PAUSE_SECONDS), fetch_photo=None) -> ChannelLog:
     log_ = ChannelLog(channel.username)
+    if fetch_photo is None and fetch is fetch_page:
+        fetch_photo = fetch_image  # live run: the picture is downloaded too (never in tests with a fake page)
     try:
         latest, new = _new_posts(channel, fetch, pause)
     except (httpx.HTTPError, ValueError) as e:
@@ -395,7 +406,7 @@ async def run_channel(db: Session, channel: TgChannel, budget: int, fetch=fetch_
         else:
             items.append((post, record))
     db.flush()
-    await _publish_posts(db, channel, items, log_, parse)
+    await _publish_posts(db, channel, items, log_, parse, fetch_photo)
     channel.checked_at = utcnow()
     db.commit()
     return log_
