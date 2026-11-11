@@ -1013,7 +1013,7 @@ def seed_notifications(db: Session) -> int:
         (buyer.id, "b_reply", "message", f"/messages/{bconv.id}" if bconv else "/messages",
          {"store": bconv.store.name if bconv else shop.name, "text": "Да, есть. Ждём вас!"}, 1, 7, False),
         (buyer.id, "b_conf", "reservation_confirmed", rlink("confirmed", False),
-         {"title": name, "store": shop.name, "until": ""}, 1, 35, False),
+         {"title": name, "store": shop.name, "until": (utcnow() + timedelta(days=2)).strftime("%d.%m")}, 1, 35, False),
         (buyer.id, "b_ready", "reservation_ready", rlink("ready", False), {"title": name, "store": shop.name}, 1, 60 * 3, True),
         (buyer.id, "b_exp", "reservation_expiring", rlink("reserved", False), {"title": name, "store": shop.name}, 1, 60 * 8, False),
         (buyer.id, "b_cancel", "reservation_cancelled_store", rlink("cancelled", False),
