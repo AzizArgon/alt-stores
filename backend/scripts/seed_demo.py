@@ -268,7 +268,8 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     _live_store(db)
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
             {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
-            {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)}]
+            {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)},
+            {"demo_notifications": seed_notifications(db)}]
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -297,6 +298,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_stock_journal": seed_stock_journal(db)})
     report.append({"demo_barcodes": seed_barcodes(db)})
     report.append({"demo_moderation": seed_moderation(db)})
+    report.append({"demo_notifications": seed_notifications(db)})
     return report
 
 
@@ -974,6 +976,59 @@ def seed_barcodes(db: Session) -> int:
 DEMO_REPORT_COMMENT = "Покупатель пишет грубо и требует скидку"
 DEMO_RUDE_LINE = "Если не сделаете скидку 30%, напишу везде, что вы мошенники!"
 DEMO_DISPUTE = "Это акция до конца недели: цена верная, товар новый"
+
+
+# Phase 12.5: the bell of demo1 and buyer1 — 5–6 notifications of different kinds, some read. demo_key keeps them
+# over re-runs (also --builds-only): updated in place, never doubled; a real store is never touched.
+def seed_notifications(db: Session) -> int:
+    from app.db.models import Notification, PriceImport
+
+    shop = db.scalar(select(Store).join(Store.owner).where(User.email == STORES[0]["email"], Store.is_demo.is_(True)))
+    buyer = db.scalar(select(User).where(User.email == DEMO_BUYER))
+    if shop is None or buyer is None:
+        return 0
+    res = {k: db.scalar(select(Reservation.id).where(Reservation.demo_key == k, Reservation.is_demo.is_(True)))
+           for k in ("confirmed", "reserved", "ready", "cancelled")}
+    conv = db.scalar(select(Conversation).where(Conversation.is_demo.is_(True), Conversation.store_id == shop.id,
+                                                Conversation.topic_kind != TopicKind.reservation).order_by(Conversation.id))
+    bconv = db.scalar(select(Conversation).where(Conversation.is_demo.is_(True), Conversation.buyer_id == buyer.id,
+                                                 Conversation.topic_kind != TopicKind.reservation).order_by(Conversation.id))
+    offer = db.scalar(select(Offer).where(Offer.store_id == shop.id, Offer.removed_at.is_(None), Offer.price.is_not(None))
+                      .order_by(Offer.id))
+    imp = db.scalar(select(PriceImport).where(PriceImport.store_id == shop.id).order_by(PriceImport.id.desc()))
+    rlink = lambda key, seller: (f"/seller/reservations?id={res[key]}" if seller else f"/reservations?id={res[key]}") if res[key] else (
+        "/seller/reservations" if seller else "/reservations")
+    name = offer.product.normalized_name if offer is not None else "Intel Core i5-12400F"
+    # (user, key, kind, link, params, count, minutes ago, read)
+    rows = [
+        (shop.user_id, "s_msg", "message",
+         f"/seller/messages/{conv.id}" if conv else "/seller/messages", {"text": "Здравствуйте! Есть в наличии?"}, 2, 4, False),
+        (shop.user_id, "s_res", "reservation_new", rlink("reserved", True), {"title": name, "qty": 1}, 1, 25, False),
+        (shop.user_id, "s_low", "low_stock", f"/seller/stock?tab=receipt&offer={offer.id}" if offer else "/seller/stock",
+         {"name": name, "left": 1}, 1, 90, False),
+        (shop.user_id, "s_imp", "import_ready", f"/seller/imports/{imp.id}" if imp else "/seller/imports",
+         {"name": imp.filename if imp else "price.xlsx", "rows": 0}, 1, 60 * 5, True),
+        (shop.user_id, "s_fix", "admin_fix", "/seller", {"status": "accepted", "name": name}, 1, 60 * 26, True),
+        (shop.user_id, "s_cancel", "reservation_cancelled", rlink("confirmed", True), {"title": name}, 1, 60 * 50, True),
+        (buyer.id, "b_reply", "message", f"/messages/{bconv.id}" if bconv else "/messages",
+         {"store": bconv.store.name if bconv else shop.name, "text": "Да, есть. Ждём вас!"}, 1, 7, False),
+        (buyer.id, "b_conf", "reservation_confirmed", rlink("confirmed", False),
+         {"title": name, "store": shop.name, "until": ""}, 1, 35, False),
+        (buyer.id, "b_ready", "reservation_ready", rlink("ready", False), {"title": name, "store": shop.name}, 1, 60 * 3, True),
+        (buyer.id, "b_exp", "reservation_expiring", rlink("reserved", False), {"title": name, "store": shop.name}, 1, 60 * 8, False),
+        (buyer.id, "b_cancel", "reservation_cancelled_store", rlink("cancelled", False),
+         {"title": name, "store": shop.name, "reason": "no_stock"}, 1, 60 * 30, True),
+    ]
+    now = utcnow()
+    for user_id, key, kind, link, params, count, ago, read in rows:
+        n = db.scalar(select(Notification).where(Notification.user_id == user_id, Notification.demo_key == key))
+        if n is None:
+            n = Notification(user_id=user_id, demo_key=key)
+            db.add(n)
+        n.kind, n.link, n.params, n.count, n.is_read = kind, link, {**params, "count": count}, count, read
+        n.group_key, n.created_at = None, now - timedelta(minutes=ago)
+    db.commit()
+    return len(rows)
 
 
 def seed_moderation(db: Session) -> dict:

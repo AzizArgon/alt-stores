@@ -337,3 +337,27 @@ def test_demo_warehouse_put_out_and_stocktake_rerun_keeps_ids(db):
     refresh_stores_and_builds(db, 12_000)
     assert state() == first
     assert age.stock_mode == "price" and not age.has_warehouse  # the real store is not touched
+
+
+def test_demo_notifications_of_demo1_and_buyer1_rerun_without_duplicates(db):
+    """Phase 12.5: 5–6 notifications of different kinds each, some read; reruns (also --builds-only) keep them."""
+    from app.db.models import Notification
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers", is_verified=True)
+    db.add(age)
+    db.commit()
+    rows = [{**_row(n, f"Kingston DDR5 {n}GB", 10 + n), "category": "ram"} for n in range(1, 30)]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    by = lambda email: db.scalars(select(Notification).join(User, Notification.user_id == User.id)  # noqa: E731
+                                  .where(User.email == email).order_by(Notification.id)).all()
+    first = {e: [(n.id, n.kind) for n in by(e)] for e in ("demo1@example.com", "buyer1@example.com")}
+    for e, items in first.items():
+        assert 5 <= len(items) <= 6 and len({k for _, k in items}) >= 4
+        assert any(n.is_read for n in by(e)) and any(not n.is_read for n in by(e))
+    assert by("seller1@example.com") == []  # the real store is never touched
+    refresh_stores_and_builds(db, 12_000)
+    seed_demo(db, 12_000)
+    assert {e: [(n.id, n.kind) for n in by(e)] for e in first} == first
