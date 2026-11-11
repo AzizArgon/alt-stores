@@ -5,7 +5,7 @@ background, half on a "busy" one (a desk), so both branches of the photo standar
 their own "photo" of the same kind with another caption, the used demo build — one too.
 
 Everything is marked is_demo; a rerun (also --builds-only) skips what is there already — no duplicates. The real store is
-never touched: no photo of its offers, and cards it does not sell come first. The demo assortment is taken from the real
+never touched: no photo of its offers. The demo assortment is taken from the real
 price list, so a demo card may be one the real store sells too: a demo placeholder gives way by itself — it is deleted as
 soon as a real photo of the card is published (app/services/photos.py `drop_demo`).
 """
@@ -163,11 +163,6 @@ def _wrap(d, text: str, font, width: int) -> list[str]:
 
 # --- seeding --------------------------------------------------------------------------------------------------------------
 
-def _real_shop_cards(db: Session) -> set[int]:
-    return set(db.scalars(select(Offer.product_id).join(Store, Store.id == Offer.store_id).where(
-        Store.is_demo.is_(False), Store.kind == StoreKind.shop)))
-
-
 def _has_demo(db: Session, owner_type: str, owner_id: int) -> bool:
     return db.scalar(select(Photo.id).where(Photo.owner_type == owner_type, Photo.owner_id == owner_id,
                                             Photo.is_demo.is_(True)).limit(1)) is not None
@@ -181,20 +176,24 @@ def _add(db: Session, owner_type: str, owner_id: int, store_id: int, data: bytes
 
 
 def demo_cards(db: Session) -> list[tuple[Product, int]]:
-    """12 cards of different categories that only demo stores sell, the most offered first (they are on the home
-    page): (card, the demo store that "uploaded" it)."""
-    real = _real_shop_cards(db)
-    picked: list[tuple[Product, int]] = []
-    for slug in CATEGORIES:
-        rows = db.execute(
-            select(Product, func.count(Offer.id), func.min(Offer.store_id)).join(Offer, Offer.product_id == Product.id)
-            .join(Store, Store.id == Offer.store_id).join(Category, Category.id == Product.category_id)
-            .where(Category.slug == slug, Store.is_demo.is_(True), Store.kind == StoreKind.shop,
-                   Offer.removed_at.is_(None), Offer.price.is_not(None), Offer.condition == Condition.new)
-            .group_by(Product.id).order_by(func.count(Offer.id).desc(), Product.id).limit(5)).all()
-        rows.sort(key=lambda r: r[0].id in real)  # cards of demo stores only first (stable: by offers inside)
-        if rows:
-            picked.append((rows[0][0], rows[0][2]))
+    """12 popular cards (the most stores first, as on the home page and the catalog), at most 2 per category, sold by
+    demo stores: (card, the demo store that "uploaded" it)."""
+    demo_seller = dict(db.execute(
+        select(Offer.product_id, func.min(Offer.store_id)).join(Store, Store.id == Offer.store_id)
+        .where(Store.is_demo.is_(True), Store.kind == StoreKind.shop, Offer.removed_at.is_(None),
+               Offer.price.is_not(None), Offer.condition == Condition.new).group_by(Offer.product_id)).all())
+    rows = db.execute(
+        select(Product, func.count(func.distinct(Offer.store_id)).label("n")).join(Offer, Offer.product_id == Product.id)
+        .where(Product.id.in_(demo_seller), Offer.removed_at.is_(None), Offer.price.is_not(None))
+        .group_by(Product.id).order_by(func.count(func.distinct(Offer.store_id)).desc(), Product.normalized_name)
+        .limit(400)).all()
+    picked, per_cat = [], {}
+    for product, _ in rows:
+        slug = product.category.slug if product.category else "other"
+        if slug not in CATEGORIES or per_cat.get(slug, 0) >= 2:
+            continue
+        per_cat[slug] = per_cat.get(slug, 0) + 1
+        picked.append((product, demo_seller[product.id]))
         if len(picked) >= CARDS:
             break
     return picked

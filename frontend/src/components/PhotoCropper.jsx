@@ -118,8 +118,10 @@ export default function PhotoCropper({ photo, onClose, onApply }) {
           {/* The template: the frame, the dashed safe zone, the centre lines */}
           <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
             <rect x="0.3" y="0.3" width="99.4" height="99.4" fill="none" stroke="var(--color-primary)" strokeWidth="0.6" />
+            {/* White under the dashes: the zone is seen on a dark or a busy photo too */}
+            <rect x={margin} y={margin} width={100 - 2 * margin} height={100 - 2 * margin} fill="none" stroke="#fff" strokeWidth="1" strokeOpacity="0.8" />
             <rect x={margin} y={margin} width={100 - 2 * margin} height={100 - 2 * margin} fill="none"
-              stroke="var(--color-primary)" strokeWidth="0.5" strokeDasharray="2 1.5" />
+              stroke="var(--color-primary)" strokeWidth="0.6" strokeDasharray="2 1.5" />
             <path d="M50 0V100M0 50H100" stroke="var(--color-primary)" strokeWidth="0.25" strokeOpacity="0.5" />
           </svg>
         </div>

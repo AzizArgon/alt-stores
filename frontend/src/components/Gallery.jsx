@@ -26,7 +26,7 @@ export function Lightbox({ photos, index, label, onClose }) {
 
   const p = photos[i]
   return createPortal(
-    <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-50 flex flex-col bg-black/90 text-white"
+    <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-50 flex flex-col bg-[rgb(12_14_20/0.94)] text-white"
       onPointerDown={(e) => { start.current = e.clientX }}
       onPointerUp={(e) => {
         if (start.current == null) return

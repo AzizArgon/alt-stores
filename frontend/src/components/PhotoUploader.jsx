@@ -19,7 +19,7 @@ let tmpSeq = 0
 function IconButton({ label, onClick, children, active = false, disabled = false }) {
   return (
     <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} aria-pressed={active || undefined}
-      className={`flex size-8 items-center justify-center rounded-md bg-surface/90 shadow-card outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40 ${active ? 'text-warning' : 'text-ink'}`}>
+      className={`flex size-8 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-30 ${active ? 'text-warning' : 'text-ink'}`}>
       {children}
     </button>
   )
@@ -149,18 +149,18 @@ export default function PhotoUploader({ ownerType, ownerId, hint, onSaved, initi
               }}
               className={`relative overflow-hidden rounded-lg border bg-surface-2 ${mainId === p.id ? 'border-warning ring-2 ring-warning/40' : 'border-line'} ${own ? 'cursor-grab' : ''}`}
               title={own ? t('photo.drag') : t('photo.otherStore')}>
-              <img src={p.thumb} alt="" className="aspect-square w-full object-cover" draggable={false} />
+              <img src={p.thumb} alt="" className="aspect-square w-full bg-white object-cover" draggable={false} />
               <div className="absolute top-1 left-1 flex flex-wrap gap-1">
                 {mainId === p.id && <Badge tone="warning">{t('photo.main')}</Badge>}
                 {STATUS_TONE[p.status] && <Badge tone={STATUS_TONE[p.status]}>{t(`photo.status.${p.status}`)}</Badge>}
                 {p.readonly && <Badge>{t('photo.model')}</Badge>}
               </div>
               {p.small && own && (
-                <span className="absolute right-1 bottom-11 flex size-7 items-center justify-center rounded-full bg-warning-soft text-warning" title={t('photo.small')}>
+                <span className="absolute top-1 right-1 flex size-7 items-center justify-center rounded-full bg-warning-soft text-warning" title={t('photo.small')}>
                   <TriangleAlert className="size-4" aria-label={t('photo.small')} />
                 </span>
               )}
-              <div className="absolute inset-x-1 bottom-1 flex flex-wrap justify-end gap-1">
+              <div className="flex flex-wrap justify-center gap-1 border-t border-line bg-surface p-1">
                 {canStar(p) && (
                   <IconButton label={t('photo.makeMain')} active={mainId === p.id} onClick={() => setMainId(p.id)}>
                     <Star className="size-4" fill={mainId === p.id ? 'currentColor' : 'none'} aria-hidden />
@@ -175,7 +175,7 @@ export default function PhotoUploader({ ownerType, ownerId, hint, onSaved, initi
                 </>}
               </div>
               {p.status === 'rejected' && p.reason && (
-                <p className="absolute inset-x-0 top-8 bg-danger-soft px-2 py-1 text-xs text-danger">{t('photo.rejected', { reason: p.reason })}</p>
+                <p className="bg-danger-soft px-2 py-1 text-xs text-danger">{t('photo.rejected', { reason: p.reason })}</p>
               )}
             </li>
           )

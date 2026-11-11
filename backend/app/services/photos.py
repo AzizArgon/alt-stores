@@ -412,6 +412,12 @@ def attach_from_url(db: Session, offer: Offer, url: str | None, fetch=fetch_imag
 
 # --- the admin: section «Фото» ---------------------------------------------------------------------------------------------
 
+def _aware(at):
+    from datetime import timezone
+
+    return at.replace(tzinfo=timezone.utc) if at is not None and at.tzinfo is None else at
+
+
 def review_queue(db: Session) -> list[dict]:
     """Cards with photos waiting for a decision: the waiting ones (with the resolution and who uploaded) next to the
     published ones; the main suggested by default is the largest."""
@@ -433,8 +439,8 @@ def review_queue(db: Session) -> list[dict]:
             "product": {"id": pid, "name": product.normalized_name if product else "",
                         "category": product.category.slug if product and product.category else None},
             "sellers": len(sellers(db, pid)),
-            "pending": [{**out(p), "store": stores.get(p.store_id), "rights_at": p.rights_at,
-                         "created_at": p.created_at, "small": imaging.is_small(p.orig_w, p.orig_h)} for p in items],
+            "pending": [{**out(p), "store": stores.get(p.store_id), "rights_at": _aware(p.rights_at),
+                         "created_at": _aware(p.created_at), "small": imaging.is_small(p.orig_w, p.orig_h)} for p in items],
             "published": [out(p) for p in current],
             "suggested_main": best.id,
         })
