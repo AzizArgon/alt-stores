@@ -269,7 +269,13 @@ def refresh_stores_and_builds(db: Session, usd_rate: float | None) -> list[dict]
     return [{"demo_builds": seed_builds(db, usd_rate or FALLBACK_USD_RATE)}, {"demo_chats": seed_chats(db)},
             {"demo_reservations": seed_reservations(db)}, {"demo_stock_journal": seed_stock_journal(db)},
             {"demo_barcodes": seed_barcodes(db)}, {"demo_moderation": seed_moderation(db)},
-            {"demo_notifications": seed_notifications(db)}]
+            {"demo_notifications": seed_notifications(db)}, {"demo_photos": _seed_photos(db)}]
+
+
+def _seed_photos(db: Session) -> dict:
+    from scripts.demo_photos import seed_photos
+
+    return seed_photos(db)  # phase 14: placeholder pictures marked «демо», no duplicates on a rerun
 
 
 def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) -> list[dict]:
@@ -299,6 +305,7 @@ def seed_demo(db: Session, usd_rate: float | None, fetch_rates: bool = False) ->
     report.append({"demo_barcodes": seed_barcodes(db)})
     report.append({"demo_moderation": seed_moderation(db)})
     report.append({"demo_notifications": seed_notifications(db)})
+    report.append({"demo_photos": _seed_photos(db)})
     return report
 
 

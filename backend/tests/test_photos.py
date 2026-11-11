@@ -458,3 +458,41 @@ def test_telegram_picture_hosts_are_checked():
     assert photos.tg_image_ok("https://cdn4.telesco.pe/file/x.jpg")
     assert not photos.tg_image_ok("http://cdn4.telesco.pe/file/x.jpg")
     assert not photos.tg_image_ok("https://127.0.0.1/x.jpg") and not photos.tg_image_ok("https://evil.pe/x.jpg")
+
+
+# --- demo ----------------------------------------------------------------------------------------------------------------
+
+def test_demo_placeholders_show_both_backgrounds():
+    from scripts.demo_photos import placeholder
+
+    white = imaging.load(placeholder("gpu", "MSI RTX 4060", "фото модели · демо", busy=False))
+    busy = imaging.load(placeholder("gpu", "MSI RTX 4060", "фото экземпляра б/у · демо", busy=True, seed=3))
+    assert imaging.auto_mode(white) == "white" and imaging.auto_mode(busy) == "blur"
+
+
+def test_demo_photos_without_duplicates_and_giving_way_to_a_real_photo(db, world):
+    from app.db.models import Condition
+    from scripts.demo_photos import seed_photos
+
+    for s in (world["shop"], world["other"]):
+        s.is_demo = True
+    used = db.scalar(select(Offer).where(Offer.store_id == world["shop"].id, Offer.product_id == world["alone"].id))
+    used.condition = Condition.used
+    db.add(Offer(store=world["other"], product=world["alone"], raw_name="x", price=99))  # a new one for the card
+    db.commit()
+    first = seed_photos(db)
+    assert first["cards"] >= 1 and first["offers"] == 1
+    assert seed_photos(db) == {"cards": 0, "offers": 0, "builds": 0}  # a rerun adds nothing
+    demo = db.scalars(select(Photo).where(Photo.owner_type == "product", Photo.is_demo.is_(True))).all()
+    assert all(p.status == "published" and p.source == "demo" for p in demo)
+    # A real photo of a demo card, accepted by the admin: the placeholder goes
+    card = demo[0].owner_id
+    shop = world["shop"]
+    if not db.scalar(select(Offer.id).where(Offer.store_id == shop.id, Offer.product_id == card)):
+        shop = world["other"]
+    real = photos.upload(db, shop, "product", card, _bytes(white_photo()))
+    photos.save_set(db, shop, shop.owner, "product", card, [real.id], rights=True)
+    if db.get(Photo, real.id).status == "pending":
+        photos.decide(db, world["admin"], real.id, True)
+    left = db.scalars(select(Photo).where(Photo.owner_type == "product", Photo.owner_id == card)).all()
+    assert [p.id for p in left] == [real.id]

@@ -242,6 +242,13 @@ def _set_main(db: Session, owner_type: str, owner_id: int, main: Photo | None) -
         p.is_main = main is not None and p.id == main.id
 
 
+def drop_demo(db: Session, product_id: int) -> None:
+    """A real photo of a card is published: the demo placeholders of the card give way (deleted)."""
+    for p in db.scalars(select(Photo).where(Photo.owner_type == "product", Photo.owner_id == product_id,
+                                            Photo.is_demo.is_(True))):
+        delete_photo(db, p)
+
+
 def ensure_main(db: Session, owner_type: str, owner_id: int) -> None:
     """A set with published photos always has one main: the first by order (for cards — the largest)."""
     db.flush()
@@ -286,6 +293,8 @@ def save_set(db: Session, store: Store, user: User, owner_type: str, owner_id: i
             p.status = "published" if sole else "pending"
             if owner_type == "product":
                 p.rights_at, p.rights_user_id = now, user.id
+    if owner_type == "product" and drafts and sole:
+        drop_demo(db, owner_id)
     if owner_type == "product" and drafts and not sole:
         product = db.get(Product, owner_id)
         notify_admins(db, "photo_review", "/admin/photos", group="photo_review",
@@ -458,6 +467,8 @@ def decide(db: Session, admin: User, photo_id: int, accept: bool, reason: str | 
             if count >= S.CARD_MAX:
                 raise PhotoError("card_full", max=S.CARD_MAX)
             p.status, p.reject_reason = "published", None
+            if not p.is_demo:
+                drop_demo(db, p.owner_id)
             notify(db, owner(db, p.store_id), "photo_approved", f"/products/{p.owner_id}", name=name)
         if main:
             _set_main(db, "product", p.owner_id, p)
