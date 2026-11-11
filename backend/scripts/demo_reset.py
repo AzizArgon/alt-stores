@@ -45,7 +45,10 @@ SELLER = {"email": "seller1@example.com", "password": secrets.token_urlsafe(24),
 # so the demo files must not go to a store with a full price list
 LIVE_SELLER = {"email": "live@example.com", "password": "demo12345", "name": "Tech Point",
                "phone": "+998900000404", "city": "fergana", "district": "Центр", "is_demo": True}
-STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "city", "district", "is_verified")
+STORE_FIELDS = ("name", "inn_stir", "phone", "telegram", "address", "city", "district", "is_verified", "hours",
+                "map_url", "map_lat", "map_lon", "reservation_days")
+BRANCH_FIELDS = ("name", "city", "address", "landmark", "hours", "phone", "map_url", "map_lat", "map_lon", "is_main",
+                 "columns_json")
 RESTORED_FILENAME = "restored_after_demo_reset"
 
 
@@ -114,6 +117,7 @@ def real_store_data(db) -> list[dict]:
     from sqlalchemy.orm import selectinload
 
     from app.db.models import Offer, Product, Store, User
+    from app.services.branches import stock_state
     from scripts.seed_demo import DEMO_EMAILS
 
     stores = []
@@ -121,13 +125,16 @@ def real_store_data(db) -> list[dict]:
         select(Store).join(Store.owner)
         .where(Store.is_demo.is_(False), Store.is_archive.is_(False), User.email.not_in(DEMO_EMAILS))
         .options(selectinload(Store.offers).selectinload(Offer.product).selectinload(Product.category),
-                 selectinload(Store.offers).selectinload(Offer.price_history))
+                 selectinload(Store.offers).selectinload(Offer.price_history),
+                 selectinload(Store.offers).selectinload(Offer.stocks))
     ):
         u = store.owner
         stores.append({
             "user": {"email": u.email, "password_hash": u.password_hash, "role": u.role.value,
                      "created_at": u.created_at.isoformat()},
             "store": {f: getattr(store, f) for f in STORE_FIELDS},
+            # Phase 12.1: the branches the owner added and the stock by branch (kept over demo.bat)
+            "branches": [{"id": b.id, **{f: getattr(b, f) for f in BRANCH_FIELDS}} for b in store.branches],
             "offers": [{
                 "raw_name": o.raw_name, "name": o.product.normalized_name, "brand": o.product.brand,
                 "model": o.product.model, "specs": o.product.specs_json or {},
@@ -135,6 +142,7 @@ def real_store_data(db) -> list[dict]:
                 "price": o.price, "currency": o.currency.value, "condition": o.condition.value, "note": o.note,
                 "is_in_stock": o.is_in_stock, "updated_at": o.updated_at.isoformat(),
                 "history": [[h.price, h.currency.value, h.recorded_at.isoformat()] for h in o.price_history],
+                "stocks": stock_state(o),
             } for o in store.offers],
         })
     return stores
@@ -154,6 +162,15 @@ def restore_real_store(db, data: dict) -> dict:
     store = Store(owner=user, **{**data["store"], "city": data["store"].get("city") or "tashkent"})
     db.add(store)
     db.flush()
+    from app.db.models import Branch
+    from app.services.branches import restore_stock
+
+    new_ids = {}
+    for b in data.get("branches", []):
+        branch = Branch(store_id=store.id, **{f: b[f] for f in BRANCH_FIELDS if f in b})
+        db.add(branch)
+        db.flush()
+        new_ids[str(b["id"])] = branch.id
     imp = PriceImport(store_id=store.id, filename=RESTORED_FILENAME, currency=Currency.USD)
     db.add(imp)
     rows = [{"row": i, "raw_name": o["raw_name"], "name": o["name"], "category": o["category"], "brand": o["brand"],
@@ -169,6 +186,8 @@ def restore_real_store(db, data: dict) -> dict:
         offer.price_history.clear()
         offer.price_history.extend(PriceHistory(price=p, currency=Currency(c), recorded_at=datetime.fromisoformat(at))
                                    for p, c, at in o["history"])
+        if o.get("stocks"):
+            restore_stock(offer, {str(new_ids[k]): v for k, v in o["stocks"].items() if k in new_ids})
         offer.updated_at = datetime.fromisoformat(o["updated_at"])
     db.commit()
     return {"store": store.name, "email": user.email, **stats}

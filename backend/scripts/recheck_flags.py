@@ -15,7 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified  # noqa: E402
 
 from app.db.database import SessionLocal  # noqa: E402
 from app.db.models import ImportStatus, Offer, PriceImport  # noqa: E402
-from app.services.antifraud import check_offer, market_prices, save_offer_flags  # noqa: E402
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags  # noqa: E402
 from app.services.exchange import get_usd_rate  # noqa: E402
 from app.services.importer import flag_rows  # noqa: E402
 
@@ -33,7 +33,7 @@ def main() -> None:
                 "name": p.normalized_name, "specs": p.specs_json, "condition": offer.condition.value,
                 "price": offer.price, "currency": offer.currency.value,
             }
-            market = market_prices(db, {p.match_key}, offer.store_id, usd_rate).get(p.match_key)
+            market = market_for(market_prices(db, {p.match_key}, offer.store_id, usd_rate), p.match_key, offer.condition.value)
             flags = check_offer(row, market, usd_rate)
             save_offer_flags(offer, flags)
             counts.update(f"{f['type']}/{f['level']}" for f in flags)

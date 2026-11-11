@@ -18,7 +18,7 @@ from statistics import median
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import ArchivePrice, Category, Condition, Offer, PriceHistory, Product, Store
+from app.db.models import ArchivePrice, Category, Condition, Offer, PriceHistory, Product, Store, StoreKind
 from app.services.exchange import RateBook
 
 HISTORY_DAYS = 90  # daily market price is kept for the last 3 months
@@ -43,9 +43,14 @@ class MarketData:
     category: dict[int, str] = field(default_factory=dict)  # product -> category slug
     # Stores whose prices are invented (Store.is_demo, or history is_demo): the pages say "includes demo data"
     demo_stores: set[int] = field(default_factory=set)
+    # Telegram channels (phase 9): their ads count in the market of their condition, the page says "by N ads"
+    ad_stores: set[int] = field(default_factory=set)
 
     def has_demo(self, key) -> bool:
         return any(s in self.demo_stores for s in self.per_store.get(key, {}))
+
+    def ads(self, key) -> int:
+        return sum(s in self.ad_stores for s in self.per_store.get(key, {}))
 
     def now(self, key) -> float | None:
         values = self.series.get(key)
@@ -59,11 +64,17 @@ class MarketData:
 _cache: dict = {}
 
 
+def market_condition(condition: str) -> str:
+    """"Condition not said" is priced with the used goods: it is in the used group (never passed off as new)."""
+    return Condition.used.value if condition == Condition.unknown.value else condition
+
+
 def _cache_key(db: Session, today: date) -> tuple:
     return (
         today,
         db.scalar(select(func.max(PriceHistory.id))), db.scalar(select(func.count(PriceHistory.id))),
         db.scalar(select(func.max(Offer.updated_at))), db.scalar(select(func.count(Offer.id))),
+        tuple(db.scalars(select(Store.id).where(Store.blocked_at.is_not(None)).order_by(Store.id))),  # phase 13
     )
 
 
@@ -82,9 +93,9 @@ def build_market(db: Session, today: date) -> MarketData:
     md = MarketData(dates=dates)
     offers = db.execute(
         select(Offer.id, Offer.product_id, Offer.store_id, Offer.condition, Offer.price, Offer.currency,
-               Product.category_id, Store.is_demo)
+               Product.category_id, Store.is_demo, Store.kind)
         .select_from(Offer).join(Product).join(Store, Offer.store_id == Store.id).where(Offer.is_in_stock.is_(True), Offer.price.is_not(None),
-                                         Store.is_archive.is_(False))
+                                         Store.is_archive.is_(False), Store.blocked_at.is_(None))
     ).all()
     slugs = dict(db.execute(select(Category.id, Category.slug)).all())
     history: dict[int, list[tuple[date, float]]] = {}
@@ -100,11 +111,13 @@ def build_market(db: Session, today: date) -> MarketData:
             history.setdefault(offer_id, []).append((at.date(), usd))
 
     per_store = md.per_store
-    for offer_id, product_id, store_id, condition, price, currency, category_id, store_demo in offers:
+    for offer_id, product_id, store_id, condition, price, currency, category_id, store_demo, kind in offers:
         usd_now = rates.usd(price, currency, today)
         if usd_now is None:
             continue
-        cond = condition.value if isinstance(condition, Condition) else condition
+        cond = market_condition(condition.value if isinstance(condition, Condition) else condition)
+        if kind == StoreKind.telegram:
+            md.ad_stores.add(store_id)
         md.offers.append((offer_id, product_id, store_id, cond))
         if store_demo or offer_id in demo_offers:
             md.demo_stores.add(store_id)
@@ -193,6 +206,7 @@ def product_market(db: Session, product_id: int, today: date | None = None) -> d
             result["conditions"][cond] = {
                 "stores": md.stores.get(key, 0),
                 "includes_demo": md.has_demo(key),
+                "ads": md.ads(key),  # of them Telegram ads: "by the data of N ads"
                 "market_usd": round(market, 2) if market is not None else None,
                 "change": change(md, key),
                 "series": [{"date": d.isoformat(), "usd": round(v, 2)} for d, v in zip(md.dates, series)

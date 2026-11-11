@@ -33,15 +33,17 @@ function CloseButton({ onClose }) {
   )
 }
 
-export function Modal({ open, onClose, title, children, footer }) {
+// `fullOnPhone`: the whole screen on a phone (a long form), a centred window from 640 px
+export function Modal({ open, onClose, title, children, footer, fullOnPhone = false }) {
   useEsc(open, onClose)
   useLockScroll(open)
   if (!open) return null
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${fullOnPhone ? 'sm:p-4' : 'p-4'}`}>
       <div className="absolute inset-0 animate-[fade-in_150ms] bg-ink/50" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-label={title}
-        className="relative flex max-h-full w-full max-w-lg animate-[pop-in_150ms] flex-col rounded-xl bg-surface shadow-pop">
+        className={`relative flex max-h-full w-full animate-[pop-in_150ms] flex-col bg-surface shadow-pop ${
+          fullOnPhone ? 'h-full sm:h-auto sm:max-w-lg sm:rounded-xl' : 'max-w-lg rounded-xl'}`}>
         <div className="flex items-center justify-between gap-3 px-5 pt-4">
           <h2 className="text-h2">{title}</h2>
           <CloseButton onClose={onClose} />
@@ -87,7 +89,8 @@ const DropdownContext = createContext(null)
 
 // Dropdown menu: closes on a click outside, on Esc and after choosing an item.
 // `trigger` gets { open, toggle } and draws the button
-export function Dropdown({ trigger, align = 'right', panelClassName = 'w-64', children }) {
+// `up`: the panel opens above the trigger (a button at the bottom of a card, above the phone tab bar)
+export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', children }) {
   const [open, setOpen] = useState(false)
   const box = useRef(null)
   const close = useCallback(() => setOpen(false), [])
@@ -103,7 +106,7 @@ export function Dropdown({ trigger, align = 'right', panelClassName = 'w-64', ch
       {trigger({ open, toggle: () => setOpen(!open) })}
       {open && (
         <DropdownContext.Provider value={close}>
-          <div role="menu" className={`absolute top-full z-40 mt-2 max-w-[calc(100vw-2rem)] animate-[pop-in_120ms] rounded-lg border border-line bg-surface p-1.5 shadow-pop ${
+          <div role="menu" className={`absolute z-40 ${up ? 'bottom-full mb-2' : 'top-full mt-2'} max-w-[calc(100vw-2rem)] animate-[pop-in_120ms] rounded-lg border border-line bg-surface p-1.5 shadow-pop ${
             align === 'right' ? 'right-0' : 'left-0'} ${panelClassName}`}>
             {children}
           </div>

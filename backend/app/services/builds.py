@@ -473,10 +473,21 @@ def _ram_gb(build: Build) -> int | None:
     return total or None
 
 
+def _build_photos(build: Build) -> list[dict]:
+    from sqlalchemy.orm import object_session
+
+    from app.services.photos import published
+
+    db = object_session(build)
+    return published(db, "build", [build.id]).get(build.id, []) if db is not None and build.id else []
+
+
 def build_summary(build: Build, usd_rate: float | None) -> dict:
     flags = build_flags(build)
     store = build.store
+    photos = _build_photos(build)  # phase 14: up to 6, the seller uploads them in «Мои сборки»
     return {
+        "photos": photos, "image": photos[0]["thumb"] if photos else None,
         "id": build.id, "name": build.name, "price": build.price, "currency": build.currency.value,
         "price_usd": to_usd(build.price, build.currency, usd_rate),
         "price_uzs": to_uzs(build.price, build.currency, usd_rate),
@@ -498,9 +509,11 @@ def build_detail(db: Session, build: Build, usd_rate: float | None) -> dict:
         "components": [component_out(c) for c in build.components],
         "flags": build_flags(build), "compatibility": compatibility(build),
         "store_reference": store_reference(db, build, usd_rate),
+        "branches": _branches(store),
         "store": {"id": store.id, "name": store.name, "city": store.city, "district": store.district,
                   "address": store.address, "phone": store.phone, "telegram": store.telegram,
-                  "is_verified": store.is_verified},
+                  "is_verified": store.is_verified, "hours": store.hours, "map_url": store.map_url,
+                  "map_lat": store.map_lat, "map_lon": store.map_lon},
     }
 
 
@@ -531,13 +544,22 @@ def _ts(dt: datetime) -> float:
     return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
 
 
+def _branches(store: Store) -> list[dict]:
+    """Phase 12.1: the build is reserved in one of the store's branches (no stock by branch for builds)."""
+    from app.services.branches import branch_public
+
+    return [branch_public(b, store) for b in store.branches]
+
+
 def list_builds(db: Session, usd_rate: float | None, f: dict, city: str | None = None, sort: str = "new",
                 page: int = 1, page_size: int = PAGE_SIZE) -> dict:
     """The "Ready PCs" section: builds on sale in the city (or the whole country), filters with counts.
     No market labels or ratings: builds of different stores are not compared."""
-    query = select(Build).join(Build.store).where(Build.is_in_stock.is_(True))
+    query = select(Build).join(Build.store).where(Build.is_in_stock.is_(True), Store.blocked_at.is_(None))
     if city:
-        query = query.where(Store.city == city)
+        from app.services.branches import store_in_city
+
+        query = query.where(store_in_city(city))  # phase 12.1: a branch of the store in the city
     all_items = [build_summary(b, usd_rate) for b in load_builds(db, query)]
     items = [s for s in all_items if _matches(s, f)]
     if sort in ("price_asc", "price_desc"):

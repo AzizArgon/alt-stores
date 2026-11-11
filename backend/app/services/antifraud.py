@@ -14,7 +14,7 @@ from statistics import median
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Currency, FlagLevel, FlagSource, FlagStatus, FraudFlag, Offer, Product
+from app.db.models import Currency, FlagLevel, FlagSource, FlagStatus, FraudFlag, Offer, Product, Store
 from app.services.exchange import to_usd
 from app.services.spec_normalizer import specs_as_text
 
@@ -200,29 +200,53 @@ def check_offer(row: dict, market_usd: list[float] | None = None, usd_rate: floa
     return sorted(flags, key=lambda f: -LEVEL_ORDER[f["level"]])
 
 
-def market_prices(db: Session, match_keys: set[str], store_id: int | None, usd_rate: float | None) -> dict[str, list[float]]:
-    """USD prices of in-stock offers from other stores, by product match_key."""
+def group_of(condition: str | None) -> str:
+    """Market group of a condition (phase 9): an opened box is new; used, refurbished and "not said" are used."""
+    return "new" if (condition or "new") in NEW else "used"
+
+
+def market_prices(db: Session, match_keys: set[str], store_id: int | None,
+                  usd_rate: float | None) -> dict[str, dict[str, list[float]]]:
+    """USD prices of in-stock offers from other stores: {match_key: {"new": [...], "used": [...]}}.
+
+    Like the monitoring, a price is compared only with its own group: a used card or a Telegram ad
+    is not "below market" just because new ones cost more."""
     if not match_keys:
         return {}
     q = (
-        select(Product.match_key, Offer.price, Offer.currency)
+        select(Product.match_key, Offer.price, Offer.currency, Offer.condition)
         .join(Offer.product)
-        .where(Product.match_key.in_(match_keys), Offer.is_in_stock.is_(True), Offer.price.is_not(None))
+        .where(Product.match_key.in_(match_keys), Offer.is_in_stock.is_(True), Offer.price.is_not(None),
+               # phase 13: a store blocked by the admin is not part of the market
+               Offer.store_id.not_in(select(Store.id).where(Store.blocked_at.is_not(None))))
     )
     if store_id is not None:
         q = q.where(Offer.store_id != store_id)
-    result: dict[str, list[float]] = {}
-    for key, price, currency in db.execute(q):
+    result: dict[str, dict[str, list[float]]] = {}
+    for key, price, currency, condition in db.execute(q):
         usd = to_usd(price, currency, usd_rate)
         if usd:
-            result.setdefault(key, []).append(usd)
+            result.setdefault(key, {}).setdefault(group_of(condition.value), []).append(usd)
     return result
+
+
+def market_for(market: dict, key: str, condition: str | None) -> list[float] | None:
+    """Prices of the offer's own group; too few of them means no market flag at all."""
+    return (market.get(key) or {}).get(group_of(condition))
 
 
 def save_offer_flags(offer: Offer, flags: list[dict]) -> None:
     """Replaces active flags; a type the seller disputed or the admin dismissed is not raised again."""
     kept = [f for f in offer.fraud_flags if f.status != FlagStatus.active]
     closed = {f.type for f in kept}
+    # Phase 13: a flag the admin upheld keeps its answer while the same check still raises it
+    raised = {f["type"]: f for f in flags}
+    upheld = [f for f in offer.fraud_flags if f.status == FlagStatus.active and f.resolution == "upheld"
+              and f.type in raised]
+    for f in upheld:
+        f.level, f.reason_key, f.params = FlagLevel(raised[f.type]["level"]), raised[f.type]["reason_key"], raised[f.type]["params"]
+    closed |= {f.type for f in upheld}
+    kept += upheld
     offer.fraud_flags = kept + [
         FraudFlag(
             type=f["type"], level=FlagLevel(f["level"]), reason_key=f["reason_key"], params=f["params"],

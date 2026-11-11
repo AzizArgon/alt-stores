@@ -14,6 +14,40 @@
    },
    "source": "ai"
   },
+  "amd ryzen 5 7500f 3 7 ghz 6c 12t am5": {
+   "data": {
+    "category": "cpu",
+    "brand": "AMD",
+    "model": "7500F",
+    "name": "Процессор AMD Ryzen 5 7500F AM5",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "series": "Ryzen 5",
+     "socket": "AM5",
+     "cores": "6",
+     "threads": "12"
+    }
+   },
+   "source": "ai"
+  },
+  "asus prime b650m k ddr5 am5": {
+   "data": {
+    "category": "motherboard",
+    "brand": "ASUS",
+    "model": "PRIME B650M-K",
+    "name": "Материнская плата ASUS PRIME B650M-K DDR5 AM5",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "socket": "AM5",
+     "chipset": "B650",
+     "form_factor": "mATX",
+     "memory_type": "DDR5"
+    }
+   },
+   "source": "ai"
+  },
   "asus tuf gaming rtx 4070 super 12gb": {
    "data": {
     "category": "gpu",
@@ -24,11 +58,12 @@
     "risks": [],
     "specs": {
      "vendor": "NVIDIA",
-     "chip": "GeForce RTX 4070 SUPER",
-     "memory": "12GB"
+     "chip": "RTX 4070 Super",
+     "memory": 12,
+     "brand": "ASUS"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "cpu core i7 14700k tray": {
    "data": {
@@ -43,12 +78,12 @@
      "pack": "OEM"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "gtx 3060 6gb": {
    "data": {
     "category": "gpu",
-    "brand": "NVIDIA",
+    "brand": null,
     "model": "GTX 3060 6gb",
     "name": "Видеокарта NVIDIA GeForce GTX 3060 6GB",
     "condition": "new",
@@ -58,10 +93,10 @@
     "specs": {
      "vendor": "NVIDIA",
      "chip": "GTX 3060",
-     "memory": "6GB"
+     "memory": 6
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "hdd wd blue 2tb 7200": {
    "data": {
@@ -72,11 +107,11 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "capacity": "2TB",
-     "rpm": "7200rpm"
+     "capacity": 2000,
+     "rpm": 7200
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "i5 12400f": {
    "data": {
@@ -84,13 +119,13 @@
     "brand": "Intel",
     "model": "Core i5-12400F",
     "name": "Процессор Intel Core i5-12400F",
-    "condition": "new",
+    "condition": "unknown",
     "risks": [],
     "specs": {
-     "series": "i5"
+     "series": "Core i5"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "i9 xeon e5 2699 v3 18 ядер как i9": {
    "data": {
@@ -104,10 +139,10 @@
     ],
     "specs": {
      "series": "Xeon",
-     "cores": "18"
+     "cores": 18
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "intel core i3 12100f": {
    "data": {
@@ -123,21 +158,52 @@
    },
    "source": "ai"
   },
+  "intel core i3 13100 3 4 ghz 12mb oem lga1700": {
+   "data": {
+    "category": "cpu",
+    "brand": "Intel",
+    "model": "i3-13100",
+    "name": "Процессор Intel Core i3-13100 OEM LGA1700",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "socket": "LGA1700",
+     "pack": "OEM"
+    }
+   },
+   "source": "ai"
+  },
+  "intel core i5 12400f 2 7 ghz 18mb oem lga1700": {
+   "data": {
+    "category": "cpu",
+    "brand": "Intel",
+    "model": "i5-12400F",
+    "name": "Процессор Intel Core i5-12400F OEM LGA1700",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "socket": "LGA1700",
+     "pack": "OEM"
+    }
+   },
+   "source": "ai"
+  },
   "kingston fury 32gb ddr5 6000": {
    "data": {
     "category": "ram",
     "brand": "Kingston",
     "model": "Fury",
     "name": "Оперативная память Kingston Fury 32GB DDR5 6000MHz",
-    "condition": "new",
+    "condition": "unknown",
     "risks": [],
     "specs": {
      "type": "DDR5",
-     "capacity": "32GB",
-     "frequency": "6000MHz"
+     "capacity": 32,
+     "frequency": 6000,
+     "brand": "Kingston"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "kingston fury beast 8gb ddr4 3200": {
    "data": {
@@ -164,7 +230,40 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "capacity": "1TB"
+     "capacity": 1000,
+     "brand": "Kingston"
+    }
+   },
+   "source": "seller"
+  },
+  "lexar lnm780 512gb m 2 nvme ssd": {
+   "data": {
+    "category": "ssd",
+    "brand": "Lexar",
+    "model": "LNM780",
+    "name": "SSD накопитель Lexar LNM780 512GB M.2 NVMe",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "capacity": "512GB",
+     "interface": "NVMe",
+     "form_factor": "M.2"
+    }
+   },
+   "source": "ai"
+  },
+  "msi pro h610m e ddr5 lga1700 motherboard": {
+   "data": {
+    "category": "motherboard",
+    "brand": "MSI",
+    "model": "PRO H610M-E DDR5",
+    "name": "Материнская плата MSI PRO H610M-E DDR5 LGA1700",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "socket": "LGA1700",
+     "chipset": "H610",
+     "memory_type": "DDR5"
     }
    },
    "source": "ai"
@@ -179,25 +278,26 @@
     "risks": [],
     "specs": {
      "type": "DDR5",
-     "capacity": "16GB",
-     "frequency": "5600MHz"
+     "capacity": 16,
+     "frequency": 5600
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "rx 6600 8gb б у": {
    "data": {
     "category": "gpu",
-    "brand": "AMD",
+    "brand": null,
     "model": "RX 6600",
     "name": "Видеокарта AMD RX 6600",
     "condition": "used",
     "risks": [],
     "specs": {
-     "memory": "8GB"
+     "chip": "RX 6600",
+     "memory": 8
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "ryzen 5 5600 box": {
    "data": {
@@ -205,14 +305,15 @@
     "brand": "AMD",
     "model": "Ryzen 5 5600",
     "name": "Процессор AMD Ryzen 5 5600",
-    "condition": "new",
+    "condition": "unknown",
     "risks": [],
     "specs": {
-     "pack": "BOX",
-     "box": "no_box"
+     "box": "no_box",
+     "series": "Ryzen 5",
+     "pack": "BOX"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "ryzen 7 7700 box": {
    "data": {
@@ -220,14 +321,14 @@
     "brand": "AMD",
     "model": "Ryzen 7 7700",
     "name": "Процессор AMD Ryzen 7 7700",
-    "condition": "new",
+    "condition": "unknown",
     "risks": [],
     "specs": {
      "series": "Ryzen 7",
-     "box": "box"
+     "pack": "BOX"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "samsung 870 evo 500gb": {
    "data": {
@@ -243,6 +344,22 @@
    },
    "source": "ai"
   },
+  "samsung 990 pro 1tb m 2 nvme ssd": {
+   "data": {
+    "category": "ssd",
+    "brand": "Samsung",
+    "model": "990 PRO",
+    "name": "SSD накопитель Samsung 990 PRO 1TB M.2 NVMe",
+    "condition": "new",
+    "risks": [],
+    "specs": {
+     "capacity": "1TB",
+     "interface": "NVMe",
+     "form_factor": "M.2"
+    }
+   },
+   "source": "ai"
+  },
   "ssd kingston nv3 500gb m 2": {
    "data": {
     "category": "ssd",
@@ -252,11 +369,12 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "capacity": "500GB",
-     "form_factor": "M.2"
+     "capacity": 500,
+     "form_factor": "M.2",
+     "brand": "Kingston"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "ssd samsung 980 1tb": {
    "data": {
@@ -264,10 +382,28 @@
     "brand": "Samsung",
     "model": "980",
     "name": "SSD накопитель Samsung 980 1TB",
+    "condition": "unknown",
+    "risks": [],
+    "specs": {
+     "capacity": 1000,
+     "brand": "Samsung"
+    }
+   },
+   "source": "seller"
+  },
+  "zotac geforce rtx 5060 twin edge oc 8gb gddr7 128bit": {
+   "data": {
+    "category": "gpu",
+    "brand": "Zotac",
+    "model": "TWIN EDGE OC",
+    "name": "Видеокарта Zotac GeForce RTX 5060 TWIN EDGE OC 8GB GDDR7 128bit",
     "condition": "new",
     "risks": [],
     "specs": {
-     "capacity": "1TB"
+     "vendor": "NVIDIA",
+     "chip": "RTX 5060",
+     "memory": "8GB",
+     "memory_type": "GDDR7"
     }
    },
    "source": "ai"
@@ -275,17 +411,18 @@
   "блок питания deepcool pk650d 650w 80 bronze": {
    "data": {
     "category": "psu",
-    "brand": "DeepCool",
+    "brand": "Deepcool",
     "model": "PK650D",
     "name": "Блок питания DeepCool PK650D 650W",
     "condition": "new",
     "risks": [],
     "specs": {
-     "power": "650W",
-     "certification": "80 PLUS Bronze"
+     "certification": "Bronze",
+     "power": 650,
+     "brand": "Deepcool"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "бп 750w": {
    "data": {
@@ -328,11 +465,12 @@
     "risks": [],
     "specs": {
      "vendor": "NVIDIA",
-     "chip": "GeForce RTX 4060",
-     "memory": "8GB"
+     "chip": "RTX 4060",
+     "memory": 8,
+     "brand": "MSI"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "видеокарта palit rtx 5060 dual 8gb": {
    "data": {
@@ -345,27 +483,28 @@
     "specs": {
      "vendor": "NVIDIA",
      "chip": "RTX 5060",
-     "memory": "8GB"
+     "memory": 8,
+     "brand": "Palit"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "видюха rtx 3060 12gb no lhr": {
    "data": {
     "category": "gpu",
-    "brand": "NVIDIA",
+    "brand": null,
     "model": "RTX 3060",
     "name": "Видеокарта NVIDIA GeForce RTX 3060 12GB",
     "condition": "new",
     "risks": [],
     "specs": {
      "vendor": "NVIDIA",
+     "revision": "Full Hash Rate",
      "chip": "RTX 3060",
-     "memory": "12GB",
-     "revision": "Full Hash Rate"
+     "memory": 12
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "доставка по ташкенту бесплатно от 500 у е": {
    "data": {
@@ -382,10 +521,11 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "color": "черный"
+     "color": "black",
+     "brand": "Zalman"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "корпус zalman s2": {
    "data": {
@@ -402,16 +542,17 @@
   "кулер deepcool ak400": {
    "data": {
     "category": "cooling",
-    "brand": "DeepCool",
+    "brand": "Deepcool",
     "model": "AK400",
     "name": "Кулер для процессора DeepCool AK400",
     "condition": "new",
     "risks": [],
     "specs": {
-     "type": "air"
+     "type": "air",
+     "brand": "Deepcool"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "мат плата msi pro b760m a wifi ddr5": {
    "data": {
@@ -424,10 +565,11 @@
     "specs": {
      "chipset": "B760",
      "memory_type": "DDR5",
-     "wifi": "WIFI"
+     "wifi": true,
+     "brand": "MSI"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "мат плата x99 xeon e5 2680 v4 комплект": {
    "data": {
@@ -440,10 +582,10 @@
      "server_hardware"
     ],
     "specs": {
-     "socket": "X99"
+     "chipset": "X99"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "материнка gigabyte b650m ds3h": {
    "data": {
@@ -454,11 +596,12 @@
     "condition": "new",
     "risks": [],
     "specs": {
+     "form_factor": "mATX",
      "chipset": "B650",
-     "form_factor": "mATX"
+     "brand": "Gigabyte"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "монитор samsung odyssey g5 27 165гц": {
    "data": {
@@ -469,11 +612,12 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "size": "27inch",
-     "refresh_rate": "165Hz"
+     "size": 27,
+     "refresh_rate": 165,
+     "brand": "Samsung"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "мышь logitech g102 lightsync б у как новая": {
    "data": {
@@ -484,10 +628,11 @@
     "condition": "used",
     "risks": [],
     "specs": {
-     "gaming": "gaming"
+     "gaming": "gaming",
+     "brand": "Logitech"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "озу kingston fury beast ddr4 16gb 3200 ddr5": {
    "data": {
@@ -501,11 +646,12 @@
     ],
     "specs": {
      "type": "DDR4",
-     "capacity": "16GB",
-     "frequency": "3200MHz"
+     "capacity": 16,
+     "frequency": 3200,
+     "brand": "Kingston"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "опер память crucial 8гб ддр4 3200 sodimm": {
    "data": {
@@ -518,11 +664,12 @@
     "specs": {
      "type": "DDR4",
      "form_factor": "SODIMM",
-     "capacity": "8GB",
-     "frequency": "3200MHz"
+     "capacity": 8,
+     "frequency": 3200,
+     "brand": "Crucial"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "прайс на 26 10 цены в у е уточняйте наличие": {
    "data": {
@@ -543,7 +690,7 @@
      "pack": "BOX"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "процессор ryzen 5 7500f oem am5": {
    "data": {
@@ -559,7 +706,7 @@
      "pack": "OEM"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "ссд самсунг 990 pro 1tb nvme": {
    "data": {
@@ -570,11 +717,11 @@
     "condition": "new",
     "risks": [],
     "specs": {
-     "capacity": "1TB",
+     "capacity": 1000,
      "interface": "NVMe"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "флешка kingston datatraveler 2tb usb 3 2": {
    "data": {
@@ -582,16 +729,17 @@
     "brand": "Kingston",
     "model": "DataTraveler",
     "name": "Флешка Kingston DataTraveler 2TB USB 3.2",
-    "condition": "new",
+    "condition": "unknown",
     "risks": [
      "fake_capacity"
     ],
     "specs": {
-     "capacity": "2TB",
-     "type": "usb"
+     "capacity": 2000,
+     "type": "usb",
+     "brand": "Kingston"
     }
    },
-   "source": "ai"
+   "source": "seller"
   },
   "флешка usb 2tb metal подарок": {
    "data": {

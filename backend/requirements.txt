@@ -15,4 +15,6 @@ openpyxl==3.1.5
 google-genai==2.33.0
 httpx==0.28.1
 python-multipart==0.0.32
+# Phase 14: photo checks and the 1500×1500 standard (light processing only, no AI)
+Pillow==13.0.0
 pytest==9.1.1

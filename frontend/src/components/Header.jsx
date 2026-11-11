@@ -1,19 +1,26 @@
-import { ChevronDown, LayoutDashboard, LogOut, MapPin, Menu, Search, UserCog } from 'lucide-react'
+import { ChevronDown, CalendarCheck, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Search, UserCog } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CITIES } from '../config/cities'
 import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
+import api from '../services/api'
+import { checkBarcode, looksLikeBarcode } from '../services/barcode'
+import { useUnread } from '../services/chat'
+import { useUnseenReservations } from '../services/reservations'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
+import { NotificationBell } from './Notifications'
 import { Button, Select, inputClass } from './ui'
 
 const SEARCH_DELAY_MS = 300
 const NAV_LINKS = [
   { to: '/catalog', label: 'nav.catalog' },
+  { to: '/used', label: 'nav.used' },
   { to: '/builds', label: 'nav.builds' },
+  { to: '/stores', label: 'nav.stores' },
   { to: '/market', label: 'nav.market' },
 ]
 const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
@@ -40,15 +47,25 @@ function HeaderSearch({ className = '' }) {
     if (urlQuery !== null && urlQuery !== value.trim()) setValue(urlQuery)
   }, [urlQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Phase 12.3: a code from a box opens its card — only a code confirmed in the common base (two stores bound it);
+  // the live search of the catalog does the same, so it never takes the buyer back to the empty results
+  const go = async (text, replace) => {
+    if (looksLikeBarcode(text) && !checkBarcode(text).error) {
+      const id = await api.get(`/catalog/barcode/${encodeURIComponent(checkBarcode(text).code)}`).then((r) => r.data.product_id).catch(() => null)
+      if (id) { navigate(`/products/${id}`); return }
+    }
+    openResults(text, replace)
+  }
+
   useEffect(() => {
     if (!onCatalog || value.trim() === urlQuery) return
-    const timer = setTimeout(() => openResults(value.trim(), true), SEARCH_DELAY_MS)
+    const timer = setTimeout(() => go(value.trim(), true), SEARCH_DELAY_MS)
     return () => clearTimeout(timer)
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = (e) => {
     e.preventDefault()
-    openResults(value.trim(), onCatalog)
+    go(value.trim(), onCatalog)
   }
 
   return (
@@ -90,23 +107,42 @@ export function Avatar({ email, className = 'size-10 text-base' }) {
   )
 }
 
-function UserLinks({ logout, Item }) {
+// A red counter of unread messages (on the avatar, in the menu, in the cabinet sections)
+export function UnreadBadge({ count, className = '' }) {
+  const { t } = useTranslation()
+  if (!count) return null
+  return (
+    <span aria-label={t('chat.unread', { count })} title={t('chat.unread', { count })}
+      className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white ${className}`}>
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+function UserLinks({ logout, Item, unread, unseen }) {
   const { t } = useTranslation()
   return (
     <>
+      <Item as={Link} to="/messages" icon={MessageSquare}>
+        <span className="flex flex-1 items-center justify-between gap-2">{t('chat.title')}<UnreadBadge count={unread} /></span>
+      </Item>
+      <Item as={Link} to="/reservations" icon={CalendarCheck}>
+        <span className="flex flex-1 items-center justify-between gap-2">{t('nav.reservations')}<UnreadBadge count={unseen} /></span>
+      </Item>
       <Item as={Link} to="/profile" icon={UserCog}>{t('nav.profile')}</Item>
       <Item icon={LogOut} onClick={logout}>{t('nav.logout')}</Item>
     </>
   )
 }
 
-function UserMenu({ user, logout }) {
+function UserMenu({ user, logout, unread, unseen }) {
   const { t } = useTranslation()
   return (
     <Dropdown trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.account')} title={user.email}
-        className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+        className="relative rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
         <Avatar email={user.email} />
+        <UnreadBadge count={unread + unseen} className="absolute -top-1 -right-1.5 ring-2 ring-surface" />
       </button>
     )}>
       <div className="flex items-center gap-2.5 border-b border-line p-2.5 pb-3 mb-1.5">
@@ -116,13 +152,13 @@ function UserMenu({ user, logout }) {
           <p className="text-xs text-muted">{t(`roles.${user.role}`)}</p>
         </div>
       </div>
-      <UserLinks logout={logout} Item={DropdownItem} />
+      <UserLinks logout={logout} Item={DropdownItem} unread={unread} unseen={unseen} />
     </Dropdown>
   )
 }
 
 // Phone and tablet menu: everything the desktop header shows in its row
-function MobileMenu({ open, onClose, user, logout }) {
+function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
   const { t } = useTranslation()
   const { city, setCity } = useCity()
   const row = 'flex min-h-11 items-center rounded-md px-2.5 text-sm font-medium hover:bg-surface-2'
@@ -142,7 +178,7 @@ function MobileMenu({ open, onClose, user, logout }) {
         {user && <div className="my-2 border-t border-line" />}
         {user?.role === 'seller'
           ? <Button {...linkProps(sellerUrl())} className="mt-1 w-full"><LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}</Button>
-          : user && <UserLinks logout={logout} Item={DropdownItem} />}
+          : user && <UserLinks logout={logout} Item={DropdownItem} unread={unread} unseen={unseen} />}
       </nav>
       <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
         {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
@@ -162,20 +198,22 @@ export default function Header() {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
+  const unread = useUnread(!!user && user.role !== 'seller')
+  const unseen = useUnseenReservations(!!user && user.role !== 'seller')
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex h-16 items-center gap-2 md:gap-3">
           <button type="button" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')}
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary lg:hidden">
+            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary xl:hidden">
             <Menu className="size-6" aria-hidden />
           </button>
           <Logo />
           <div className="hidden md:block"><CityMenu /></div>
           <HeaderSearch className="hidden flex-1 md:block" />
           <div className="flex-1 md:hidden" />
-          <nav className="hidden shrink-0 items-center gap-1 lg:flex">
+          <nav className="hidden shrink-0 items-center gap-1 xl:flex">
             {NAV_LINKS.map((link) => (
               <NavLink key={link.to} to={link.to} end className={({ isActive }) =>
                 `rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-surface-2 ${isActive ? 'text-primary' : 'text-ink'}`}>
@@ -188,7 +226,12 @@ export default function Header() {
             <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">
               <LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}
             </Button>
-          ) : user ? <UserMenu user={user} logout={logout} /> : (
+          ) : user ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {user.role === 'buyer' && <NotificationBell allPath="/notifications" />}
+              <UserMenu user={user} logout={logout} unread={unread} unseen={unseen} />
+            </div>
+          ) : (
             <div className="flex shrink-0 items-center gap-2">
               <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
               <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
@@ -198,7 +241,7 @@ export default function Header() {
         {/* The home page has its own big search: the phone row would repeat it */}
         {pathname !== '/' && <div className="pb-3 md:hidden"><HeaderSearch /></div>}
       </div>
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} />
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} unread={unread} unseen={unseen} />
     </header>
   )
 }

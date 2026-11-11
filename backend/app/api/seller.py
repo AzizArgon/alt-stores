@@ -1,21 +1,24 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
 from app.core.limits import spend_import
 from app.db.database import get_db
-from app.db.models import Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
+from app.db.models import Branch, Category, Condition, Currency, ImportStatus, Offer, PriceImport, Product, Store, User
 from app.schemas.seller import (
-    BulkIn, CheckResult, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
+    BranchIn, BulkIn, CheckResult, ColumnsIn, StockIn, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
     PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
-from app.services import cabinet
+from app.services import branch_stock, branches, cabinet
 from app.services.cabinet import EditError
 from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
 )
 from app.services.market import PERIODS, index_table, market_data, missing_popular, seller_position
+from app.services import undo
+from app.services.maps import MapLinkError, parse_map_url
 from app.services.manual import create_product, product_brief, save_offer, store_offer, suggest_products
 
 router = APIRouter(tags=["seller"])
@@ -43,20 +46,92 @@ def _my_import(db: Session, user: User, import_id: int) -> tuple[Store, PriceImp
     return store, imp
 
 
+def _store_out(db: Session, store: Store) -> dict:
+    out = StoreOut.model_validate({c.name: getattr(store, c.name) for c in Store.__table__.columns}).model_dump()
+    out["branches"] = [branches.branch_seller(b, store) for b in branches.store_branches(db, store.id)]
+    from app.services.warehouse import warehouse_out
+
+    out["warehouse"] = warehouse_out(db, store)  # phase 12.4: never on the storefront
+    return out
+
+
 @router.get("/stores/me", response_model=StoreOut)
 def get_my_store(user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    return _require_store(db, user)
+    return _store_out(db, _require_store(db, user))
 
 
 @router.put("/stores/me", response_model=StoreOut)
 def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    store = _my_store(db, user) or Store(user_id=user.id)
+    """Create the store (its address becomes the main branch) or change its own fields. Once the store has
+    branches, the address, hours and map are edited in the branches (phase 12.1): those fields are ignored here."""
+    store = _my_store(db, user)
+    has_branches = store is not None and bool(branches.store_branches(db, store.id))
+    if not has_branches and (not data.address or not data.city):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "address"})
+    try:
+        map_url, lat, lon = parse_map_url(data.map_url)
+    except MapLinkError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    store = store or Store(user_id=user.id)
+    location = {"address", "district", "city", "hours", "map_url"}
     for field, value in data.model_dump().items():
+        if has_branches and field in location or field == "low_stock" and value is None:
+            continue
+        if isinstance(value, str):
+            value = value.strip() or None
         setattr(store, field, value)
+    if not has_branches:
+        store.map_url, store.map_lat, store.map_lon = map_url, lat, lon
     db.add(store)
+    db.flush()
+    branches.ensure_main_branch(db, store)
     db.commit()
     db.refresh(store)
-    return store
+    return _store_out(db, store)
+
+
+def _my_branch(db: Session, store: Store, branch_id: int) -> Branch:
+    branch = db.get(Branch, branch_id)
+    if branch is None or branch.store_id != store.id or branch.is_warehouse:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Branch not found")
+    return branch
+
+
+def _branch_edit(db: Session, fn, *args):
+    try:
+        fn(db, *args)
+    except branches.BranchError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    db.commit()
+
+
+@router.post("/stores/me/branches", response_model=StoreOut, status_code=status.HTTP_201_CREATED)
+def add_branch(data: BranchIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.save_branch, store, data.model_dump())
+    return _store_out(db, store)
+
+
+@router.put("/stores/me/branches/{branch_id}", response_model=StoreOut)
+def edit_branch(branch_id: int, data: BranchIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.save_branch, store, data.model_dump(), _my_branch(db, store, branch_id))
+    return _store_out(db, store)
+
+
+@router.post("/stores/me/branches/{branch_id}/main", response_model=StoreOut)
+def set_main_branch(branch_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.make_main, store, _my_branch(db, store, branch_id))
+    return _store_out(db, store)
+
+
+@router.delete("/stores/me/branches/{branch_id}", response_model=StoreOut)
+def remove_branch(branch_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    store = _require_store(db, user)
+    _branch_edit(db, branches.delete_branch, store, _my_branch(db, store, branch_id))
+    return _store_out(db, store)
 
 
 @router.post("/imports", response_model=ImportOut, status_code=status.HTTP_202_ACCEPTED)
@@ -66,10 +141,13 @@ async def upload_price(
     currency: Currency = Form(...),
     # No default: the seller chooses "full price list" or "addition" every time
     mode: str = Form(..., pattern="^(full|append)$"),
+    branch_id: int | None = Form(None),  # phase 12.1: the price list of one branch; none = the whole store
     user: User = Depends(seller_only),
     db: Session = Depends(get_db),
 ):
     store = _require_store(db, user)
+    if branch_id is not None:
+        _my_branch(db, store, branch_id)
     filename = file.filename or "price"
     if not any(filename.lower().endswith(ext) for ext in ALLOWED_EXTENSIONS):
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Unsupported file type")
@@ -78,7 +156,7 @@ async def upload_price(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File too large")
 
     spend_import(db, store.id)
-    imp = PriceImport(store_id=store.id, filename=filename, currency=currency, mode=mode)
+    imp = PriceImport(store_id=store.id, filename=filename, currency=currency, mode=mode, branch_id=branch_id)
     db.add(imp)
     db.commit()
     db.refresh(imp)
@@ -105,14 +183,54 @@ def paste_text(data: TextImportIn, background: BackgroundTasks, user: User = Dep
 @router.get("/imports", response_model=list[ImportOut])
 def list_imports(user: User = Depends(seller_only), db: Session = Depends(get_db)):
     store = _require_store(db, user)
-    return db.scalars(
+    undoable = undo.undoable_id(db, store)
+    imports = db.scalars(
         select(PriceImport).where(PriceImport.store_id == store.id).order_by(PriceImport.id.desc()).limit(20)
     ).all()
+    return [ImportOut.model_validate(i).model_copy(update={"can_undo": i.id == undoable}) for i in imports]
+
+
+def _undoable(db: Session, imp: PriceImport) -> None:
+    reason = undo.can_undo(db, imp)
+    if reason:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": reason})
+
+
+@router.get("/imports/{import_id}/undo")
+def undo_summary(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """"What will come back" before undoing the upload: nothing is written."""
+    imp = _my_import(db, user, import_id)[1]
+    _undoable(db, imp)
+    return undo.plan_undo(db, imp)
+
+
+@router.post("/imports/{import_id}/undo")
+def undo_upload(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    imp = _my_import(db, user, import_id)[1]
+    _undoable(db, imp)
+    return undo.undo_import(db, imp)
 
 
 @router.get("/imports/{import_id}", response_model=ImportDetail)
 def get_import(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    return _my_import(db, user, import_id)[1]
+    imp = _my_import(db, user, import_id)[1]
+    out = ImportDetail.model_validate(imp)
+    out.branch_info = branch_stock.branch_info(db, imp)
+    return out
+
+
+@router.post("/imports/{import_id}/columns", response_model=ImportDetail)
+def confirm_import_columns(import_id: int, data: ColumnsIn, user: User = Depends(seller_only),
+                           db: Session = Depends(get_db)):
+    """"Сопоставление столбцов": which branch each stock column is; remembered for the next price list."""
+    store, imp = _my_import(db, user, import_id)
+    try:
+        branch_stock.confirm_columns(db, store, imp, data.mapping)
+    except branch_stock.ColumnsError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    db.commit()
+    return get_import(import_id, user, db)
 
 
 @router.post("/imports/{import_id}/publish", response_model=PublishResult)
@@ -121,6 +239,8 @@ def publish(import_id: int, data: PublishRequest, user: User = Depends(seller_on
     if imp.status != ImportStatus.ready:
         raise HTTPException(status.HTTP_409_CONFLICT, "Import is not ready to publish")
     rows = [r.model_dump() for r in data.rows]
+    if not branch_stock.branch_info(db, imp)["confirmed"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": "columns"})  # match the branch columns first
     if not data.confirm_drop and plan_import(db, imp, store, rows, data.mode)["large_drop"]:
         raise HTTPException(status.HTTP_409_CONFLICT, {"code": "large_drop"})
     return publish_import(db, imp, store, rows, data.mode)
@@ -271,6 +391,14 @@ def edit_offer(offer_id: int, data: OfferPatch, user: User = Depends(seller_only
     return _edit(cabinet.update_offer, db, store, _my_offer(db, store, offer_id), data.model_dump(exclude_unset=True))
 
 
+@router.put("/seller/offers/{offer_id}/stocks")
+def edit_offer_stocks(offer_id: int, data: list[StockIn], user: User = Depends(seller_only),
+                      db: Session = Depends(get_db)):
+    """Stock by branch (phase 12.1): a quantity, "есть / нет" (quantity unknown) or clear = not tracked there."""
+    store = _require_store(db, user)
+    return _edit(cabinet.set_branch_stock, db, store, _my_offer(db, store, offer_id), [d.model_dump() for d in data])
+
+
 @router.delete("/seller/offers/{offer_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_offer(offer_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """Only the store's offer: the card and the price history stay."""
@@ -307,4 +435,32 @@ def bulk_offers(data: BulkIn, user: User = Depends(seller_only), db: Session = D
         offers = [o for o in cabinet.store_offers(db, store) if o.id in wanted]
     else:
         offers = [o for o, _ in cabinet.filtered_offers(db, store, (data.filter or OfferFilter()).model_dump())]
-    return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply)
+    if data.action in ("branch_on", "branch_off"):
+        if data.branch_id is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "branch_required"})
+        _my_branch(db, store, data.branch_id)
+    return cabinet.bulk(db, store, offers, data.action, data.percent, data.apply, data.branch_id)
+
+
+# --- Phase 13: the admin's decisions in the cabinet -------------------------------------------------------------------
+
+class DisputeIn(BaseModel):
+    comment: str = Field(max_length=500)
+
+
+@router.post("/seller/flags/{flag_id}/dispute")
+def dispute_flag(flag_id: int, data: DisputeIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    from app.services.admin import AdminError, dispute_flag as dispute
+
+    try:
+        dispute(db, _require_store(db, user), flag_id, data.comment)
+    except AdminError as e:
+        raise HTTPException(e.status, {"code": e.code})
+    return {"ok": True}
+
+
+@router.get("/seller/decisions")
+def decisions(user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    from app.services.admin import seller_decisions
+
+    return seller_decisions(db, _require_store(db, user))

@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     cbu_fetch: bool = True  # false on the public server: cbu.uz is closed to foreign addresses
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Phase 14: photos (app/services/storage.py). "local" = a folder on disk; S3 later (docs/deploy.md)
+    storage_backend: str = "local"
+    media_dir: str = ""  # "" = <ALT_LOCAL_DIR>/media; in Docker /data/media
+    media_url: str = "http://127.0.0.1:8000/media"  # in Docker "/media" (served by the web container)
+    serve_media: bool = True  # the backend serves /media itself (laptop); false in Docker
+
     # Public server only (backend/.env there); 0 or "" = off, as on the laptop
     seller_invite_code: str = ""  # sellers register only with this code; buyers freely
     seller_daily_imports: int = 0  # files, texts and retries per store per day

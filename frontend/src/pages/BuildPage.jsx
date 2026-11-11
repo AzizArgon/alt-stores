@@ -6,12 +6,16 @@ import { ErrorText } from '../components/AuthForm'
 import BuildParts from '../components/BuildParts'
 import { PrecisionBadge } from '../components/BuildTile'
 import { ProductVisual } from '../components/CategoryIcon'
+import { ProductGallery } from '../components/Gallery'
 import Flags from '../components/Flags'
 import Price from '../components/Price'
 import { Badge, Breadcrumbs, Button, Card, Skeleton } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum } from '../services/format'
 import { useSpecDictionary } from '../services/specs'
+import { WriteButton } from '../components/Chat'
+import { MapButtons, StoreName } from '../components/StoreWhere'
+import { ReserveButton } from '../components/Reservation'
 import { Contacts } from './ProductPage'
 
 // "These parts separately in this store": a neutral line, no percent, no colour, not a warning
@@ -75,7 +79,9 @@ export default function BuildPage() {
       <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6">
         <div className="grid min-w-0 gap-4">
           <div className="flex gap-4">
-            <ProductVisual category="desktop" className="hidden size-24 sm:flex" />
+            {build.photos?.length > 0
+              ? <ProductGallery photos={build.photos} label={t('photo.build')} className="w-28 shrink-0 sm:w-40" />
+              : <ProductVisual category="desktop" className="hidden size-24 sm:flex" />}
             <div className="min-w-0">
               <p className="flex flex-wrap gap-1.5">
                 <Badge tone="primary">{t(`builds.purpose.${build.purpose}`)}</Badge>
@@ -114,12 +120,18 @@ export default function BuildPage() {
           <div className="mt-4 border-t border-line pt-4">
             <p className="text-xs text-muted">{t('builds.store')}</p>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
-              {store.name}
+              <StoreName store={store} />
               {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
             </p>
             <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
+            {store.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{store.hours}</p>}
+            <MapButtons store={store} className="mt-2" />
           </div>
-          <div className="mt-4">
+          <div className="mt-4 grid gap-2">
+            <ReserveButton store={store} usdRate={build.usd_rate} className="w-full" item={{
+              kind: 'build', id: build.id, title: build.name, condition: build.condition, price: build.price,
+              currency: build.currency, inStock: build.is_in_stock, branches: build.branches }} />
+            <WriteButton kind="build" id={build.id} store={store} className="w-full" />
             {open ? <Contacts store={store} />
               : <Button size="lg" className="w-full" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
           </div>

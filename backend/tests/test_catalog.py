@@ -141,8 +141,11 @@ def test_condition_filter_and_seller_note(db):
     publish_import(db, _import(db, a), a, [gpu(300, "new_openbox", "Подписчикам 290$")])
     publish_import(db, _import(db, b), b, [gpu(200, "unknown")])
     cheapest = lambda c: search_products(db, 12_000, condition=c)["items"][0]["min_price_usd"]  # noqa: E731
-    assert cheapest(None) == 200 and cheapest("new_openbox") == 300
-    assert search_products(db, 12_000, condition="used")["items"] == []
+    # Phase 9: "not said" is in the used group, so the catalog price "from" is the new one; the tile says "used from"
+    item = search_products(db, 12_000)["items"][0]
+    assert cheapest(None) == 300 and cheapest("new_openbox") == 300 and item["offers"] == 1
+    assert item["used_from"]["price"] == 200
+    assert search_products(db, 12_000, group="used")["items"][0]["min_price_usd"] == 200
     card = product_card(db, db.scalar(select(Product)).id, 12_000)
     assert {o["note"] for o in card["offers"]} == {"Подписчикам 290$", None}
 
@@ -190,9 +193,9 @@ def test_store_city_must_be_known():
 
     from app.schemas.seller import StoreIn
 
-    assert StoreIn(name="Shop", city="bukhara").city == "bukhara"
+    assert StoreIn(name="Shop", address="ул. Навои, 1", city="bukhara").city == "bukhara"
     for bad in ("all", "moscow"):
         with pytest.raises(ValidationError):
-            StoreIn(name="Shop", city=bad)
-    with pytest.raises(ValidationError):
-        StoreIn(name="Shop")
+            StoreIn(name="Shop", address="ул. Навои, 1", city=bad)
+    # Phase 12.1: no city = keep the branches' own (the endpoint asks for it only when the store is created)
+    assert StoreIn(name="Shop").city is None

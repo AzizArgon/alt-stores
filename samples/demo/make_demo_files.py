@@ -1,6 +1,7 @@
 """Builds the live demo files: dirty_price.xlsx (slang, typos, Anti-Fraud traps, a row without a price) and national_currency.xlsx.
 
 Usage (from backend/): .venv/Scripts/python.exe ../samples/demo/make_demo_files.py ../samples/demo/dirty_price.xlsx
+Also branches_price.xlsx (phase 12.1): stock columns of the three Silicon Plus branches.
 """
 import sys
 import openpyxl
@@ -61,3 +62,24 @@ for r in [("Intel Core i3-12100F", 1050000), ("AMD Ryzen 5 5500", 1150000), ("Ki
           ("Samsung 870 EVO 500GB", 690000), ("Корпус Zalman S2 (только в сборках)", 380000)]:
     ws.append(list(r))
 wb.save(out.replace("dirty_price.xlsx", "national_currency.xlsx"))
+
+# Phase 12.1: a price list of Silicon Plus (demo1) with a stock column per branch — the column matching step.
+# Values as stores write them: numbers, "+", "-", "да / нет", empty
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "Наличие"
+ws.append(["Наименование", "Цена, $", "Юнусабад", "Чиланзар", "Сергели"])
+for c in ws[1]:
+    c.font = Font(bold=True)
+for r in [
+    ("Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 127, 4, "+", "-"),
+    ("AMD Ryzen 5 7500F, 3.7 GHz, 6C/12T, AM5", 126, 0, 2, "да"),
+    ("Zotac GeForce RTX 5060 TWIN EDGE OC 8GB GDDR7 128bit", 438, "нет", 1, 3),
+    ("Samsung 990 PRO 1TB M.2 NVMe SSD", 198, 6, None, 2),
+    ("Intel Core i3-13100, 3.4 GHz, 12MB, OEM, LGA1700", 100, "+", "+", "+"),
+    ("MSI PRO H610M-E DDR5 LGA1700 Motherboard", 56, 0, 0, 0),
+    ("ASUS PRIME B650M-K DDR5 AM5", 112, 2, "нет", None),
+    ("Lexar LNM780 512GB M.2 NVMe SSD", 92, "есть", 5, 1),
+]:
+    ws.append(list(r))
+wb.save(out.replace("dirty_price.xlsx", "branches_price.xlsx"))

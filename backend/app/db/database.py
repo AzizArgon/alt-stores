@@ -50,11 +50,15 @@ def add_missing_columns() -> None:
 
 def init_db():
     from app.db import models  # noqa: F401  (register models on Base.metadata)
+    from app.services import photos  # noqa: F401  (phase 14: photos go with a deleted offer, build or card)
 
     Base.metadata.create_all(bind=engine)
     add_missing_columns()
 
     from app.db.seed import seed_categories
 
+    from app.services.branches import migrate_branches
+
     with SessionLocal() as db:
         seed_categories(db)
+        migrate_branches(db)  # phase 12.1: the store's address -> its main branch (once)

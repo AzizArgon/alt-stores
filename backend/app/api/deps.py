@@ -25,7 +25,13 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise unauthorized
+    if user.blocked_at is not None:  # phase 13: blocked by the admin — nothing works, the reason is shown
+        raise blocked_error(user)
     return user
+
+
+def blocked_error(user: User) -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, {"code": "user_blocked", "reason": user.block_reason or ""})
 
 
 def require_role(*roles: str):
@@ -35,3 +41,6 @@ def require_role(*roles: str):
         return user
 
     return checker
+
+
+admin_only = require_role("admin")

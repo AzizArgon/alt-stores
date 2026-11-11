@@ -1,17 +1,24 @@
-import { BadgeCheck, MapPin, Phone, Send } from 'lucide-react'
+import { BadgeCheck, ExternalLink, MapPin, Phone, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
+import { WriteButton } from '../components/Chat'
+import { BranchAvailability } from '../components/BranchList'
+import { MapButtons, StoreName } from '../components/StoreWhere'
+import { ReserveButton } from '../components/Reservation'
 import { ProductVisual } from '../components/CategoryIcon'
+import { PhotoThumbs, ProductGallery } from '../components/Gallery'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
 import { Badge, Breadcrumbs, Button, Card, Skeleton, Tabs } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
 import { useCity } from '../services/city.jsx'
+import { cityParam } from '../config/cities'
 import { formatDate, formatDayMonth, formatPrice, roundSum, telegramUrl } from '../services/format'
 import { formatSpec, specLabel, specsLine } from '../services/specs'
+import { defaultGroup, groupCounts } from '../services/used'
 
 const SORTS = ['recommended', 'price']
 
@@ -36,30 +43,58 @@ export function Contacts({ store }) {
   )
 }
 
-function OfferCard({ offer, usdRate, rateDate, market }) {
+// A Telegram ad: not a shop, never verified; the buyer opens the post instead of calling (phase 9)
+export function AdBadge() {
+  const { t } = useTranslation()
+  return <Badge tone="warning"><Send className="size-3.5" aria-hidden />{t('used.adBadge')}</Badge>
+}
+
+export function OpenPost({ url, className = '' }) {
+  const { t } = useTranslation()
+  return (
+    <a href={url} target="_blank" rel="noreferrer nofollow"
+      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-6 text-base font-semibold outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary ${className}`}>
+      <ExternalLink className="size-4" aria-hidden />{t('used.openPost')}
+    </a>
+  )
+}
+
+export const isAd = (offer) => offer.store.kind === 'telegram'
+
+function OfferCard({ offer, usdRate, rateDate, market, title, city }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { store } = offer
-  const place = [t(`cities.${store.city}`), store.district, store.address].filter(Boolean).join(', ')
+  const ad = isAd(offer)
+  // The branch of the chosen city first (phase 12.1), else the store's main address
+  const first = offer.stock?.branches?.[0]
+  const where = first && !ad ? { ...store, ...first, id: store.id, name: store.name, phone: store.phone } : store
+  const place = [t(`cities.${where.city}`), where.district, where.address].filter(Boolean).join(', ')
 
   return (
     <Card as="li" padded={false} className={`min-w-0 p-4 ${offer.is_in_stock ? '' : 'opacity-60'}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-h3">
-            {store.name}
+            <StoreName store={store} />
             {store.is_verified && <Badge tone="success"><BadgeCheck className="size-3.5" aria-hidden />{t('product.verified')}</Badge>}
+            {ad && <AdBadge />}
           </p>
           <p className="mt-0.5 flex gap-1 text-sm text-muted"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />{place}</p>
+          {!ad && where.hours && <p className="mt-0.5 pl-5 text-sm text-muted">{where.hours}</p>}
           <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-sm">
             <span className={offer.is_in_stock ? 'font-medium text-success' : 'text-muted'}>
               {t(offer.is_in_stock ? 'product.inStock' : 'product.outOfStock')}
             </span>
             <span className="text-faint">·</span>{t(`condition.${offer.condition}`)}
-            <span className="text-faint">·</span><span className="text-muted">{t('product.updated', { date: formatDate(offer.updated_at) })}</span>
+            <span className="text-faint">·</span><span className="text-muted">
+              {ad ? t('used.posted', { date: formatDate(offer.posted_at) }) : t('product.updated', { date: formatDate(offer.updated_at) })}
+            </span>
           </p>
+          {!ad && <BranchAvailability stock={offer.stock} city={city} />}
           {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
           <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
+          <PhotoThumbs photos={offer.photos} label={t('photo.seller')} big={offer.group === 'used'} className="mt-2" />
         </div>
         <div className="shrink-0 sm:text-right">
           <Price price={offer.price} currency={offer.currency} usdRate={usdRate} rateDate={rateDate} />
@@ -67,19 +102,27 @@ function OfferCard({ offer, usdRate, rateDate, market }) {
         </div>
       </div>
       <Flags flags={offer.flags} className="mt-3 grid gap-1" />
-      <div className="mt-3">
-        {open ? <Contacts store={store} />
-          : <Button size="lg" className="w-full sm:float-right sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
+      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-start sm:justify-end">
+        {ad ? <OpenPost url={offer.post_url} className="w-full sm:w-auto" /> : <>
+          <ReserveButton store={store} usdRate={usdRate} className="w-full sm:w-auto" item={{
+            kind: 'offer', id: offer.id, title, condition: offer.condition, price: offer.price, currency: offer.currency,
+            inStock: offer.is_in_stock, branches: offer.stock?.branches, tracked: offer.stock?.tracked }} />
+          <WriteButton kind="offer" id={offer.id} store={store} className="w-full sm:w-auto" />
+          <MapButtons store={where} size="lg" className="[&>a]:w-full sm:[&>a]:w-auto" />
+          {open ? <Contacts store={store} />
+            : <Button size="lg" className="w-full sm:w-auto" onClick={() => setOpen(true)}>{t('product.contact')}</Button>}
+        </>}
       </div>
     </Card>
   )
 }
 
 function OfferList({ offers, product }) {
+  const { city } = useCity()
   return (
     <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
       {offers.map((o) => (
-        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} />
+        <OfferCard key={o.id} offer={o} usdRate={product.usd_rate} rateDate={product.usd_rate_date} market={product.market?.offers[o.id]} title={product.name} city={city} />
       ))}
     </ul>
   )
@@ -147,14 +190,16 @@ export default function ProductPage() {
   const { id } = useParams()
   const { city, setCity } = useCity()
   const [sort, setSort] = useState('recommended')
+  const [tab, setTab] = useState(null) // "new" / "used"; by default "new", or "used" when there are no new ones
   const [product, setProduct] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get(`/catalog/products/${id}`, { params: { sort } })
+    // The city (phase 12.1): "в наличии" and "есть в N из M филиалов" by the branches of that city
+    api.get(`/catalog/products/${id}`, { params: { sort, city: cityParam(city) } })
       .then((res) => { setProduct(res.data); setError('') })
       .catch((err) => setError(t(errorKey(err))))
-  }, [id, sort, t])
+  }, [id, sort, city, t])
 
   if (error) return <ErrorText>{error}</ErrorText>
   if (!product) {
@@ -166,13 +211,18 @@ export default function ProductPage() {
       </div>
     )
   }
+  const counts = groupCounts(product.offers)
+  const group = tab || defaultGroup(counts)
+  const offers = product.offers.filter((o) => o.group === group)
   const byCity = city !== 'all'
-  const here = byCity ? product.offers.filter((o) => o.store.city === city) : product.offers
-  const elsewhere = byCity ? product.offers.filter((o) => o.store.city !== city) : []
+  // A store is in the city when one of its branches is there
+  const inCity = (o) => o.in_city || o.store.city === city
+  const here = byCity ? offers.filter(inCity) : offers
+  const elsewhere = byCity ? offers.filter((o) => !inCity(o)) : []
   const range = priceRange(here, product.usd_rate)
   const cityName = t(`cities.${city}`)
   const keySpecs = product.specs.filter((s) => s.main)
-  const market = product.market?.conditions?.new
+  const market = product.market?.conditions?.[group === 'new' ? 'new' : 'used']
 
   return (
     <section>
@@ -183,15 +233,19 @@ export default function ProductPage() {
       ]} />
 
       <Card className="mt-3 flex flex-col gap-4 sm:flex-row sm:gap-6">
-        <ProductVisual category={product.category} image={product.image} alt={product.name}
-          className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />
+        {product.photos?.length > 0
+          ? <ProductGallery photos={product.photos} label={t('photo.model')} className="w-full sm:w-56 md:w-64" />
+          : <ProductVisual category={product.category} alt={product.name}
+              className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />}
         <div className="min-w-0 flex-1">
           <p className="text-sm text-muted">{t(`categories.${product.category}`)}{product.brand && ` · ${product.brand}`}</p>
           <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>
           {keySpecs.length > 0 && <p className="mt-1 text-sm break-words text-muted">{specsLine(keySpecs)}</p>}
           <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
-              <p className="text-xs text-muted">{byCity ? t('product.priceIn', { city: cityName }) : t('product.priceAll')}</p>
+              <p className="text-xs text-muted">
+                {byCity ? t('product.priceIn', { city: cityName }) : t('product.priceAll')} · {t(`used.group.${group}`)}
+              </p>
               {range ? (
                 <p className="text-h2 md:text-h1">
                   {range.min === range.max ? formatPrice(range.min, 'UZS')
@@ -204,6 +258,7 @@ export default function ProductPage() {
               <div className="text-sm">
                 <p className="text-xs text-muted">{t('market.productTitle')} · {t('market.scope')}</p>
                 <p className="font-semibold" title={t('market.scopeHint')}>≈ {formatPrice(roundSum(market.market_usd * product.usd_rate), 'UZS')}</p>
+                {market.ads > 0 && <p className="text-xs text-muted">{t('used.byAds', { count: market.ads })}</p>}
               </div>
             )}
           </div>
@@ -212,6 +267,8 @@ export default function ProductPage() {
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="min-w-0">
+          <Tabs value={group} onChange={setTab} className="mb-4"
+            tabs={['new', 'used'].map((g) => ({ value: g, label: `${t(`used.group.${g}`)} (${counts[g]})` }))} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-h2">{byCity ? t('product.inCityTitle', { city: cityName }) : t('product.allTitle')}</h2>
             <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />
@@ -236,7 +293,7 @@ export default function ProductPage() {
           )}
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-          <ProductMarket market={product.market} usdRate={product.usd_rate} />
+          <ProductMarket market={product.market} usdRate={product.usd_rate} condition={group === 'new' ? 'new' : 'used'} />
           <SpecsTable product={product} />
         </div>
       </div>

@@ -1,12 +1,16 @@
 """Catalog: one product card per real product, offers from all stores, "recommended" order."""
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, func, or_, select, true
+from sqlalchemy import and_, case, func, or_, select, true
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Category, Condition, Currency, FlagLevel, FlagStatus, FraudFlag, Offer, Product, Store
+from app.db.models import (
+    NEW_GROUP, USED_GROUP, Category, Condition, Currency, FlagLevel, FlagStatus, FraudFlag, Offer, Product, Store,
+    StoreKind,
+)
+from app.services.branches import in_city, in_stock_in, offer_branches
 from app.services.exchange import to_usd, to_uzs
 from app.services.spec_dictionary import CARD_SPECS, NUMBER, YESNO, Spec, spec_map, specs_of
 from app.services.spec_inference import INFERABLE
@@ -131,6 +135,9 @@ def rebuild_match_keys(db: Session) -> dict:
             offer.product = keeper
         keeper.brand = keeper.brand or p.brand
         keeper.specs_json = {**(p.specs_json or {}), **(keeper.specs_json or {})}
+        from app.services.photos import move_owner
+
+        move_owner(db, "product", p.id, keeper.id)
         db.delete(p)
         merged += 1
     db.commit()
@@ -192,15 +199,39 @@ def _usd_price(usd_rate: float | None):
 
 
 def _in_city(city: str | None):
-    """Offers of the stores of one city; None = all of Uzbekistan."""
-    return Offer.store_id.in_(select(Store.id).where(Store.city == city)) if city else true()
+    """Offers of the stores present in a city (a branch there, phase 12.1); None = all of Uzbekistan."""
+    return in_city(city)
+
+
+AD_DAYS = 30  # a Telegram ad older than this is hidden
+GROUPS = {"new": NEW_GROUP, "used": USED_GROUP}
+
+
+def visible():
+    """An offer the buyer sees: it has a price; a Telegram ad also is not sold, not gone and not older than 30 days."""
+    fresh = datetime.now(timezone.utc) - timedelta(days=AD_DAYS)
+    return and_(Offer.price.is_not(None), Offer.store_id.not_in(blocked_store_ids()),
+                or_(Offer.posted_at.is_(None), and_(Offer.removed_at.is_(None), Offer.posted_at >= fresh)))
+
+
+def blocked_store_ids():
+    """Phase 13: stores blocked by the admin (and deleted Telegram channels) — off the storefront and the market."""
+    return select(Store.id).where(Store.blocked_at.is_not(None)).scalar_subquery()
+
+
+def group_of(condition: str) -> str:
+    return "new" if condition in {c.value for c in NEW_GROUP} else "used"
+
+
+def _in_group(group: str | None):
+    return Offer.condition.in_(GROUPS[group]) if group in GROUPS else true()
 
 
 def _cheapest_offers(db: Session, product_ids: list[int], usd_rate: float | None, in_stock: bool,
-                     city: str | None = None) -> dict[int, Offer]:
-    query = select(Offer).where(Offer.product_id.in_(product_ids), Offer.price.is_not(None), _in_city(city))
+                     city: str | None = None, group: str | None = "new") -> dict[int, Offer]:
+    query = select(Offer).where(Offer.product_id.in_(product_ids), visible(), _in_city(city), _in_group(group))
     if in_stock:
-        query = query.where(Offer.is_in_stock.is_(True))
+        query = query.where(in_stock_in(city))
     result: dict[int, Offer] = {}
     for o in db.scalars(query):
         best = result.get(o.product_id)
@@ -258,11 +289,11 @@ def _flag_levels(db: Session, product_ids: list[int], in_stock: bool, city: str 
     """The most serious active Anti-Fraud flag among the offers a tile counts: "warning" or "danger"."""
     query = (
         select(Offer.product_id, FraudFlag.level).join(FraudFlag, FraudFlag.offer_id == Offer.id)
-        .where(Offer.product_id.in_(product_ids), Offer.price.is_not(None), _in_city(city),
+        .where(Offer.product_id.in_(product_ids), visible(), _in_city(city), _in_group("new"),
                FraudFlag.status == FlagStatus.active, FraudFlag.level.in_([FlagLevel.warning, FlagLevel.danger]))
     )
     if in_stock:
-        query = query.where(Offer.is_in_stock.is_(True))
+        query = query.where(in_stock_in(city))
     result: dict[int, str] = {}
     for product_id, level in db.execute(query):
         if result.get(product_id) != FlagLevel.danger.value:
@@ -270,11 +301,11 @@ def _flag_levels(db: Session, product_ids: list[int], in_stock: bool, city: str 
     return result
 
 
-def _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition=None, city=None):
+def _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition=None, city=None, group="new"):
     usd = _usd_price(usd_rate)
-    offer_filter = [Offer.price.is_not(None), _in_city(city)]
+    offer_filter = [visible(), _in_city(city), _in_group(group)]
     if in_stock:
-        offer_filter.append(Offer.is_in_stock.is_(True))
+        offer_filter.append(in_stock_in(city))
     if condition:
         offer_filter.append(Offer.condition == condition)
     stats = (
@@ -306,15 +337,18 @@ def search_products(
     db: Session, usd_rate: float | None, q: str = "", category: str | None = None,
     price_min: float | None = None, price_max: float | None = None, in_stock: bool = True, page: int = 1,
     spec_filters: dict[str, list] | None = None, condition: Condition | None = None,
-    city: str | None = None, sort: str = "popular", page_size: int = PAGE_SIZE,
+    city: str | None = None, sort: str = "popular", page_size: int = PAGE_SIZE, group: str | None = "new",
 ) -> dict:
     """Catalog page: products with the lowest USD price and the number of offers (one offer per store).
+
+    Only new goods count by default (group "new": new and new with an opened box); a tile also says
+    "used from N" when the product has used offers (phase 9).
 
     With a category, also its spec filters ("facets") with product counts per value.
     With a city, only offers of that city's stores count: products without them are not shown.
     Sort: "popular" (more stores first), "price_asc", "price_desc".
     """
-    query, stats = _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition, city)
+    query, stats = _base_query(usd_rate, q, category, price_min, price_max, in_stock, condition, city, group)
     spec_filters = spec_filters or {}
     facets = spec_facets(db, query, category, spec_filters) if category else []
     specs = spec_map(category) if category else {}
@@ -331,8 +365,12 @@ def search_products(
         .order_by(*order).offset((page - 1) * page_size).limit(page_size)
     ).all()
     ids = [p.id for p, _, _ in rows]
-    cheapest = _cheapest_offers(db, ids, usd_rate, in_stock, city)
+    cheapest = _cheapest_offers(db, ids, usd_rate, in_stock, city, group)
+    used = _cheapest_offers(db, ids, usd_rate, True, city, "used") if group == "new" else {}
     flags = _flag_levels(db, ids, in_stock, city)
+    from app.services.photos import main_thumbs
+
+    thumbs = main_thumbs(db, "product", ids)  # phase 14: the main card photo instead of the category icon
     items = []
     for p, min_usd, n in rows:
         slug = p.category.slug if p.category else "other"
@@ -343,7 +381,10 @@ def search_products(
             "min_price": cheapest[p.id].price if p.id in cheapest else None,
             "min_currency": cheapest[p.id].currency.value if p.id in cheapest else None,
             "specs": card_specs(slug, p.specs_json or {}),
-            "flag_level": flags.get(p.id),
+            "flag_level": flags.get(p.id), "image": thumbs.get(p.id),
+            "used_from": ({"price": used[p.id].price, "currency": used[p.id].currency.value,
+                           "price_uzs": to_uzs(used[p.id].price, used[p.id].currency, usd_rate)}
+                          if p.id in used else None),
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size, "facets": facets}
 
@@ -352,7 +393,7 @@ def counts_demo(db: Session, city: str | None = None) -> bool:
     """Do the numbers of the catalog include invented demo stores (the page marks them)?"""
     return db.scalar(
         select(func.count(Offer.id)).join(Store, Store.id == Offer.store_id)
-        .where(Store.is_demo.is_(True), Offer.price.is_not(None), _in_city(city))
+        .where(Store.is_demo.is_(True), visible(), _in_city(city))
     ) > 0
 
 
@@ -363,7 +404,7 @@ def category_summary(db: Session, usd_rate: float | None, city: str | None = Non
         select(Category.slug, func.count(func.distinct(Offer.product_id)), func.count(func.distinct(Offer.store_id)),
                func.min(usd))
         .join(Product, Product.category_id == Category.id).join(Offer, Offer.product_id == Product.id)
-        .where(Offer.price.is_not(None), Offer.is_in_stock.is_(True), _in_city(city))
+        .where(visible(), in_stock_in(city), _in_city(city), _in_group("new"))
         .group_by(Category.slug).order_by(func.count(func.distinct(Offer.product_id)).desc())
     ).all()
     return [{"slug": slug, "products": products, "stores": stores,
@@ -428,39 +469,79 @@ def recommended_order(offer: dict) -> tuple:
     )
 
 
+def is_visible(o: Offer) -> bool:
+    """The same as visible() for one loaded offer."""
+    if o.price is None or o.store.blocked_at is not None:
+        return False
+    if o.posted_at is None:
+        return True
+    at = o.posted_at if o.posted_at.tzinfo else o.posted_at.replace(tzinfo=timezone.utc)
+    return o.removed_at is None and at >= datetime.now(timezone.utc) - timedelta(days=AD_DAYS)
+
+
+def store_brief(store: Store) -> dict:
+    """The seller as the buyer sees it. A Telegram channel: never verified, no phone (only "Open the post")."""
+    ad = store.kind == StoreKind.telegram
+    return {"id": store.id, "name": store.name, "kind": store.kind.value, "is_verified": store.is_verified and not ad,
+            "phone": None if ad else store.phone, "telegram": None if ad else store.telegram,
+            "address": None if ad else store.address, "district": None if ad else store.district, "city": store.city,
+            # Where to go (phase 12): the buyer opens Yandex Maps, the site has no map of its own
+            "hours": None if ad else store.hours, "map_url": None if ad else store.map_url,
+            "map_lat": None if ad else store.map_lat, "map_lon": None if ad else store.map_lon}
+
+
 def price_order(offer: dict) -> tuple:
     return (not offer["is_in_stock"], offer["price_usd"] if offer["price_usd"] is not None else float("inf"))
 
 
-def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str = "recommended") -> dict | None:
+def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str = "recommended",
+                 city: str | None = None) -> dict | None:
     product = db.scalar(
         select(Product).where(Product.id == product_id).options(
             selectinload(Product.category),
-            selectinload(Product.offers).selectinload(Offer.store),
+            selectinload(Product.offers).selectinload(Offer.store).selectinload(Store.branches),
             selectinload(Product.offers).selectinload(Offer.fraud_flags),
+            selectinload(Product.offers).selectinload(Offer.stocks),
         )
     )
     if product is None:
         return None
     offers = []
     for o in product.offers:
-        if o.price is None:
+        if not is_visible(o):
             continue
         store: Store = o.store
+        # Phase 12.1: by branch ("есть в 2 из 3"); a store present in the city counts only its branches there
+        by_branch = offer_branches(o, store.branches, store, city) if store.kind == StoreKind.shop else None
+        here = city if by_branch and any(b["city"] == city for b in by_branch["branches"]) else None
+        if by_branch and here and by_branch["tracked"]:
+            in_stock = by_branch["available"] > 0
+        else:
+            in_stock = o.is_in_stock
+        if by_branch and city and not here:
+            by_branch = offer_branches(o, store.branches, store, None)
         offers.append({
             "id": o.id, "raw_name": o.raw_name, "price": o.price, "currency": o.currency.value,
             "price_usd": to_usd(o.price, o.currency, usd_rate), "price_uzs": to_uzs(o.price, o.currency, usd_rate),
-            "is_in_stock": o.is_in_stock, "condition": o.condition.value, "note": o.note, "updated_at": o.updated_at,
-            "store": {"id": store.id, "name": store.name, "is_verified": store.is_verified, "phone": store.phone,
-                      "telegram": store.telegram, "address": store.address, "district": store.district, "city": store.city},
+            "is_in_stock": in_stock, "in_city": bool(here) if city else None, "stock": by_branch,
+            "condition": o.condition.value, "group": group_of(o.condition.value),
+            "note": o.note, "updated_at": o.updated_at, "post_url": o.post_url, "posted_at": o.posted_at,
+            "store": store_brief(store),
             "flags": [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
                        "source": f.source.value} for f in o.fraud_flags if f.status == FlagStatus.active],
         })
+    from app.services.photos import published
+
+    own = published(db, "offer", [o["id"] for o in offers])
+    for o in offers:
+        o["photos"] = own.get(o["id"], [])  # phase 14: «Фото продавца» — the store's real item
     offers.sort(key=price_order if sort == "price" else recommended_order)
+    card_photos = published(db, "product", [product.id]).get(product.id, [])
     slug = product.category.slug if product.category else "other"
     return {
         "id": product.id, "name": product.normalized_name, "brand": product.brand, "model": product.model,
         "category": product.category.slug if product.category else "other",
+        "photos": card_photos, "image": card_photos[0]["thumb"] if card_photos else None,  # «Фото модели»
         "mxik_code": product.category.mxik_code if product.category else None,
         # Specs in dictionary order, with units and the source: "inferred" = the rule that added a value the
         # seller did not write (the page marks it), None = written by the seller
@@ -474,3 +555,59 @@ def product_card(db: Session, product_id: int, usd_rate: float | None, sort: str
                      "value": v} for k, v in (product.specs_json or {}).get(SUSPECT, {}).items()],
         "usd_rate": usd_rate, "offers": offers,
     }
+
+
+USED_SORTS = ("newest", "price_asc", "price_desc")
+
+
+def used_offers(
+    db: Session, usd_rate: float | None, category: str | None = None, price_min: float | None = None,
+    price_max: float | None = None, city: str | None = None, conditions: list[str] | None = None,
+    source: str | None = None, sort: str = "newest", page: int = 1, page_size: int = PAGE_SIZE,
+) -> dict:
+    """The "Used" section: used offers of the whole catalog, one row per offer (shops and Telegram ads).
+
+    Prices are in USD here (the API converts the buyer's UZS); `source`: "shop" or "telegram"."""
+    usd = _usd_price(usd_rate)
+    allowed = {c.value for c in USED_GROUP}
+    conds = [c for c in (conditions or []) if c in allowed] or list(allowed)
+    query = (
+        select(Offer).join(Product, Product.id == Offer.product_id).join(Store, Store.id == Offer.store_id)
+        .outerjoin(Category, Category.id == Product.category_id)
+        .where(visible(), in_stock_in(city), Offer.condition.in_(conds), _in_city(city),
+               Store.is_archive.is_(False))
+    )
+    if category:
+        query = query.where(Category.slug == category)
+    if source in ("shop", "telegram"):
+        query = query.where(Store.kind == source)
+    if price_min is not None:
+        query = query.where(usd >= price_min)
+    if price_max is not None:
+        query = query.where(usd <= price_max)
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    newest = func.coalesce(Offer.posted_at, Offer.updated_at)
+    order = {"price_asc": (usd, Offer.id), "price_desc": (usd.desc(), Offer.id)}.get(sort, (newest.desc(), Offer.id.desc()))
+    offers = db.scalars(
+        query.options(selectinload(Offer.product).selectinload(Product.category), selectinload(Offer.store),
+                      selectinload(Offer.fraud_flags))
+        .order_by(*order).offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    from app.services.photos import published
+
+    own = published(db, "offer", [o.id for o in offers])
+    cards = published(db, "product", {o.product_id for o in offers})
+    items = [{
+        "id": o.id, "product_id": o.product_id,
+        # Phase 14: the photo of the item itself if there is one, else the card's, else the icon
+        "photos": own.get(o.id, []),
+        "image": (own[o.id][0]["thumb"] if o.id in own else cards[o.product_id][0]["thumb"] if o.product_id in cards
+                  else None), "name": o.product.normalized_name, "raw_name": o.raw_name,
+        "category": o.product.category.slug if o.product.category else "other",
+        "price": o.price, "currency": o.currency.value, "price_usd": to_usd(o.price, o.currency, usd_rate),
+        "price_uzs": to_uzs(o.price, o.currency, usd_rate), "condition": o.condition.value, "note": o.note,
+        "updated_at": o.updated_at, "posted_at": o.posted_at, "post_url": o.post_url, "store": store_brief(o.store),
+        "flags": [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
+                   "source": f.source.value} for f in o.fraud_flags if f.status == FlagStatus.active],
+    } for o in offers]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 // Category icons in one style (24 px grid, 1.6 stroke, like lucide). They stand in for product photos until phase 9
 const ICONS = {
   cpu: <><rect x="6" y="6" width="12" height="12" rx="1.5" /><rect x="9.5" y="9.5" width="5" height="5" rx=".5" /><path d="M9 2.5v3M12 2.5v3M15 2.5v3M9 18.5v3M12 18.5v3M15 18.5v3M2.5 9h3M2.5 12h3M2.5 15h3M18.5 9h3M18.5 12h3M18.5 15h3" /></>,
@@ -36,13 +38,24 @@ export function CategoryIcon({ category, className = 'size-6' }) {
   )
 }
 
-// The picture place of a product: a photo when there is one (phase 9), otherwise the category icon.
-// The size comes from `className` (e.g. "aspect-[4/3] w-full"), so a photo fits the same box without layout changes
+// The picture place of a product: the main photo when there is one (phase 14), otherwise the category icon.
+// The size comes from `className` (e.g. "aspect-square w-full"), so a photo fits the same box without layout changes;
+// a grey silhouette stays until the photo has loaded (lazy), a broken photo falls back to the icon
 export function ProductVisual({ category, image, alt = '', className = '', iconClassName = 'size-1/2 max-h-16 max-w-16' }) {
+  const [done, setDone] = useState({}) // { src, state: 'ok' | 'error' } of the last loaded picture
+  const state = done.src === image ? done.state : 'loading'
+  const setState = (s) => setDone({ src: image, state: s })
+  const photo = image && state !== 'error'
   return (
-    <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary-soft/60 text-primary ${className}`}>
-      {image
-        ? <img src={image} alt={alt} loading="lazy" className="size-full bg-surface object-contain" />
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-lg text-primary ${photo ? 'bg-white' : 'bg-primary-soft/60'} ${className}`}>
+      {photo && state === 'loading' && (
+        <span className="absolute inset-0 flex animate-pulse items-center justify-center bg-surface-2 text-line-strong" aria-hidden>
+          <CategoryIcon category={category} className={iconClassName} />
+        </span>
+      )}
+      {photo
+        ? <img src={image} alt={alt} loading="lazy" decoding="async" onLoad={() => setState('ok')} onError={() => setState('error')}
+            className={`size-full object-contain transition-opacity ${state === 'ok' ? 'opacity-100' : 'opacity-0'}`} />
         : <CategoryIcon category={category} className={iconClassName} />}
     </div>
   )

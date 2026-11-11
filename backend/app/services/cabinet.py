@@ -9,17 +9,22 @@ price history stays.
 from datetime import timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.db.models import (
     Category, Condition, Currency, FlagLevel, FlagStatus, Offer, OfferEvent, PriceHistory, PriceImport, Product,
     ProductFix, Store, utcnow,
 )
+from app.services.branches import available, seller_stocks, set_general, set_stock
+from app.services.stock import overview as stock_overview
+from app.services.warehouse import overview_extra
 from app.services.builds import counts as build_counts
-from app.services.antifraud import check_offer, market_prices, save_offer_flags
+from app.services.chat import overview_counts as chat_counts
+from app.services.reservations import store_counts as reservation_counts
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.exchange import get_usd_rate
 from app.services.manual import card_fields, product_brief
-from app.services.market import diff_pct, label, market_data
+from app.services.market import diff_pct, label, market_condition, market_data
 from app.services.spec_normalizer import INFERRED, SUSPECT
 
 PAGE_SIZE = 50
@@ -49,13 +54,22 @@ def store_offers(db: Session, store: Store) -> list[Offer]:
     """All offers of the store except deleted ones, with what the table shows."""
     return db.scalars(
         select(Offer).where(Offer.store_id == store.id, Offer.removed_at.is_(None)).options(
-            selectinload(Offer.product).selectinload(Product.category), selectinload(Offer.fraud_flags))
+            selectinload(Offer.product).selectinload(Product.category), selectinload(Offer.fraud_flags),
+            selectinload(Offer.stocks), selectinload(Offer.barcodes))
     ).all()
 
 
 def active_flags(offer: Offer) -> list[dict]:
-    return [{"type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
-             "source": f.source.value} for f in offer.fraud_flags if f.status == FlagStatus.active]
+    return [{"id": f.id, "type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
+             "source": f.source.value, "resolution": f.resolution, "admin_answer": f.admin_answer}
+            for f in offer.fraud_flags if f.status == FlagStatus.active]
+
+
+def disputed_flags(offer: Offer) -> list[dict]:
+    """Phase 13: flags the seller disputed (waiting for the admin) or the admin took off — for the editor."""
+    return [{"id": f.id, "type": f.type, "level": f.level.value, "reason_key": f.reason_key, "params": f.params,
+             "status": f.status.value, "resolution": f.resolution, "dispute_comment": f.dispute_comment,
+             "admin_answer": f.admin_answer} for f in offer.fraud_flags if f.status != FlagStatus.active]
 
 
 def _flag_rank(offer: Offer) -> int:
@@ -64,7 +78,7 @@ def _flag_rank(offer: Offer) -> int:
 
 def _market(md, offer: Offer) -> dict | None:
     """The offer against the market median of its card (in stock, same condition), as on the market pages."""
-    market = md.now((offer.product_id, offer.condition.value))
+    market = md.now((offer.product_id, market_condition(offer.condition.value)))
     usd = md.offer_usd.get(offer.id)
     if market is None or usd is None:
         return None
@@ -80,16 +94,31 @@ def offer_row(offer: Offer, market: dict | None = None) -> dict:
         "price": offer.price, "currency": offer.currency.value, "condition": offer.condition.value,
         "is_in_stock": offer.is_in_stock, "note": offer.note, "updated_at": _aware(offer.updated_at),
         "flags": active_flags(offer), "market": market,
+        "stocks": seller_stocks(offer),  # phase 12.1: by branch id; empty = the store does not track it by branch
+        # phase 12.2, only the seller: purchase prices (offer currency) and the markup over the average one
+        "cost_last": offer.cost_last, "cost_avg": offer.cost_avg, "markup": markup(offer),
+        "barcodes": [{"id": b.id, "code": b.code} for b in offer.barcodes],  # phase 12.3
+        "oversold": offer.oversold_at is not None,  # phase 12.4: "продано больше, чем по учёту"
     }
+
+
+def markup(offer: Offer) -> float | None:
+    if not offer.cost_avg or offer.price is None:
+        return None
+    return round((offer.price - offer.cost_avg) / offer.cost_avg * 100, 1)
 
 
 def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
     q = (f.get("q") or "").strip().lower()
-    if q and q not in row["name"].lower() and q not in offer.raw_name.lower():
+    if q and q not in row["name"].lower() and q not in offer.raw_name.lower() and not _barcode_hit(q, row):
         return False
     if f.get("category") and row["category"] != f["category"]:
         return False
-    if f.get("stock") == "in" and not offer.is_in_stock or f.get("stock") == "out" and offer.is_in_stock:
+    in_stock = offer.is_in_stock
+    if f.get("branch"):  # phase 12.1: "в наличии / нет" in one branch
+        row_ = row["stocks"].get(str(f["branch"]))
+        in_stock = bool(row_ and row_["in_stock"])
+    if f.get("stock") == "in" and not in_stock or f.get("stock") == "out" and in_stock:
         return False
     if f.get("flagged") and _flag_rank(offer) < LEVEL_RANK[FlagLevel.warning]:
         return False  # "with suspicions": warnings and dangers; a soft info note is not a suspicion
@@ -99,7 +128,20 @@ def _matches(offer: Offer, row: dict, f: dict, stale_before) -> bool:
         return False
     if f.get("market") and (row["market"] or {}).get("label") != f["market"]:
         return False
+    if f.get("no_photo") and row.get("photo"):
+        return False
     return True
+
+
+def _barcode_hit(q: str, row: dict) -> bool:
+    """"My goods" search by a barcode: the whole code (UPC-A as EAN-13 too) or its part of 4+ characters."""
+    from app.services.barcodes import BarcodeError, normalize
+
+    try:
+        full = normalize(q).lower()
+    except BarcodeError:
+        full = None
+    return any(b["code"].lower() == full or (len(q) >= 4 and q in b["code"].lower()) for b in row["barcodes"])
 
 
 def _sort_key(sort: str, usd_rate: float | None):
@@ -119,8 +161,17 @@ def filtered_offers(db: Session, store: Store, f: dict) -> list[tuple[Offer, dic
     md = market_data(db)
     stale_before = utcnow() - timedelta(days=STALE_DAYS)
     rows = []
-    for offer in store_offers(db, store):
+    offers = store_offers(db, store)
+    from app.services.photos import own_counts, published
+
+    cards = published(db, "product", {o.product_id for o in offers})
+    own = own_counts(db, store, [o.id for o in offers])
+    for offer in offers:
         row = offer_row(offer, _market(md, offer))
+        # Phase 14: the row's picture (own photo, else the card's) and how many there are
+        mine = own.get(offer.id, {})
+        row["photo"] = mine.get("thumb") or (cards[offer.product_id][0]["thumb"] if offer.product_id in cards else None)
+        row["photos"] = {"own": mine.get("count", 0), "card": len(cards.get(offer.product_id, []))}
         if _matches(offer, row, f, stale_before):
             rows.append((offer, row))
     return rows
@@ -147,9 +198,25 @@ def overview(db: Session, store: Store) -> dict:
         "flagged": sum(_flag_rank(o) >= LEVEL_RANK[FlagLevel.warning] for o in offers),
         "stale": sum(_aware(o.updated_at) < stale_before for o in offers),
         "last_upload": {"id": last.id, "filename": last.filename, "created_at": _aware(last.created_at)} if last else None,
+        "undo": _undo_brief(db, store),  # "Undo this upload" (phase 12)
         "categories": sorted({o.product.category.slug for o in offers if o.product.category}),
         "builds": build_counts(db, store),  # ready PCs live apart from the goods (phase B4)
+        "chat": chat_counts(db, store),  # new messages and buyers waiting longer than a day (phase 10)
+        "reservations": reservation_counts(db, store),  # new ones and the ones ending today (phase 11)
+        "stock_mode": store.stock_mode,
+        "stock": stock_overview(db, store),  # phase 12.2: running low, reservations without a reserve, movements
+        "warehouse": overview_extra(db, store) if store.stock_mode == "stock" else None,  # phase 12.4
     }
+
+
+def _undo_brief(db: Session, store: Store) -> dict | None:
+    from app.services.undo import undo_deadline, undoable_id
+
+    imp_id = undoable_id(db, store)
+    if imp_id is None:
+        return None
+    imp = db.get(PriceImport, imp_id)
+    return {"id": imp.id, "filename": imp.filename, "source": imp.source, "deadline": undo_deadline(imp)}
 
 
 def _check_row(offer: Offer) -> dict:
@@ -168,7 +235,7 @@ def recheck_flags(db: Session, offers: list[Offer], store: Store) -> None:
     usd_rate = _usd_rate(db)
     market = market_prices(db, {o.product.match_key for o in offers}, store.id, usd_rate)
     for offer in offers:
-        save_offer_flags(offer, check_offer(_check_row(offer), market.get(offer.product.match_key), usd_rate))
+        save_offer_flags(offer, check_offer(_check_row(offer), market_for(market, offer.product.match_key, offer.condition.value), usd_rate))
 
 
 class EditError(ValueError):
@@ -195,7 +262,9 @@ def apply_changes(offer: Offer, changes: dict, source: str) -> None:
     if changes.get("is_in_stock") is not None and changes["is_in_stock"] != offer.is_in_stock:
         if changes["is_in_stock"] and offer.price is None:
             raise EditError("price_required")
-        offer.is_in_stock = changes["is_in_stock"]
+        if offer.stocks and offer.store is not None and offer.store.stock_mode == "stock":
+            raise EditError("stock_mode")  # "Учёт остатков": quantities change only by operations (phase 12.2)
+        set_general(object_session(offer), offer, changes["is_in_stock"])  # by branch too (phase 12.1)
         offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source=source))
     if offer.price is not None and (offer.price != old_price or offer.currency != old_currency):
         offer.price_history.append(PriceHistory(price=offer.price, currency=offer.currency))
@@ -215,6 +284,9 @@ def remove_offer(db: Session, offer: Offer) -> None:
     offer.removed_at = utcnow()
     offer.is_in_stock = False
     offer.price = None
+    from app.services.photos import delete_owner
+
+    delete_owner(db, "offer", offer.id)  # phase 14: the store's photos of the item go with it
     db.commit()
 
 
@@ -243,6 +315,7 @@ def offer_detail(db: Session, store: Store, offer: Offer) -> dict:
         **offer_row(offer, _market(market_data(db), offer)),
         "card": _card(product), "other_stores": other_stores(db, product, store),
         "history": history, "pending_fix": pending.after if pending else None,
+        "disputed_flags": disputed_flags(offer),
     }
 
 
@@ -258,6 +331,9 @@ def edit_card(db: Session, store: Store, offer: Offer, data: dict) -> dict:
     if other_stores(db, product, store):
         after = {k: data.get(k) for k in ("name", "brand", "model", "category")} | {"specs": data.get("specs") or {}}
         db.add(ProductFix(product_id=product.id, store_id=store.id, before=_card(product), after=after))
+        from app.services import notifications as notify  # phase 12.5
+
+        notify.notify_admins(db, "fix_suggested", "/admin/fixes", store=store.name, name=product.normalized_name)
         db.commit()
         return {"status": "suggested"}
     brand, name, specs, key = card_fields(category, data.get("brand"), data.get("model"), data.get("name"),
@@ -285,6 +361,9 @@ def relink(db: Session, store: Store, offer: Offer, product: Product) -> dict:
     offer.events.append(OfferEvent(field="product", value=str(product.id), source="edit"))
     offer.updated_at = utcnow()
     db.flush()
+    from app.services.barcodes import refresh_offer
+
+    refresh_offer(db, offer)  # phase 12.3: the codes of the offer follow it to the other card
     recheck_flags(db, [offer], store)
     db.commit()
     return offer_row(offer)
@@ -297,10 +376,60 @@ def round_price(value: float, currency: Currency) -> float:
     return round(value, 1) if value < 10 else float(round(value))
 
 
-def bulk(db: Session, store: Store, offers: list[Offer], action: str, percent: float | None, apply: bool) -> dict:
-    """Bulk actions: off sale, back on sale (only priced offers), price +-N%. apply=False is the preview."""
+def set_branch_stock(db: Session, store: Store, offer: Offer, items: list[dict]) -> dict:
+    """The editor and the inline cell of "My goods": a quantity per branch, "есть / нет", or "не указано"."""
+    from app.services.branches import clear_stock, store_branches
+
+    from app.services.stock import journal
+
+    if store.stock_mode == "stock":
+        raise EditError("stock_mode")
+    ids = {b.id for b in store_branches(db, store.id)}
+    was = offer.is_in_stock
+    with journal("manual", user_id=store.user_id):
+        _set_branch_items(offer, items, ids)
+    if was != offer.is_in_stock:
+        offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source="edit"))
+    offer.updated_at = utcnow()
+    db.commit()
+    return offer_row(offer, _market(market_data(db), offer))
+
+
+def _set_branch_items(offer: Offer, items: list[dict], ids: set[int]) -> None:
+    from app.services.branches import clear_stock
+
+    for it in items:
+        if it["branch_id"] not in ids:
+            raise EditError("branch")
+        if it.get("clear"):
+            clear_stock(offer, it["branch_id"])
+        elif it.get("quantity") is not None or it.get("present") is not None:
+            if offer.price is None and (it.get("present") or (it.get("quantity") or 0) > 0):
+                raise EditError("price_required")
+            set_stock(offer, it["branch_id"], quantity=it.get("quantity"), present=it.get("present"))
+
+
+def _branch_changes(offer: Offer, branch_id: int, present: bool) -> bool:
+    row = next((s for s in offer.stocks if s.branch_id == branch_id), None)
+    if present:
+        return offer.price is not None and not (row is not None and available(row))
+    return row is None or available(row)
+
+
+def bulk(db: Session, store: Store, offers: list[Offer], action: str, percent: float | None, apply: bool,
+         branch_id: int | None = None) -> dict:
+    """Bulk actions: off sale, back on sale (only priced offers), price +-N%, "в филиале …: есть / нет" (phase
+    12.1). apply=False is the preview."""
+    from app.services.stock import journal
+
+    if action in ("branch_on", "branch_off") and store.stock_mode == "stock":
+        raise EditError("stock_mode")
     changed: list[tuple[Offer, dict]] = []
     for offer in offers:
+        if action in ("branch_on", "branch_off"):
+            if branch_id and _branch_changes(offer, branch_id, action == "branch_on"):
+                changed.append((offer, {"branch": action == "branch_on"}))
+            continue
         if action == "off" and offer.is_in_stock:
             changed.append((offer, {"is_in_stock": False}))
         elif action == "on" and not offer.is_in_stock and offer.price is not None:
@@ -313,6 +442,14 @@ def bulk(db: Session, store: Store, offers: list[Offer], action: str, percent: f
                 "old_price": o.price, "price": c.get("price", o.price)} for o, c in changed[:BULK_PREVIEW]]
     if apply:
         for offer, c in changed:
+            if "branch" in c:
+                was = offer.is_in_stock
+                with journal("manual", user_id=store.user_id):
+                    set_stock(offer, branch_id, present=c["branch"])
+                if was != offer.is_in_stock:
+                    offer.events.append(OfferEvent(field="stock", value=str(int(offer.is_in_stock)), source="bulk"))
+                offer.updated_at = utcnow()
+                continue
             apply_changes(offer, c, "bulk")
         recheck_flags(db, [o for o, _ in changed], store)
         db.commit()

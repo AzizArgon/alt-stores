@@ -54,10 +54,11 @@ export function ChangePhrase({ change }) {
 }
 
 // Product card: market price chart (median, in sums by today's rate), the change phrase, the old price list point
-export function ProductMarket({ market, usdRate }) {
+// condition: "new" (new goods) or "used" (the used tab: used goods and "not said", Telegram ads among them)
+export function ProductMarket({ market, usdRate, condition = 'new' }) {
   const { t } = useTranslation()
-  const info = market?.conditions?.new
-  const archive = market?.archive
+  const info = market?.conditions?.[condition]
+  const archive = condition === 'new' ? market?.archive : null
   const toSum = (usd) => (usdRate ? roundSum(usd * usdRate) : usd)
   const chart = useMemo(() => {
     if (!info || info.series.length < 2) return null
@@ -75,12 +76,15 @@ export function ProductMarket({ market, usdRate }) {
   return (
     <Card className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="flex flex-wrap items-center gap-2 text-h2">{t('market.productTitle')} <DemoNote show={info?.includes_demo} /></h2>
+        <h2 className="flex flex-wrap items-center gap-2 text-h2">
+          {t('market.productTitle')}{condition !== 'new' && ` · ${t('used.group.used')}`} <DemoNote show={info?.includes_demo} />
+        </h2>
         <Badge title={t('market.scopeHint')}>{t('market.scope')}</Badge>
       </div>
       {info?.market_usd != null && (
         <p className="mt-1 text-sm text-muted">
           {t('market.marketNow', { stores: info.stores })}: <b className="text-ink">≈ {formatValue(toSum(info.market_usd))}</b>
+          {info.ads > 0 && <> · {t('used.byAds', { count: info.ads })}</>}
         </p>
       )}
       {info?.market_usd == null ? (

@@ -9,4 +9,6 @@ const brandTitle = { name: 'brand-title', transformIndexHtml: (html) => html.rep
 export default defineConfig({
   plugins: [react(), tailwindcss(), brandTitle],
   server: { port: 5173 },
+  // Tests render components without the dev plugin's transform: the same automatic JSX runtime as the app
+  esbuild: { jsx: 'automatic' },
 })

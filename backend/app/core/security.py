@@ -12,7 +12,12 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
+NO_LOGIN = "!"  # the hash of a service account (Telegram channels): no password ever matches
+
+
 def verify_password(password: str, password_hash: str) -> bool:
+    if password_hash == NO_LOGIN:
+        return False
     return pwd_context.verify(password, password_hash)
 
 

@@ -11,14 +11,20 @@ class StoreIn(BaseModel):
     inn_stir: str | None = Field(default=None, max_length=20)
     phone: str | None = Field(default=None, max_length=32)
     telegram: str | None = Field(default=None, max_length=64)
-    address: str | None = Field(default=None, max_length=255)
+    # Street, house, landmark: the buyer must know where to go (phase 12)
+    # Required when the store is created; later the address lives in the branches (phase 12.1), these stay None
+    address: str | None = Field(default=None, min_length=3, max_length=255)
     district: str | None = Field(default=None, max_length=128)
-    city: str
+    city: str | None = None
+    reservation_days: int = Field(default=2, ge=1, le=7)  # how long a confirmed reservation waits (phase 11)
+    hours: str | None = Field(default=None, max_length=100)  # "Mon-Sat 10:00-19:00", as the store writes it
+    map_url: str | None = Field(default=None, max_length=500)  # only Yandex Maps (app.services.maps)
+    low_stock: int | None = Field(default=None, ge=0, le=1000)  # phase 12.2: "заканчивается" threshold
 
     @field_validator("city")
     @classmethod
-    def known_city(cls, value: str) -> str:
-        if value not in CITIES:
+    def known_city(cls, value: str | None) -> str | None:
+        if value is not None and value not in CITIES:
             raise ValueError("unknown city")
         return value
 
@@ -28,6 +34,34 @@ class StoreOut(StoreIn):
 
     id: int
     is_verified: bool
+    address: str | None = None  # stores made before phase 12 may have none yet
+    branches: list[dict] = []  # phase 12.1: the main one first
+    stock_mode: str = "price"  # phase 12.2: "price" (только прайс) / "stock" (учёт остатков)
+    has_warehouse: bool = False  # phase 12.4: "Есть отдельный склад"
+    warehouse: dict | None = None  # phase 12.4: {id} of the warehouse when it is on (the seller only)
+    map_lat: float | None = None
+    map_lon: float | None = None
+    blocked_at: datetime | None = None  # phase 13: blocked by the admin, the cabinet shows the reason
+    block_reason: str | None = None
+
+
+class BranchIn(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+    city: str
+    address: str = Field(max_length=255)
+    landmark: str = Field(max_length=128)
+    hours: str | None = Field(default=None, max_length=100)
+    phone: str | None = Field(default=None, max_length=32)
+    map_url: str | None = Field(default=None, max_length=500)
+
+
+class StockIn(BaseModel):
+    """One branch of one offer: a quantity, or only "есть / нет", or clear = not tracked there."""
+
+    branch_id: int
+    quantity: int | None = Field(default=None, ge=0, le=1_000_000)
+    present: bool | None = None
+    clear: bool = False
 
 
 class CategoryOut(BaseModel):
@@ -67,6 +101,9 @@ class PreviewRow(BaseModel):
     # AI specs not found in the row text: shown to the seller, never saved to the product
     specs_guess: dict[str, str | int | float | bool] = {}  # values inferred by rules are not always text
     is_in_stock: bool = True
+    # Phase 12.1: stock by branch column header: a count, True ("+", "есть"), False ("нет") or None (empty)
+    branches: dict[str, bool | int | None] = {}
+    barcode: str | None = None  # phase 12.3: a "Штрихкод" column
     # Pasted text: the currency of this line (None = the import's one); check = not written, default was taken
     currency: Literal["USD", "UZS"] | None = None
     currency_check: bool = False
@@ -97,16 +134,28 @@ class ImportOut(BaseModel):
     error: str | None
     stats: dict = Field(default_factory=dict, validation_alias="stats_json")
     created_at: datetime
+    published_at: datetime | None = None
+    undone_at: datetime | None = None
+    can_undo: bool = False  # the store's last published file or post, not older than 7 days (phase 12)
+    branch_id: int | None = None  # phase 12.1: the price list of one branch
 
-    @field_validator("created_at")
+    @field_validator("created_at", "published_at", "undone_at")
     @classmethod
-    def _assume_utc(cls, value: datetime) -> datetime:
+    def _assume_utc(cls, value: datetime | None) -> datetime | None:
         # SQLite drops the timezone; we always store UTC
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value is None or value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 class ImportDetail(ImportOut):
     rows: list[PreviewRow] = Field(validation_alias="rows_json")
+    # Phase 12.1: branch columns found, their match to branches (confirmed or suggested)
+    branch_info: dict = {}
+
+
+class ColumnsIn(BaseModel):
+    """Column header -> branch id (None = not a branch column)."""
+
+    mapping: dict[str, int | None]
 
 
 class PublishRequest(BaseModel):
@@ -170,14 +219,17 @@ class OfferFilter(BaseModel):
     condition: CONDITIONS | None = None
     stale: bool = False
     market: Literal["above", "below", "at"] | None = None
+    branch: int | None = None  # phase 12.1: the stock filter applies to this branch
+    no_photo: bool = False  # phase 14: neither a card photo nor an own photo
 
 
 class BulkIn(BaseModel):
     # Chosen rows, or every row by the filter when ids is None
     ids: list[int] | None = Field(default=None, max_length=5000)
     filter: OfferFilter | None = None
-    action: Literal["off", "on", "price"]
+    action: Literal["off", "on", "price", "branch_on", "branch_off"]
     percent: float | None = Field(default=None, ge=-50, le=100)
+    branch_id: int | None = None  # "в филиале …: есть / нет"
     apply: bool = False  # False: only the preview "N goods will change"
 
 
@@ -189,6 +241,7 @@ class PublishResult(BaseModel):
     created: int
     updated: int
     out_of_stock: int
+    barcodes: int = 0  # phase 12.3: codes bound by a "Штрихкод" column
 
 
 class RateOut(BaseModel):

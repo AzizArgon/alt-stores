@@ -27,7 +27,7 @@ export default function BuildTile({ item, dictionary, usdRate, rateDate, classNa
   return (
     <Link to={`/builds/${item.id}`}
       className={`group relative flex min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:p-4 ${className}`}>
-      <ProductVisual category="desktop" className="aspect-[5/3] w-full" />
+      <ProductVisual category="desktop" image={item.image} alt={item.name} className="aspect-square w-full" />
       {item.warnings > 0 && (
         <span title={t('builds.warnings')} aria-label={t('builds.warnings')}
           className="absolute top-4 right-4 flex size-7 items-center justify-center rounded-full bg-warning-soft text-warning md:top-5 md:right-5">

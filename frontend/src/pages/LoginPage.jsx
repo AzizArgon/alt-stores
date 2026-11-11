@@ -6,7 +6,7 @@ import { Input, PasswordInput, SiteLink } from '../components/ui'
 import { goTo, sellerUrl, storeUrl } from '../config/sites'
 import { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
-import { homeFor } from '../services/roles'
+import { returnTo } from '../services/roles'
 
 // `seller`: the cabinet's own login (/seller/login); after any login each role goes to its own interface
 export default function LoginPage({ seller = false }) {
@@ -30,12 +30,11 @@ export default function LoginPage({ seller = false }) {
     setBusy(true)
     try {
       const user = await login(email, password)
-      // A guest sent from a cabinet page returns to it
-      const from = location.state?.from
-      goTo(navigate, user.role === 'seller' && from?.startsWith('/seller') ? from : homeFor(user))
+      goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
-      setErrors({ [fieldOfError(key)]: t(key) })
+      const detail = err.response?.data?.detail  // a blocked user: {code: 'user_blocked', reason}
+      setErrors({ [fieldOfError(key)]: t(key, typeof detail === 'object' ? detail : {}) })
     } finally {
       setBusy(false)
     }
@@ -56,7 +55,7 @@ export default function LoginPage({ seller = false }) {
       </form>
       <p className="mt-6 text-center text-sm text-muted">
         {t('auth.noAccount')}{' '}
-        <Link to={seller ? '/seller/register' : '/register'} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
+        <Link to={seller ? '/seller/register' : '/register'} state={location.state} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
       </p>
       <p className="mt-2 text-center text-sm text-muted">
         {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}

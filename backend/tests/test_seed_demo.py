@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 
-from app.db.models import Build, FraudFlag, Offer, PriceHistory, Store, User
+from app.db.models import Build, Conversation, FraudFlag, Message, Offer, PriceHistory, Store, User
 from app.services.importer import publish_import
 from scripts.seed_demo import seed_demo
 from tests.test_publish import _import, _row, db  # noqa: F401  (db is a fixture)
@@ -33,15 +33,16 @@ def test_demo_stores_share_cards_flag_cheap_items_and_rerun_without_duplicates(d
     assert byte_market.currency.value == "UZS" and byte_market.price > 1_000_000
 
     # PC Galaxy sells the SSD at half price: flagged, the showcase CPU is not
-    cheap = db.scalars(select(FraudFlag).where(FraudFlag.type == "price_below_market")).all()
+    cheap = db.scalars(select(FraudFlag).where(FraudFlag.type == "price_below_market",
+                                     FraudFlag.is_demo.is_(False))).all()  # phase 13: not the demo dispute
     assert [f.offer.store.name for f in cheap] == ["PC Galaxy"]
     assert "990 PRO" in cheap[0].offer.raw_name
 
-    # Demo builds are marked and recreated; the real store gets none
+    # Demo builds are marked and updated in place; the real store gets none
     assert all(b.is_demo and b.store.is_demo for b in db.scalars(select(Build)))
-    counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build)]
+    counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build, Conversation, Message)]
     seed_demo(db, 12_000)
-    assert [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build)] == counts
+    assert [_count(db, m) for m in (User, Store, Offer, PriceHistory, FraudFlag, Build, Conversation, Message)] == counts
 
 
 def test_builds_only_keeps_offers_history_and_passwords(db):
@@ -65,9 +66,298 @@ def test_builds_only_keeps_offers_history_and_passwords(db):
     db.commit()
     counts = [_count(db, m) for m in (User, Store, Offer, PriceHistory)]
 
+    chats = [_count(db, m) for m in (Conversation, Message)]
     report = refresh_stores_and_builds(db, 12_000)
 
     assert [_count(db, m) for m in (User, Store, Offer, PriceHistory)] == counts
+    # Demo conversations are recreated without duplicates
+    assert [_count(db, m) for m in (Conversation, Message)] == chats
+    assert report[1]["demo_chats"] == chats[0] - report[2]["demo_reservations"] >= 2
+    assert all(c.is_demo and c.store.is_demo for c in db.scalars(select(Conversation)))
     assert demo1.password_hash == "server-own" and demo1_store.city == "tashkent"
     assert report[0]["demo_builds"] == _count(db, Build)
     assert db.get(Store, age.id).is_demo is False
+
+
+def test_builds_only_twice_keeps_build_ids_and_buyer_conversations(db):
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    builds = {b.name: b.id for b in db.scalars(select(Build))}
+    assert builds
+    # A buyer's own conversation about a demo build (not demo: the seed never deletes it)
+    from app.db.models import TopicKind
+    buyer = db.scalar(select(User).where(User.email == "buyer1@example.com"))
+    build_id = max(builds.values())
+    build = db.get(Build, build_id)
+    own = db.scalar(select(Conversation).where(Conversation.topic_kind == TopicKind.build,
+                                                Conversation.topic_id == build_id))
+    if own is None:
+        own = Conversation(buyer_id=buyer.id, store_id=build.store_id, topic_kind=TopicKind.build, topic_id=build_id)
+        db.add(own)
+    own.is_demo = False
+    db.commit()
+
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+
+    assert {b.name: b.id for b in db.scalars(select(Build))} == builds
+    assert db.get(Conversation, own.id).topic_id == build_id and db.get(Build, build_id) is not None
+
+
+def test_demo_reservations_survive_builds_only_reruns(db):
+    from app.db.models import Reservation, TopicKind
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    first = {r.demo_key: (r.id, r.status.value, r.build_id) for r in db.scalars(select(Reservation))}
+    assert first and all(r.is_demo and r.store.is_demo for r in db.scalars(select(Reservation)))
+    convs = {c.topic_id: c.id for c in db.scalars(select(Conversation).where(Conversation.topic_kind == TopicKind.reservation))}
+    assert set(convs) == {rid for rid, _, _ in first.values()}
+    counts = [_count(db, m) for m in (Reservation, Conversation, Message)]
+
+    # A run days ago: the "ends today" reservation has expired since; the next run makes it "today" again
+    from datetime import timedelta
+
+    from app.db.models import ReservationStatus, utcnow
+    from app.services.reservations import TZ
+    ending = db.scalar(select(Reservation).where(Reservation.demo_key == "confirmed"))
+    ending.expires_at, ending.status = utcnow() - timedelta(days=3), ReservationStatus.expired
+    db.commit()
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    db.refresh(ending)
+    assert ending.status == ReservationStatus.confirmed
+    assert ending.expires_at.replace(tzinfo=ending.expires_at.tzinfo or TZ).astimezone(TZ).date() == utcnow().astimezone(TZ).date()         or ending.expires_at.replace(tzinfo=__import__("datetime").timezone.utc).astimezone(TZ).date() == utcnow().astimezone(TZ).date()
+    demo1 = db.scalar(select(Store).join(Store.owner).where(User.email == "demo1@example.com"))
+    assert demo1.address and demo1.hours and demo1.map_url is None
+
+    assert {r.demo_key: (r.id, r.status.value, r.build_id) for r in db.scalars(select(Reservation))} == first
+    assert {c.topic_id: c.id for c in db.scalars(select(Conversation).where(
+        Conversation.topic_kind == TopicKind.reservation))} == convs
+    assert [_count(db, m) for m in (Reservation, Conversation, Message)] == counts
+    # A demo build reservation points at a build that still exists
+    assert all(db.get(Build, b) is not None for _, _, b in first.values() if b)
+    assert not db.scalars(select(Reservation).where(Reservation.store_id == age.id)).all()
+
+
+def test_demo_branches_and_stock_rerun_without_duplicates_and_keep_ids(db):
+    """Phase 12.1: demo1 — 3 branches in Tashkent with different stock, demo2 — two cities, demo3 — no stock by
+    branch; re-runs (also --builds-only) keep the branch ids and do not add rows; the real store is not touched."""
+    from app.db.models import Branch, OfferStock
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [{**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+            *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 30)]]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+
+    def state():
+        by_store = {}
+        for b in db.scalars(select(Branch).where(Branch.is_warehouse.is_(False)).order_by(Branch.id)):
+            by_store.setdefault(b.store_id, []).append((b.id, b.city, b.is_main))
+        return by_store, _count(db, OfferStock)
+
+    first = state()
+    stores = {s.owner.email: s for s in db.scalars(select(Store))}
+    demo1, demo2, demo3 = (first[0][stores[f"demo{i}@example.com"].id] for i in (1, 2, 3))
+    assert [c for _, c, _ in demo1] == ["tashkent"] * 3 and sum(m for *_, m in demo1) == 1
+    assert {c for _, c, _ in demo2} == {"samarkand", "tashkent"} and len(demo3) == 1
+    assert stores["seller1@example.com"].id not in first[0]  # no address: nothing invented
+    assert first[1] > 0 and not db.scalar(select(OfferStock.id).join(Offer).where(
+        Offer.store_id == stores["demo3@example.com"].id))
+    seed_demo(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+
+
+def test_demo_stock_journal_is_the_same_on_every_run(db):
+    from app.db.models import OfferStock, Reservation, StockMovement
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        {**_row(2, "AMD Ryzen 5 7600X, 4.7 GHz, AM5, OEM", 190), "category": "cpu", "brand": "AMD"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(3, 40)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    stores = {s.owner.email: s for s in db.scalars(select(Store).where(Store.is_demo.is_(True)))}
+    assert stores["demo1@example.com"].stock_mode == "stock"
+    assert stores["demo2@example.com"].stock_mode == "stock"  # phase 12.4: Byte Market, "склада нет"
+    assert stores["demo3@example.com"].stock_mode == "price"
+    assert age.stock_mode == "price"
+
+    def state():
+        moves = db.scalars(select(StockMovement).where(StockMovement.store_id.in_(
+            [stores["demo1@example.com"].id, stores["demo2@example.com"].id]))).all()
+        stock = {(s.offer_id, s.branch_id): (s.quantity, s.reserved) for s in db.scalars(select(OfferStock))}
+        return sorted((m.offer_id, m.branch_id, m.kind, m.delta, m.quantity_after) for m in moves), stock
+
+    first = state()
+    kinds = {k for _, _, k, _, _ in first[0]}
+    assert {"initial", "receipt", "sale", "adjust", "reserve"} <= kinds
+    assert all(q is None or q >= 0 for q, _ in first[1].values())
+    r = db.scalar(select(Reservation).where(Reservation.demo_key == "reserved"))
+    assert r.reserved_qty == 1 and r.status.value == "confirmed"
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+    assert not db.scalars(select(StockMovement).where(StockMovement.store_id == age.id)).all()
+
+
+def test_demo_barcodes_confirmed_pending_and_one_conflict_rerun_keeps_ids(db):
+    from app.db.models import Barcode, BarcodeCode
+    from app.services.barcodes import check_digit
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(1, 60)]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+
+    def state():
+        return sorted((b.id, b.store_id, b.offer_id, b.code) for b in db.scalars(select(Barcode)))
+
+    first = state()
+    assert 15 <= len({c for *_, c in first}) <= 20
+    assert all(c.startswith("2") and c[:3] <= "299" and int(c[-1]) == check_digit(c[:-1]) for *_, c in first)
+    status = {c.status for c in db.scalars(select(BarcodeCode))}
+    assert status == {"confirmed", "pending", "conflict"}
+    assert db.scalar(select(func.count()).select_from(BarcodeCode).where(BarcodeCode.status == "conflict")) == 1
+    assert not any(s == age.id for _, s, _, _ in first)  # the real store is not touched
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+
+
+def test_demo_moderation_waits_for_the_admin_and_keeps_ids(db):
+    """Phase 13: one report, one disputed flag, one card fix; reruns reset them to "waiting" in place."""
+    from app.db.models import ChatReport, FlagStatus, ProductFix
+    from app.services.admin import counts
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers", is_verified=True)
+    db.add(age)
+    db.commit()
+    rows = [
+        {**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+        {**_row(2, "AMD Ryzen 5 7500F, 3.7 GHz, AM5, OEM", 130), "category": "cpu", "brand": "AMD"},
+        *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(3, 30)],
+    ]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    ids = lambda: [db.scalar(select(m.id).where(m.is_demo.is_(True))) for m in (ChatReport, FraudFlag, ProductFix)]  # noqa: E731
+    first = ids()
+    assert None not in first
+    w = counts(db)
+    assert w["reports"] == 1 and w["flags"] == 1 and w["fixes"] == 1 and w["stores"] >= 1 and w["barcodes"] >= 1
+    # The admin decided; the next run puts everything back to "waiting" with the same ids
+    db.get(FraudFlag, first[1]).status = FlagStatus.dismissed
+    db.get(ProductFix, first[2]).status = "rejected"
+    db.get(ChatReport, first[0]).status = "reviewed"
+    db.commit()
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert ids() == first
+    assert counts(db)["flags"] == 1 and counts(db)["fixes"] == 1 and counts(db)["reports"] == 1
+    assert db.scalar(select(func.count()).select_from(ProductFix)) == 1
+
+
+def test_demo_warehouse_put_out_and_stocktake_rerun_keeps_ids(db):
+    """Phase 12.4: Silicon Plus has a warehouse (a put-out, an applied stocktake with a shortage and a surplus),
+    Byte Market has none; --builds-only twice changes nothing and keeps the ids; the journal agrees with the stock."""
+    from app.db.models import Branch, OfferStock, StockMovement, Stocktake
+    from app.services import warehouse
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    age = Store(owner=User(email="seller1@example.com", password_hash="x"), name="Age Computers")
+    db.add(age)
+    db.commit()
+    rows = [{**_row(1, "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700", 114), "category": "cpu", "brand": "Intel"},
+            *[_row(n, f"Kingston DDR5 {n}GB", 10 + n) for n in range(2, 90)]]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    stores = {s.owner.email: s for s in db.scalars(select(Store).where(Store.is_demo.is_(True)))}
+    silicon, byte = stores["demo1@example.com"], stores["demo2@example.com"]
+    assert silicon.has_warehouse and not byte.has_warehouse and byte.stock_mode == "stock"
+    wh = db.scalar(select(Branch).where(Branch.store_id == silicon.id, Branch.is_warehouse.is_(True)))
+    assert wh is not None and wh.id not in {b.id for b in silicon.branches}
+
+    def state():
+        moves = db.scalars(select(StockMovement).where(StockMovement.store_id == silicon.id)).all()
+        stock = {(s.offer_id, s.branch_id): (s.quantity, s.reserved) for s in db.scalars(select(OfferStock))}
+        sts = [(s.id, s.status, s.shortage, s.surplus) for s in db.scalars(select(Stocktake))]
+        return sorted((m.offer_id, m.branch_id, m.kind, m.delta, m.quantity_after, m.doc) for m in moves), stock, sts, wh.id
+
+    first = state()
+    kinds = {m[2] for m in first[0]}
+    assert {"move_out", "move_in", "inventory", "receipt"} <= kinds
+    assert len({m[5] for m in first[0] if m[2] in ("move_out", "move_in")}) == 1  # one put-out document
+    st = first[2]
+    assert len(st) == 1 and st[0][1] == "applied" and st[0][2] >= 1 and st[0][3] >= 1
+    # The journal of every row ends at its quantity
+    for (oid, bid), (q, _) in first[1].items():
+        lines = sorted((m for m in db.scalars(select(StockMovement).where(StockMovement.offer_id == oid,
+                        StockMovement.branch_id == bid, StockMovement.kind != "reserve"))), key=lambda m: (m.created_at, m.id))
+        if lines and db.get(Offer, oid).store_id == silicon.id:
+            assert lines[-1].quantity_after == q, (oid, bid)
+    over = warehouse.overview_extra(db, silicon)
+    assert over["only_warehouse"] and over["last_stocktake"]["shortage"] >= 1
+    only = db.get(Offer, over["only_warehouse"][0]["offer_id"])
+    assert only.is_in_stock is False  # only in the warehouse: "нет в наличии" for the buyer
+    refresh_stores_and_builds(db, 12_000)
+    refresh_stores_and_builds(db, 12_000)
+    assert state() == first
+    assert age.stock_mode == "price" and not age.has_warehouse  # the real store is not touched
+
+
+def test_demo_notifications_of_demo1_and_buyer1_rerun_without_duplicates(db):
+    """Phase 12.5: 5–6 notifications of different kinds each, some read; reruns (also --builds-only) keep them."""
+    from app.db.models import Notification
+    from scripts.seed_demo import refresh_stores_and_builds
+
+    user = User(email="seller1@example.com", password_hash="x")
+    age = Store(owner=user, name="Age Computers", is_verified=True)
+    db.add(age)
+    db.commit()
+    rows = [{**_row(n, f"Kingston DDR5 {n}GB", 10 + n), "category": "ram"} for n in range(1, 30)]
+    publish_import(db, _import(db, age), age, rows)
+    seed_demo(db, 12_000)
+    by = lambda email: db.scalars(select(Notification).join(User, Notification.user_id == User.id)  # noqa: E731
+                                  .where(User.email == email).order_by(Notification.id)).all()
+    first = {e: [(n.id, n.kind) for n in by(e)] for e in ("demo1@example.com", "buyer1@example.com")}
+    for e, items in first.items():
+        assert 5 <= len(items) <= 6 and len({k for _, k in items}) >= 4
+        assert any(n.is_read for n in by(e)) and any(not n.is_read for n in by(e))
+    assert by("seller1@example.com") == []  # the real store is never touched
+    refresh_stores_and_builds(db, 12_000)
+    seed_demo(db, 12_000)
+    assert {e: [(n.id, n.kind) for n in by(e)] for e in first} == first

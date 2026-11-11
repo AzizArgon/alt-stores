@@ -20,13 +20,17 @@ from app.db.models import (
     Store, utcnow,
 )
 from app.services.catalog import completion_index, make_match_key, unique_completion
-from app.services.antifraud import check_offer, market_prices, save_offer_flags
+from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.ai_parser import QuotaExhausted, parse_rows, split_specs
 from app.services.exchange import get_usd_rate
+from app.services.branch_stock import (
+    apply_row_stock, do_take_off_sale, known_branch_columns, plan_branch_stock, take_off_sale,
+)
 from app.services.price_cleaner import CleanRow, cache_key, clean_markdown
 from app.services.rule_parser import parse_by_rules
 from app.services.sheet_blocks import prepare_workbook
 from app.services.text_import import no_rows_reason, text_to_rows
+from app.services.undo import UNDO_SOURCES, make_snapshot, offer_state
 from app.services.spec_normalizer import (
     canonical_brand, merge_specs, normalize_specs, source_text, strip_modifiers, written_specs,
 )
@@ -91,7 +95,19 @@ def file_to_markdown(data: bytes, filename: str, notices: list[str] | None = Non
 def _set(import_id: int, **fields) -> None:
     with SessionLocal() as db:
         db.execute(update(PriceImport).where(PriceImport.id == import_id).values(**fields))
+        if fields.get("status") in (ImportStatus.ready, ImportStatus.failed):
+            _notify_parsed(db, import_id, fields["status"] == ImportStatus.ready, len(fields.get("rows_json") or []))
         db.commit()
+
+
+def _notify_parsed(db: Session, import_id: int, ok: bool, rows: int) -> None:
+    """Phase 12.5: "прайс разобран" / "ошибка разбора" in the seller's bell."""
+    from app.services import notifications as notify
+
+    imp = db.get(PriceImport, import_id)
+    if imp is not None:
+        notify.notify(db, notify.owner(db, imp.store_id), "import_ready" if ok else "import_failed",
+                      f"/seller/imports/{import_id}", name=imp.filename or "", rows=rows)
 
 
 def _preview_row(r: CleanRow, parsed: dict | None, source: str) -> dict:
@@ -130,6 +146,8 @@ def _preview_row(r: CleanRow, parsed: dict | None, source: str) -> dict:
         "specs": specs,
         "specs_guess": guessed,
         "is_in_stock": r.is_in_stock,
+        "branches": r.branch_cells,  # phase 12.1: stock by branch column header
+        "barcode": r.barcode,  # phase 12.3: bound to the offer when published
         "currency": r.currency,  # pasted text: per line; None = the currency of the whole import
         "currency_check": r.currency_check,
         "ai_risks": p.get("risks") or [],  # Anti-Fraud hints from the AI, checked after the rules
@@ -237,7 +255,7 @@ def flag_rows(db: Session, rows: list[dict], store_id: int, currency: Currency) 
     market = market_prices(db, keys, store_id, usd_rate)
     for r in rows:
         key = make_match_key(r.get("category") or "other", r["name"], r.get("brand"), r.get("specs"))
-        r["flags"] = check_offer({**r, "currency": r.get("currency") or currency.value}, market.get(key), usd_rate)
+        r["flags"] = check_offer({**r, "currency": r.get("currency") or currency.value}, market_for(market, key, r.get("condition")), usd_rate)
 
 
 def _finish(import_id: int, rows: list[dict], stats: dict) -> None:
@@ -268,11 +286,16 @@ async def run_import(import_id: int, data: bytes, filename: str) -> None:
             log.exception("Import %s: file can't be read", import_id)
             _set(import_id, status=ImportStatus.failed, error="unreadable_file")
             return
-        rows = clean_markdown(md)
+        with SessionLocal() as db:
+            known = known_branch_columns(db, db.get(PriceImport, import_id).store_id)
+        rows = clean_markdown(md, known)
         if not rows:
             _set(import_id, status=ImportStatus.failed, error="no_rows")
             return
         stats: dict = {"notices": notices} if notices else {}
+        headers = list(dict.fromkeys(h for r in rows for h in r.branch_cells))
+        if headers:
+            stats["branch_columns"] = headers  # the seller matches them to branches before publishing
         with SessionLocal() as db:
             parsed = await parse_clean_rows(db, rows, stats, _progress(import_id))
         _finish(import_id, parsed, stats)
@@ -305,6 +328,7 @@ def _clean_row(r: dict, imp: PriceImport) -> CleanRow:
         is_in_stock=r.get("is_in_stock", False), ai_text=r.get("ai_text") or r["name"],
         currency=r.get("currency"), currency_check=r.get("currency_check", False),
         condition=r.get("condition") if imp.source == "text" else None, note=r.get("note"),
+        branch_cells=r.get("branches") or {},
     )
 
 
@@ -446,22 +470,33 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
     unchanged = 0
     seen: set[int] = set()
     new_keys: set[str] = set()
+    pending: list[tuple] = []  # (offer, row, item, in_stock): the general state needs the branch plan first
+    matched: list[tuple] = []
     for r in _rows_to_save(rows):
         _, _, key, product = matcher.match(r)
         offer = offers_by_raw.get(r["raw_name"]) or (offers_by_product.get(product.id) if product else None)
         price = r.get("price")
         currency = Currency(r["currency"]) if r.get("currency") else imp.currency
         item = {"name": r["name"], "raw_name": r["raw_name"], "price": price, "currency": currency.value}
+        in_stock = price is not None and r.get("is_in_stock", True)
         if offer is None:
             if key not in new_keys:  # the same new card twice in one file is one new offer
                 new_keys.add(key)
                 groups["new"].append(item)
+                matched.append((None, r, in_stock))
             continue
         if offer.id in seen:
             continue
         seen.add(offer.id)
         item.update(old_price=offer.price, old_currency=offer.currency.value, offer_id=offer.id)
-        in_stock = price is not None and r.get("is_in_stock", True)
+        matched.append((offer, r, in_stock))
+        pending.append((offer, r, item, in_stock))
+    unseen = [o for o in store_offers if o.id not in seen and o.removed_at is None]
+    by_branch = plan_branch_stock(db, imp, store, matched, unseen, mode)
+    for offer, r, item, in_stock in pending:
+        price = r.get("price")
+        currency = Currency(r["currency"]) if r.get("currency") else imp.currency
+        in_stock = by_branch["general"].get(offer.id, in_stock)
         was_on_sale = offer.is_in_stock and offer.removed_at is None
         if not in_stock:
             if was_on_sale:
@@ -476,8 +511,8 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
             old, new = _usd(offer.price, offer.currency, usd_rate), _usd(price, currency, usd_rate)
             groups["price_down" if old is not None and new is not None and new < old else "price_up"].append(item)
     if mode == "full":
-        for offer in store_offers:
-            if offer.id not in seen and offer.is_in_stock and offer.removed_at is None:
+        for offer in unseen:
+            if take_off_sale(imp, offer, store.stock_mode == "stock") and not by_branch["general"].get(offer.id, False):
                 groups["out_of_stock"].append({
                     "name": offer.product.normalized_name, "raw_name": offer.raw_name, "price": None,
                     "currency": offer.currency.value, "old_price": offer.price, "old_currency": offer.currency.value,
@@ -485,13 +520,23 @@ def plan_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], m
     on_sale = sum(o.is_in_stock and o.removed_at is None for o in store_offers)
     dropped = len(groups["out_of_stock"])
     return {
-        "mode": mode, **groups, "unchanged": unchanged, "on_sale": on_sale,
+        "mode": mode, **groups, "unchanged": unchanged, "on_sale": on_sale, "branches": by_branch["branches"],
         "large_drop": mode == "full" and on_sale > 0 and dropped / on_sale > LARGE_DROP_SHARE,
     }
 
 
-def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None) -> dict:
-    """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock"."""
+def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None,
+                   touched: list[int] | None = None) -> dict:
+    """Creates/updates offers. In the "full" mode store offers missing from the file become "out of stock".
+    Stock changes go to the journal as "import" lines of this upload (phase 12.2)."""
+    from app.services.stock import journal
+
+    with journal("import", import_id=imp.id):
+        return _publish_import(db, imp, store, rows, mode, touched)
+
+
+def _publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict], mode: str | None = None,
+                    touched: list[int] | None = None) -> dict:
     mode = import_mode(imp, mode)
     store_offers = db.scalars(select(Offer).where(Offer.store_id == store.id)).all()
     offers_by_raw = {o.raw_name: o for o in store_offers}
@@ -501,7 +546,20 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
     products = matcher.products
     seen: set[int] = set()
     stats = {"created": 0, "updated": 0, "out_of_stock": 0}
+    # "Undo this upload" (phase 12): offers before the change (None = new), what the upload added
+    before: dict[int, dict | None] = {}
+    touched_offers: list[Offer] = []
+    new_products: list[Product] = []
+    history: list[PriceHistory] = []
+    events: list[OfferEvent] = []
 
+    def remember(o: Offer) -> None:
+        if o.id is None or o.id not in before:
+            if o.id is not None:
+                before[o.id] = offer_state(o)
+            touched_offers.append(o)
+
+    codes: list[tuple[Offer, str]] = []  # phase 12.3: a "Штрихкод" column binds codes to the offers
     rows_to_save = _rows_to_save(rows)
     # Flags are checked again: the seller may have changed category, condition or price
     flag_rows(db, rows, store.id, imp.currency)
@@ -514,6 +572,7 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
                 specs_json=specs,
             )
             db.add(product)
+            new_products.append(product)
         else:
             product.specs_json = merge_specs(product.specs_json, specs)
         products[key] = product
@@ -533,35 +592,56 @@ def publish_import(db: Session, imp: PriceImport, store: Store, rows: list[dict]
         else:
             price_changed = offer.price != price or offer.currency != currency
             stats["updated"] += 1
-        if offer.id is not None and (offer.is_in_stock != in_stock or offer.removed_at is not None):
-            offer.events.append(OfferEvent(field="stock", value=str(int(in_stock)), source="import"))
+        remember(offer)
+        was = (offer.is_in_stock, offer.removed_at is not None) if offer.id is not None else None
         offer.product = product
         offer.price = price
         offer.currency = currency
         offer.condition = Condition(r.get("condition") or "new")
         offer.note = r.get("note")
-        offer.is_in_stock = in_stock
+        # Phase 12.1: stock by branch (columns or a branch price list), else the general flag
+        in_stock = apply_row_stock(db, imp, store, offer, r, in_stock)
+        if was is not None and (was[0] != in_stock or was[1]):
+            events.append(OfferEvent(field="stock", value=str(int(in_stock)), source="import"))
+            offer.events.append(events[-1])
         offer.removed_at = None  # a deleted offer listed again is back
         offer.updated_at = utcnow()  # the price list confirmed this offer: freshness for "recommended"
         save_offer_flags(offer, r["flags"])
         if price is not None and price_changed:
-            offer.price_history.append(PriceHistory(price=price, currency=currency))
+            history.append(PriceHistory(price=price, currency=currency))
+            offer.price_history.append(history[-1])
         db.flush()
         seen.add(offer.id)
         offers_by_product.setdefault(product.id, offer)
+        if r.get("barcode"):
+            codes.append((offer, r["barcode"]))
 
     # Only a full price list file says "everything else is sold out"; an addition or a post lists just a few goods
     for offer in offers_by_raw.values() if mode == "full" else ():
-        if offer.id not in seen and offer.is_in_stock:
-            offer.is_in_stock = False
-            offer.events.append(OfferEvent(field="stock", value="0", source="import"))
-            stats["out_of_stock"] += 1
+        if offer.id not in seen and take_off_sale(imp, offer, store.stock_mode == "stock"):
+            remember(offer)
+            was = offer.is_in_stock
+            do_take_off_sale(imp, offer)  # a branch price list: "нет" in this branch only
+            if was and not offer.is_in_stock:
+                events.append(OfferEvent(field="stock", value="0", source="import"))
+                offer.events.append(events[-1])
+                stats["out_of_stock"] += 1
 
+    if touched is not None:
+        touched.extend(sorted(seen))  # the offers this publication listed (a Telegram post links them to itself)
     parsed_rows = imp.rows_json or []
     imp.mode = mode
     imp.status = ImportStatus.published
     imp.rows_json = rows
+    imp.published_at = utcnow()
+    if imp.source in UNDO_SOURCES:
+        db.flush()
+        imp.undo_json = make_snapshot(before, touched_offers, history, events, new_products)
     db.commit()
+    if codes:
+        from app.services.barcodes import bind_many
+
+        stats["barcodes"] = bind_many(db, store, codes, user_id=store.user_id, source="import")["bound"]
     # Reviewed rows teach the cache: next upload of the same names needs no AI at all
     save_cache(db, _seller_cache(parsed_rows, rows), "seller")
     return stats

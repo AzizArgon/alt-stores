@@ -51,6 +51,8 @@ if [ -n "$(docker compose ps -q backend 2>/dev/null </dev/null)" ]; then
     docker compose exec -T backend python scripts/backup_db.py before_deploy 5 </dev/null
 fi
 mv docker-compose.yml.new docker-compose.yml
+# Phase 14: photos live in data/media (made here by the owner of data/, so the backend user can write there)
+mkdir -p data/media
 # current -> previous (kept for a rollback), the new one -> current; the version before previous is removed
 for img in $IMAGES; do
     old=$(docker image inspect -f '{{.Id}}' "$img:previous" 2>/dev/null || true)
