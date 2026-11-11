@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Trash2 } from 'lucide-react'
+import { Search, Trash2, Volume2, VolumeX } from 'lucide-react'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { ProductLine } from './AddFromCatalog'
 import { branchLabel, stockOf } from './BranchStock'
 import { Modal, useToast } from './overlays'
 import { Badge, Button, Checkbox, Input, Select, inputClass } from './ui'
-import { checkBarcode, feedback, looksLikeBarcode, useScanner } from '../services/barcode'
+import { checkBarcode, feedback, looksLikeBarcode, scannerReady, setSound, soundOn, useScanner } from '../services/barcode'
 import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 
 // Downloads a file of the API (the token goes in a header, so a plain link can't do it)
@@ -33,7 +33,7 @@ export function stockError(t, err) {
 // The goods input of every operation: one field with search; Enter takes the first match. A barcode scanner types
 // into this same field (a scanner is a keyboard that ends with Enter): the search finds the store's own codes; a
 // code it doesn't know goes to `onCode` ("Привязать штрихкод"), a misread EAN/UPC is said at once (phase 12.3).
-export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = false, placeholder, hint = true, big = false, inline = false }) {
+export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = false, placeholder, hint = true, big = false, inline = false, adornment = null, scanner = false }) {
   const { t } = useTranslation()
   const [q, setQ] = useState('')
   const [items, setItems] = useState(null)
@@ -88,7 +88,8 @@ export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = fa
     <div className="relative">
       <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-faint" aria-hidden />
       <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} aria-label={t('warehouse.search')}
-        placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9 ${big ? 'min-h-14 text-base' : ''}`} autoComplete="off" />
+        placeholder={placeholder || t('warehouse.search')} className={`${inputClass} w-full pl-9 ${big ? 'min-h-14 text-base' : ''} ${adornment ? 'sm:pr-12' : ''}`} autoComplete="off" />
+      {adornment && <div className={`absolute right-1.5 hidden sm:block ${big ? 'top-2.5' : 'top-1'}`}>{adornment}</div>}
       {items && (
         <div className={`${inline ? "" : "absolute inset-x-0 top-full z-20 shadow-pop"} mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-surface`}>
           {items.length === 0 && <p className="px-3 py-2.5 text-sm text-muted">{t('warehouse.notFoundMine')}</p>}
@@ -107,8 +108,44 @@ export function GoodsInput({ onPick, onCode, autoFocus = true, allowCatalog = fa
           )}
         </div>
       )}
+      {scanner && <ScannerStatus field={ref} />}
       {hint && <p className="mt-1 text-xs text-muted">{t('warehouse.searchHint')}</p>}
       {catalog && <CatalogPick query={looksLikeBarcode(q) ? '' : q} onClose={() => setCatalog(false)} onPicked={(o) => { setCatalog(false); pick(o) }} />}
+    </div>
+  )
+}
+
+// Phase 12.5: "Сканер готов" (a green dot) or a grey one with "нажмите здесь, чтобы пикать" (the focus went to
+// another field), and the beep on / off next to it
+export function ScannerStatus({ field }) {
+  const { t } = useTranslation()
+  const [ready, setReady] = useState(true)
+  const [sound, setSoundState] = useState(soundOn)
+  useEffect(() => {
+    const check = () => setReady(scannerReady(document.activeElement === document.body ? null : document.activeElement, field.current))
+    const later = () => setTimeout(check, 0) // the focus left: wait where it goes
+    check()
+    document.addEventListener('focusin', check)
+    document.addEventListener('focusout', later)
+    return () => { document.removeEventListener('focusin', check); document.removeEventListener('focusout', later) }
+  }, [field])
+  const toggle = () => { setSound(!sound); setSoundState(!sound) }
+  const Icon = sound ? Volume2 : VolumeX
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-testid="scanner-status">
+      {ready ? (
+        <span className="inline-flex items-center gap-1.5 font-medium text-success" role="status">
+          <span className="size-2 rounded-full bg-success" aria-hidden />{t('scanner.ready')}
+        </span>
+      ) : (
+        <button type="button" onClick={() => field.current?.focus()} className="inline-flex items-center gap-1.5 text-muted hover:text-ink" role="status">
+          <span className="size-2 rounded-full bg-faint" aria-hidden />{t('scanner.notReady')} — <span className="underline">{t('scanner.focusHere')}</span>
+        </button>
+      )}
+      <button type="button" onClick={toggle} aria-pressed={sound} title={t(sound ? 'scanner.soundOn' : 'scanner.soundOff')}
+        aria-label={t(sound ? 'scanner.soundOn' : 'scanner.soundOff')} className="grid size-7 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-ink">
+        <Icon className="size-4" aria-hidden />
+      </button>
     </div>
   )
 }
@@ -263,8 +300,10 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
-        <GoodsInput onPick={add} onCode={onCode} allowCatalog={kind === 'receipt'} big={big} hint={!big} />
-        <CameraButton onCode={onCode} size={big ? 'lg' : 'md'} className={big ? 'min-h-14 w-full sm:w-auto' : ''} />
+        <GoodsInput onPick={add} onCode={onCode} allowCatalog={kind === 'receipt'} big={big} hint={!big} scanner
+          adornment={<CameraButton icon onCode={onCode} />} />
+        {/* A phone: the camera is the main way — a large button; a computer: the icon inside the field */}
+        <CameraButton onCode={onCode} size={big ? 'lg' : 'md'} className={`w-full sm:hidden ${big ? 'min-h-14' : ''}`} />
       </div>
       {binding && <BindBarcode code={binding.code} suggestion={binding.suggestion} onClose={() => setBinding(null)}
         onBound={(offer) => { setBinding(null); add(offer) }} />}

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { Boxes, ChartLine, ExternalLink, LayoutDashboard, LogOut, MapPin, Package, Store, Users } from 'lucide-react'
+import { Boxes, ChartLine, Check, ChevronDown, ExternalLink, House, LogOut, MapPin, Package, Store, Users } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
 import StockModeBlock, { WarehouseBlock } from '../components/StockMode'
 import { ScanBox, ScanPanel } from '../components/ScanPanel'
 import { stockTabs } from './WarehousePage'
-import { placeFor, placeLabel, placesOf, readPlace, savePlace } from '../services/place'
+import { PLACE_OPEN, placeFor, placeLabel, placesOf, readPlace, savePlace } from '../services/place'
 import { ScopeChoice } from '../components/BranchColumns'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
@@ -18,7 +18,8 @@ import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../com
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
-import Workspace, { pageActive } from '../layouts/Workspace'
+import Workspace, { pageActive, sectionActive } from '../layouts/Workspace'
+import { NotificationBell } from '../components/Notifications'
 import { BlockedNotice } from '../components/AdminDecisions'
 import api, { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
@@ -267,41 +268,42 @@ function ImportHistory({ items, onChanged }) {
   )
 }
 
-// Phase 12.4: five sections instead of thirteen items — groups on the left on a computer, five tabs at the bottom on
-// a phone, the pages of a section as tabs at the top. The store profile is in the avatar menu.
+// Phase 12.5: four sections without sub-items on the left (Товары · Склад · Покупатели · Аналитика); the pages of a
+// section are tabs at the top of the page. "Главная" (the overview) is the logo; on a phone — the first tab of the
+// bottom bar. The store profile and the storefront are in the avatar menu.
 export function sellerSections(store, badges = {}) {
   const stock = store?.stock_mode === 'stock'
     ? stockTabs(store).map((k) => ({ to: `/seller/stock?tab=${k}`, key: `stock_${k}` }))
     : [{ to: '/seller/stock', key: 'stock_about' }]
   const buyers = (badges.messages || 0) + (badges.reservations || 0)
   return [
-    { to: '/seller', key: 'overview', icon: LayoutDashboard, end: true, tab: true },
-    { to: '/seller/goods', key: 'goodsGroup', icon: Package, tab: true, children: [
+    { to: '/seller', key: 'overview', icon: House, end: true, tab: true, side: false },
+    { to: '/seller/goods', key: 'goodsGroup', icon: Package, tab: true, pages: [
       { to: '/seller/goods', key: 'goods' }, { to: '/seller/add', key: 'add' },
       { to: '/seller/builds', key: 'builds', deep: true }, { to: '/seller/imports', key: 'imports', deep: true }] },
-    { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true, children: stock },
-    { to: '/seller/messages', key: 'buyers', icon: Users, tab: true, badge: buyers || undefined, children: [
+    { to: '/seller/stock', key: 'stock', icon: Boxes, tab: true, pages: stock },
+    { to: '/seller/messages', key: 'buyers', icon: Users, tab: true, badge: buyers || undefined, pages: [
       { to: '/seller/messages', key: 'messages', deep: true, badge: badges.messages },
       { to: '/seller/reservations', key: 'reservations', badge: badges.reservations }] },
-    { to: '/seller/analytics', key: 'analyticsGroup', icon: ChartLine, tab: true, children: [
+    { to: '/seller/analytics', key: 'analyticsGroup', icon: ChartLine, tab: true, pages: [
       { to: '/seller/analytics', key: 'analytics' }, { to: '/seller/reports', key: 'reports' }] },
   ]
 }
 
-// The pages of the open section as tabs at the top ("Склад" has its own large mode buttons)
-function SectionTabs({ sections }) {
+// The pages of the open section as tabs at the top: one row that scrolls sideways on a phone
+export function SectionTabs({ sections }) {
   const { t } = useTranslation()
   const location = useLocation()
-  const group = sections.find((s) => s.children && s.key !== 'stock' && s.children.some((c) => pageActive(c, location)))
-  if (!group) return null
+  const group = sections.find((s) => s.pages && sectionActive(s, location))
+  if (!group || group.pages.length < 2) return null
   return (
-    <nav aria-label={t('cabinet.sectionTabs')} className="mb-4 inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1">
-      {group.children.map((c) => {
+    <nav aria-label={t('cabinet.sectionTabs')} className="mb-4 flex max-w-full gap-0.5 overflow-x-auto overscroll-x-contain rounded-md bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
+      {group.pages.map((c) => {
         const active = pageActive(c, location)
         return (
           <Link key={c.key} to={c.to} aria-current={active ? 'page' : undefined}
-            className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-              active ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
+            className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              active ? 'bg-surface text-primary shadow-card' : 'text-muted hover:text-ink'}`}>
             {t(`cabinet.nav.${c.key}`)}<UnreadBadge count={c.badge} />
           </Link>
         )
@@ -310,30 +312,49 @@ function SectionTabs({ sections }) {
   )
 }
 
-// "Я сейчас в: Юнусабад / Склад" — the place of every mode of "Склад" and of the scanner's panel
-function PlacePicker({ places, place, setPlace }) {
+// "Юнусабад ▾" with a pin in the top bar: the warehouse and the branches, one place for the whole cabinet
+export function PlaceMenu({ places, place, setPlace }) {
   const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    const show = () => setOpen(true)
+    window.addEventListener(PLACE_OPEN, show)
+    return () => window.removeEventListener(PLACE_OPEN, show)
+  }, [])
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => { if (!box.current?.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
   if (places.length < 2) return null
   return (
-    <label className="mb-4 flex flex-wrap items-center gap-2 text-sm" title={t('place.iAmInHint')}>
-      <MapPin className="size-4 text-primary" aria-hidden />
-      <span className="text-muted">{t('place.iAmIn')}</span>
-      <select value={place?.id || ''} onChange={(e) => setPlace(Number(e.target.value))}
-        className="min-h-9 max-w-full min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        {places.map((p) => <option key={p.id} value={p.id}>{placeLabel(t, p)}</option>)}
-      </select>
-    </label>
-  )
-}
-
-// The storefront always opens in a new tab: the cabinet stays where the seller left it
-function OpenStoreButton() {
-  const { t } = useTranslation()
-  return (
-    <Button href={storeUrl('/')} target="_blank" rel="noreferrer" variant="secondary" size="sm"
-      aria-label={t('seller.openStore')} title={t('seller.openStore')} className="shrink-0 max-sm:!px-2.5">
-      <ExternalLink className="size-4" aria-hidden /><span className="hidden sm:inline">{t('seller.openStore')}</span>
-    </Button>
+    <div ref={box} className="relative min-w-0">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="listbox"
+        aria-label={t('place.choose')} title={t('place.choose')}
+        className="flex min-h-10 max-w-[7.5rem] min-w-0 items-center gap-1 rounded-md px-1.5 text-sm font-semibold outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary sm:max-w-56 sm:px-2.5">
+        <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
+        <span className="truncate">{placeLabel(t, place)}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={t('place.choose')}
+          className="absolute top-full right-0 z-40 mt-2 max-h-80 w-56 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-pop">
+          {places.map((p) => (
+            <li key={p.id}>
+              <button type="button" role="option" aria-selected={p.id === place?.id} onClick={() => { setPlace(p.id); setOpen(false) }}
+                className={`flex min-h-10 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm hover:bg-surface-2 ${p.id === place?.id ? 'font-semibold text-primary' : ''}`}>
+                <span className="min-w-0 flex-1 truncate">{placeLabel(t, p)}</span>
+                {p.id === place?.id && <Check className="size-4 shrink-0" aria-hidden />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -353,21 +374,23 @@ function AccountMenu({ store }) {
         <p className="truncate text-xs text-muted" title={user.email}>{user.email}</p>
       </div>
       {store && <DropdownItem as={Link} to="/seller/profile" icon={Store}>{t('cabinet.nav.profile')}</DropdownItem>}
+      {/* The storefront opens in a new tab: the cabinet stays where the seller left it */}
+      <DropdownItem as="a" href={storeUrl('/')} target="_blank" rel="noreferrer" icon={ExternalLink}>{t('seller.openStore')}</DropdownItem>
       <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
     </Dropdown>
   )
 }
 
 // The frame of every seller page apart from the storefront; `sections` only for a logged-in seller with a store
-function SellerFrame({ store, sections, top, children }) {
+function SellerFrame({ store, sections, top, place, children }) {
   const { t } = useTranslation()
   const { user } = useAuth()
   return (
     <Workspace home="/seller" subtitle={t('seller.subtitle')} sections={sections} navKey="cabinet.nav" tabKey="cabinet.tab"
       menuLabel={t('cabinet.menu')} sideTitle={store?.name} top={top}
       actions={<>
-        {store && <span className="hidden max-w-56 truncate text-sm font-semibold lg:block" title={store.name}>{store.name}</span>}
-        <OpenStoreButton />
+        {place && <PlaceMenu {...place} />}
+        {user?.role === 'seller' && store && <NotificationBell allPath="/seller/notifications" />}
         {user?.role === 'seller' && <AccountMenu store={store} />}
       </>}>
       {children}
@@ -439,13 +462,8 @@ export default function SellerLayout() {
     )
   }
   const sections = store ? sellerSections(store, badges) : null
-  const top = sections && (
-    <div className="flex flex-wrap-reverse items-start justify-between gap-x-4">
-      <SectionTabs sections={sections} />
-      <PlacePicker places={places} place={place} setPlace={setPlace} />
-    </div>
-  )
-  return <SellerFrame store={store} sections={sections} top={top}>{content}</SellerFrame>
+  const top = sections && <SectionTabs sections={sections} />
+  return <SellerFrame store={store} sections={sections} top={top} place={store && { places, place, setPlace }}>{content}</SellerFrame>
 }
 
 export function AddSection() {

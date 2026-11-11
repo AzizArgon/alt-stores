@@ -112,14 +112,22 @@ export function CameraScan({ onCode, onClose }) {
   )
 }
 
-export function CameraButton({ onCode, className = '', size = 'md' }) {
+// `icon`: a small camera inside the goods field (a computer: the USB scanner is the main way)
+export function CameraButton({ onCode, className = '', size = 'md', icon = false }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   return (
     <>
-      <Button variant="secondary" size={size} className={className} onClick={() => setOpen(true)}>
-        <Camera className="size-4" aria-hidden />{t('barcode.camera.button')}
-      </Button>
+      {icon ? (
+        <button type="button" onClick={() => setOpen(true)} aria-label={t('barcode.camera.button')} title={t('barcode.camera.button')}
+          className={`grid size-9 place-items-center rounded-md text-muted outline-none hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-primary ${className}`}>
+          <Camera className="size-5" aria-hidden />
+        </button>
+      ) : (
+        <Button variant="secondary" size={size} className={className} onClick={() => setOpen(true)}>
+          <Camera className="size-4" aria-hidden />{t('barcode.camera.button')}
+        </Button>
+      )}
       {open && <CameraScan onClose={() => setOpen(false)} onCode={(code) => { setOpen(false); onCode(code) }} />}
     </>
   )

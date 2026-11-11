@@ -26,6 +26,7 @@ import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import AdminLayout, { AdminAuthLayout, AdminLog, AdminLoginPage, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
 import { AdminBarcodes, AdminChannels, AdminFixes, AdminFlags, AdminReports, AdminStoreCard, AdminStores } from './pages/AdminModeration'
+import { NotificationsPage } from './components/Notifications'
 import { useAuth } from './services/auth.jsx'
 import { adminGate, homeFor, returnTo, sellerGate } from './services/roles'
 
@@ -121,6 +122,7 @@ export default function App() {
         <Route path="/messages/new" element={<BuyerOnly><OpenConversation /></BuyerOnly>} />
         <Route path="/messages/:id" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
         <Route path="/reservations" element={<BuyerOnly><ReservationsPage /></BuyerOnly>} />
+        <Route path="/notifications" element={<BuyerOnly><NotificationsPage side="buyer" /></BuyerOnly>} />
         <Route path="/profile" element={<UserOnly><ProfilePage /></UserOnly>} />
         {UiPage && <Route path="/ui" element={<Suspense fallback={null}><UiPage /></Suspense>} />}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -148,6 +150,7 @@ export default function App() {
         <Route path="reservations" element={<SellerReservationsPage />} />
         <Route path="analytics" element={<SellerAnalyticsPage />} />
         <Route path="profile" element={<ProfileSection />} />
+        <Route path="notifications" element={<NotificationsPage side="seller" />} />
         <Route path="*" element={<Navigate to="/seller" replace />} />
       </Route>
 
@@ -165,6 +168,7 @@ export default function App() {
         <Route path="channels" element={<AdminChannels />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="log" element={<AdminLog />} />
+        <Route path="notifications" element={<NotificationsPage side="admin" />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>

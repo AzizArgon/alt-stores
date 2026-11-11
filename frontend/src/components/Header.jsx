@@ -12,6 +12,7 @@ import { useUnseenReservations } from '../services/reservations'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
+import { NotificationBell } from './Notifications'
 import { Button, Select, inputClass } from './ui'
 
 const SEARCH_DELAY_MS = 300
@@ -225,7 +226,12 @@ export default function Header() {
             <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">
               <LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}
             </Button>
-          ) : user ? <UserMenu user={user} logout={logout} unread={unread} unseen={unseen} /> : (
+          ) : user ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {user.role === 'buyer' && <NotificationBell allPath="/notifications" />}
+              <UserMenu user={user} logout={logout} unread={unread} unseen={unseen} />
+            </div>
+          ) : (
             <div className="flex shrink-0 items-center gap-2">
               <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
               <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>

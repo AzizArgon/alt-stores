@@ -4,6 +4,8 @@ import { branchLabel } from '../components/BranchStock'
 // warehouse is the seller's only: the storefront never shows it.
 
 export const PLACE_KEY = 'alt_place'
+// Phase 12.5: "Место: Юнусабад" on a page opens the one choice of the place in the top bar
+export const PLACE_OPEN = 'place:open'
 
 export function placesOf(store) {
   const branches = store?.branches || []

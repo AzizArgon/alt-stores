@@ -833,7 +833,8 @@
       "stock_return": "Возврат",
       "stock_stocktake": "Ревизия",
       "stock_journal": "Журнал",
-      "stock_about": "Учёт остатков"
+      "stock_about": "Учёт остатков",
+      "notifications": "Уведомления"
     },
     "overview": {
       "lastUpload": "Последний прайс загружен {{date}}",
@@ -1024,7 +1025,7 @@
       }
     },
     "tab": {
-      "overview": "Обзор",
+      "overview": "Главная",
       "goods": "Товары",
       "add": "Добавить",
       "imports": "Загрузки",
@@ -2323,6 +2324,76 @@
     "warehouse": "Склад",
     "iAmIn": "Я сейчас в:",
     "iAmInHint": "Место для приёмки, продажи и панели сканера",
-    "where": "Место"
+    "where": "Место",
+    "label": "Место: {{place}}",
+    "choose": "Где вы сейчас: склад или филиал",
+    "onlyBranches": "в этом режиме — только филиалы"
+  },
+  "notify": {
+    "title": "Уведомления",
+    "bell": "Уведомления",
+    "bellUnread": "Уведомления: {{count}} непрочитанных",
+    "markAll": "Отметить все прочитанными",
+    "all": "Все уведомления",
+    "empty": "Пока уведомлений нет",
+    "emptyHint": "Здесь появятся новые сообщения, брони и важные события.",
+    "more": "Показать ещё",
+    "unreadDot": "Не прочитано",
+    "keep": "Уведомления хранятся 30 дней.",
+    "ago": {
+      "now": "только что",
+      "min": "{{count}} мин",
+      "hour": "{{count}} ч",
+      "day": "{{count}} дн"
+    },
+    "types": {
+      "all": "Все",
+      "messages": "Сообщения",
+      "reservations": "Брони",
+      "stock": "Склад",
+      "imports": "Загрузки",
+      "admin": "Модерация"
+    },
+    "text": {
+      "message_one": "Новое сообщение от покупателя: «{{text}}»",
+      "message_few": "{{count}} новых сообщения от покупателя, последнее: «{{text}}»",
+      "message_many": "{{count}} новых сообщений от покупателя, последнее: «{{text}}»",
+      "message_other": "{{count}} новых сообщения от покупателя, последнее: «{{text}}»",
+      "reply_one": "«{{store}}» ответил: «{{text}}»",
+      "reply_few": "«{{store}}»: {{count}} новых сообщения, последнее: «{{text}}»",
+      "reply_many": "«{{store}}»: {{count}} новых сообщений, последнее: «{{text}}»",
+      "reply_other": "«{{store}}»: {{count}} новых сообщения, последнее: «{{text}}»",
+      "reservation_new": "Новая бронь: {{title}} — {{qty}} шт.",
+      "reservation_cancelled": "Покупатель отменил бронь: {{title}}",
+      "reservation_expired": "Бронь истекла: {{title}}",
+      "reservation_confirmed": "Бронь подтверждена: {{title}} — ждём до {{until}}",
+      "reservation_ready": "Готово к выдаче: {{title}} в «{{store}}»",
+      "reservation_cancelled_store": "«{{store}}» отменил бронь: {{title}}",
+      "reservation_branch": "Бронь перенесена в филиал {{branch}}: {{title}}",
+      "reservation_expiring": "Бронь истекает сегодня: {{title}} в «{{store}}»",
+      "low_stock": "Заканчивается: {{name}} — доступно {{left}} шт.",
+      "oversold": "Продано больше, чем по учёту: {{name}} — проверьте при ревизии",
+      "import_ready": "Прайс «{{name}}» разобран — проверьте и опубликуйте",
+      "import_failed": "Не удалось разобрать прайс «{{name}}»",
+      "admin_flag_upheld": "Администратор оставил отметку на «{{name}}»",
+      "admin_flag_dismissed": "Администратор снял отметку с «{{name}}»",
+      "admin_fix_accepted": "Исправление карточки «{{name}}» принято",
+      "admin_fix_rejected": "Исправление карточки «{{name}}» отклонено",
+      "admin_barcode_resolved": "Администратор решил спор по штрихкоду {{code}}",
+      "admin_barcode_rejected": "Штрихкод {{code}} убран из общей базы",
+      "admin_store_on": "Магазин заблокирован администратором: {{reason}}",
+      "admin_store_off": "Блокировка магазина снята",
+      "report": "Новая жалоба на чат с «{{store}}»",
+      "flag_disputed": "«{{store}}» оспаривает отметку: {{name}}",
+      "fix_suggested": "«{{store}}» предлагает исправить карточку «{{name}}»",
+      "barcode_conflict": "Конфликт штрихкода {{code}}: магазины привязали разные карточки"
+    }
+  },
+  "scanner": {
+    "ready": "Сканер готов",
+    "notReady": "Сканер не слушает",
+    "focusHere": "нажмите здесь, чтобы пикать",
+    "soundOn": "Звук пика включён",
+    "soundOff": "Звук пика выключен"
   }
 }

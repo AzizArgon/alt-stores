@@ -53,6 +53,12 @@ const editable = (el) => el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'S
 
 // The page listens to the scanner even when no field is focused ("Склад", "Сканирование"). A focused field gets
 // its keys as usual (the goods input itself takes a code with Enter). Enter of a scan never presses a focused button.
+// Phase 12.5: "Сканер готов" — the scanner's keys reach the goods field (it has the focus) or nobody's field (the
+// page catches a scan without a focus); another field has the focus — the scan would type into it
+export function scannerReady(active, field) {
+  return !active || active === field || !editable(active)
+}
+
 export function useScanner(onScan, enabled = true) {
   const cb = useRef(onScan)
   cb.current = onScan
@@ -74,11 +80,21 @@ export function useScanner(onScan, enabled = true) {
 }
 
 let audio
+// Phase 12.5: the beep can be switched off next to "Сканер готов" (the choice is kept in the browser)
+export const SOUND_KEY = 'alt_scan_sound'
+export function soundOn() {
+  try { return localStorage.getItem(SOUND_KEY) !== 'off' } catch { return true }
+}
+export function setSound(on) {
+  try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off') } catch { /* private mode */ }
+}
+
 // A short high beep for a success, two low ones for an error; a vibration on a phone
 export function feedback(ok) {
   try {
     navigator.vibrate?.(ok ? 60 : [120, 80, 120])
   } catch { /* not allowed */ }
+  if (!soundOn()) return
   try {
     audio = audio || new (window.AudioContext || window.webkitAudioContext)()
     const beep = (freq, at, len) => {

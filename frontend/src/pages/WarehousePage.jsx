@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
-import { Download, FileBarChart, X } from 'lucide-react'
+import { Download, FileBarChart, MapPin, X } from 'lucide-react'
+import { PLACE_OPEN } from '../services/place'
 import Stocktake from '../components/Stocktake'
 import { ModeSwitch } from '../components/StockMode'
 import { GoodsInput, OperationForm, download } from '../components/Warehouse'
@@ -19,14 +20,15 @@ const when = (iso) => new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-
 
 // The modes of "Склад" (phase 12.4): Приёмка · Выкладка (only with a warehouse) · Продажа · Возврат · Ревизия ·
 // Журнал. A scan (the USB scanner even with no field focused, the camera) works in every mode. The chosen mode is
-// kept (the address and the browser); the place is the cabinet's "Я сейчас в: …" (some modes allow only branches).
+// kept (the address and the browser); the place is the one of the top bar (some modes allow only branches).
+// Phase 12.5: the modes are the section tabs at the top of the page (no second row of buttons here).
 export function stockTabs(store) {
   return ['receipt', ...(store?.warehouse ? ['move'] : []), 'sale', 'return', 'stocktake', 'journal']
 }
 
 export default function WarehousePage() {
   const { t } = useTranslation()
-  const { store, setStore, place, setPlace, places } = useOutletContext()
+  const { store, setStore, place, places } = useOutletContext()
   const [params, setParams] = useSearchParams()
   const tabs = stockTabs(store)
   const priceOnly = store.stock_mode !== 'stock'
@@ -34,6 +36,7 @@ export default function WarehousePage() {
   const tab = [...tabs, 'adjust'].includes(asked) ? asked : null
   const [start, setStart] = useState(null)
   const [version, setVersion] = useState(0)
+  useEffect(() => setStart(null), [tab])
 
   // No mode in the address: the last one (or "Приёмка")
   useEffect(() => {
@@ -81,26 +84,11 @@ export default function WarehousePage() {
         <h1 className="text-h1">{t('warehouse.title')}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{t('warehouse.hint')}</p>
       </div>
-      {/* Large buttons for a finger: three in a row on a phone, all in one row on a computer */}
-      <div role="tablist" aria-label={t('warehouse.title')} className={`grid grid-cols-3 gap-1 rounded-lg bg-surface-2 p-1 ${tabs.length === 6 ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
-        {tabs.map((m) => (
-          <button key={m} type="button" role="tab" aria-selected={tab === m} onClick={() => { setStart(null); setParams({ tab: m }) }}
-            className={`min-h-12 rounded-md px-1 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-base ${
-              tab === m ? 'bg-surface text-primary shadow-sm' : 'text-muted hover:text-ink'}`}>
-            {t(`warehouse.tabs.${m}`)}
-          </button>
-        ))}
-      </div>
       {!branches.length ? <Card><p className="text-sm">{t('warehouse.noBranches')}</p></Card> : tab === 'journal' ? (
         <Journal branches={places} doc={params.get('doc')} />
       ) : !tab ? null : (
         <>
-          {allowed.length > 1 && (
-            <Select label={t(`warehouse.placeFor.${tab}`)} value={here?.id} selectClassName="min-h-12 text-base"
-              onChange={(e) => setPlace(Number(e.target.value))}>
-              {allowed.map((p) => <option key={p.id} value={p.id}>{placeLabel(t, p)}</option>)}
-            </Select>
-          )}
+          {places.length > 1 && <PlaceLine place={here} other={here?.id !== place?.id} />}
           {tab === 'stocktake' ? <Stocktake key={here?.id} place={here} places={places} /> : (
             <Card>
               {tab === 'adjust' && <h2 className="mb-1 text-h3">{t('warehouse.tabs.adjust')}</h2>}
@@ -114,6 +102,19 @@ export default function WarehousePage() {
         </>
       )}
     </div>
+  )
+}
+
+// Phase 12.5: the place is chosen once, in the top bar; here — a short line, a click opens that choice
+function PlaceLine({ place, other }) {
+  const { t } = useTranslation()
+  return (
+    <button type="button" onClick={() => window.dispatchEvent(new Event(PLACE_OPEN))} data-testid="place-line"
+      className="-mt-1 inline-flex max-w-full items-center gap-1.5 justify-self-start rounded-md px-1 text-sm text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-primary">
+      <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
+      <span className="truncate"><span className="font-semibold text-ink">{t('place.label', { place: placeLabel(t, place) })}</span>
+        {other && ` · ${t('place.onlyBranches')}`}</span>
+    </button>
   )
 }
 
