@@ -58,9 +58,9 @@
 
 **Откат на прежнюю версию:** `rollback.bat` — меняет местами `current` и `previous` и перезапускает контейнеры (база остаётся как есть). Повторный `rollback.bat` вернёт новую версию.
 
-**Демо-данные на сервере** — только `seed_demo.py --builds-only` (обновляет данные демо-магазинов и демо-сборки, не трогая предложения, историю цен и пароли):
+**Демо-данные на сервере** — только `seed_demo.py --builds-only --no-photos` (обновляет данные демо-магазинов и демо-сборки, не трогая предложения, историю цен и пароли; `--no-photos` — без заглушек «ДЕМО»: демо-карточки бывают и карточками Age Computers):
 ```bash
-ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/seed_demo.py --builds-only"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/seed_demo.py --builds-only --no-photos"
 ```
 Полный `seed_demo` на сервере не запускать: он перетасует ассортимент демо-магазинов.
 
