@@ -81,7 +81,13 @@ def refresh_common(db: Session, code: str) -> BarcodeCode | None:
     if common.admin_status in ("resolved", "rejected"):  # phase 13: the admin decided a conflict
         return _apply_decision(db, common, code, by_product)
     if len(by_product) > 1:
+        was = common.status
         common.status, common.product_id, common.stores = "conflict", None, 0
+        if was != "conflict":  # phase 12.5: a new conflict goes to the admins' bell
+            from app.services import notifications as notify
+
+            with db.no_autoflush:
+                notify.notify_admins(db, "barcode_conflict", "/admin/barcodes", code=code)
         common.conflict_json = [{"product_id": p, "stores": sorted(s)} for p, s in sorted(by_product.items())]
     else:
         (product_id, stores), = by_product.items()

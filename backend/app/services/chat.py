@@ -16,6 +16,7 @@ from app.db.models import (
     Build, ChatReport, Conversation, Message, MessageAuthor, Offer, Store, StoreBlock, StoreKind, TopicKind, User,
     UserRole, utcnow,
 )
+from app.services import notifications as notify
 from app.services.exchange import to_usd, to_uzs
 
 MAX_TEXT = 2000
@@ -192,6 +193,14 @@ def send_message(db: Session, user: User, conv_id: int, text: str) -> Message:
     msg = Message(conversation_id=conv.id, author=MessageAuthor(side), sender_id=user.id, text=text, created_at=now)
     conv.last_message_at = now
     db.add(msg)
+    # Phase 12.5: the bell of the other side; several messages in a row in one conversation — one notification
+    snippet = text[:80]
+    if side == "buyer":
+        notify.notify(db, notify.owner(db, conv.store), "message", f"/seller/messages/{conv.id}", f"chat:{conv.id}",
+                      text=snippet)
+    else:
+        notify.notify(db, conv.buyer_id, "message", f"/messages/{conv.id}", f"chat:{conv.id}",
+                      store=conv.store.name, text=snippet)
     db.commit()
     return msg
 
@@ -201,6 +210,7 @@ def read_messages(db: Session, user: User, conv_id: int, after_id: int = 0) -> t
     side, conv = get_conversation(db, user, conv_id)
     db.query(Message).filter(Message.conversation_id == conv.id, _unread_q(side, user.id)).update(
         {"is_read": True}, synchronize_session="fetch")
+    notify.read_group(db, user.id, f"chat:{conv.id}")  # phase 12.5: the conversation is open — its bell is read
     db.commit()
     msgs = db.scalars(select(Message).where(Message.conversation_id == conv.id, Message.id > after_id)
                       .order_by(Message.id)).all()
@@ -281,6 +291,8 @@ def report(db: Session, user: User, conv_id: int, reason: str, comment: str | No
     item = ChatReport(conversation_id=conv.id, reporter_id=user.id, reason=reason,
                       comment=(comment or "").strip()[:MAX_TEXT] or None)
     db.add(item)
+    db.flush()
+    notify.notify_admins(db, "report", "/admin/reports", reason=reason, store=conv.store.name)  # phase 12.5
     db.commit()
     return item
 

@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, auth, barcodes, builds, catalog, chat, market, reference, reservations, seller, stock
+from app.api import (admin, auth, barcodes, builds, catalog, chat, market, notifications, reference, reservations, seller,
+                     stock)
 from app.core.config import settings
 from app.db.database import SessionLocal, init_db
 from app.services.importer import fail_stale_imports
@@ -12,11 +13,14 @@ from app.services.importer import fail_stale_imports
 
 async def expire_reservations_hourly() -> None:
     """Phase 11: reservations whose term has passed become "expired" (the lists also check it when opened)."""
-    from app.services.reservations import expire_due
+    from app.services.notifications import purge
+    from app.services.reservations import expire_due, remind_expiring
 
     while True:
         with suppress(Exception), SessionLocal() as db:
             expire_due(db)
+            remind_expiring(db)  # phase 12.5: "бронь истекает сегодня" to the buyer
+            purge(db)  # notifications older than 30 days
         await asyncio.sleep(3600)
 
 
@@ -51,6 +55,7 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(reservations.router, prefix="/api")
 app.include_router(stock.router, prefix="/api")
 app.include_router(barcodes.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(admin.public, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 

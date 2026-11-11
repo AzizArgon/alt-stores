@@ -317,6 +317,9 @@ def edit_card(db: Session, store: Store, offer: Offer, data: dict) -> dict:
     if other_stores(db, product, store):
         after = {k: data.get(k) for k in ("name", "brand", "model", "category")} | {"specs": data.get("specs") or {}}
         db.add(ProductFix(product_id=product.id, store_id=store.id, before=_card(product), after=after))
+        from app.services import notifications as notify  # phase 12.5
+
+        notify.notify_admins(db, "fix_suggested", "/admin/fixes", store=store.name, name=product.normalized_name)
         db.commit()
         return {"status": "suggested"}
     brand, name, specs, key = card_fields(category, data.get("brand"), data.get("model"), data.get("name"),

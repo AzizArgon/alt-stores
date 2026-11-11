@@ -20,6 +20,7 @@ from app.db.models import (
     Branch, Build, Conversation, Message, MessageAuthor, Offer, Reservation, ReservationEvent, ReservationStatus as S, Store,
     StoreKind, TopicKind, User, UserRole, utcnow,
 )
+from app.services import notifications as notify  # phase 12.5: the bell
 from app.services import stock  # phase 12.2: reserves in "Учёт остатков"
 from app.services.branches import available, branch_public, store_branches
 from app.services.chat import ChatError, _aware, _price, is_blocked
@@ -209,6 +210,8 @@ def create(db: Session, user: User, data: dict) -> Reservation:
     db.add(Conversation(buyer_id=user.id, store_id=store.id, topic_kind=TopicKind.reservation, topic_id=r.id))
     db.flush()
     _system_line(db, r, "created", user)
+    notify.notify(db, notify.owner(db, store), "reservation_new", f"/seller/reservations?id={r.id}", title=r.title,
+                  qty=quantity)
     # Filled in the next form (the buyer may change them there)
     user.contact_name, user.contact_phone = contacts["name"], contacts["phone"]
     if contacts["telegram"]:
@@ -228,9 +231,24 @@ def expire_due(db: Session) -> int:
         stock.release_reserve(db, r.store, r, None)
         _set_status(db, r, S.expired, "system", None)
         _system_line(db, r, "expired", None)
+        notify.notify(db, notify.owner(db, r.store), "reservation_expired", f"/seller/reservations?id={r.id}",
+                      title=r.title)
     if due:
         db.commit()
     return len(due)
+
+
+def remind_expiring(db: Session) -> int:
+    """Phase 12.5: "бронь истекает сегодня" — once per reservation to the buyer (the hourly job)."""
+    now = utcnow()
+    end = datetime.combine(now.astimezone(TZ).date() + timedelta(days=1), time(), TZ).astimezone(timezone.utc)
+    due = db.scalars(select(Reservation).where(Reservation.status.in_((S.confirmed, S.ready)),
+                                               Reservation.expires_at.is_not(None), Reservation.expires_at >= now,
+                                               Reservation.expires_at < end)).all()
+    made = [notify.notify_once(db, r.buyer_id, "reservation_expiring", f"/reservations?id={r.id}", f"expiring:{r.id}",
+                               None, title=r.title, store=r.store.name) for r in due]
+    db.commit()
+    return sum(n is not None for n in made)
 
 
 def _store_of(db: Session, user: User) -> Store:
@@ -276,6 +294,9 @@ def advance(db: Session, user: User, res_id: int) -> Reservation:
             raise ReservationError("reserve_short")
     _set_status(db, r, nxt, "store", user)
     _system_line(db, r, nxt.value, user, until=_until(r))
+    if nxt in (S.confirmed, S.ready):
+        notify.notify(db, r.buyer_id, f"reservation_{nxt.value}", f"/reservations?id={r.id}", title=r.title,
+                      store=r.store.name, until=_until(r))
     db.commit()
     return r
 
@@ -300,6 +321,8 @@ def change_branch(db: Session, user: User, res_id: int, branch_id: int) -> Reser
     r.branch_id, r.updated_at, r.buyer_seen = branch.id, utcnow(), False
     _system_line(db, r, "branch_changed", user, branch=branch.name or "", address=branch.address,
                  city=branch.city)
+    notify.notify(db, r.buyer_id, "reservation_branch", f"/reservations?id={r.id}", title=r.title,
+                  branch=branch.name or branch.address or "")
     db.commit()
     db.refresh(r)
     return r
@@ -322,6 +345,12 @@ def cancel(db: Session, user: User, res_id: int, reason: str | None = None, text
     stock.release_reserve(db, r.store, r, user.id)  # phase 12.2: the reserve goes back
     _set_status(db, r, S.cancelled, side, user)
     _system_line(db, r, f"cancelled_{side}", user, reason=reason or "", text=text or "")
+    if side == "buyer":
+        notify.notify(db, notify.owner(db, r.store), "reservation_cancelled", f"/seller/reservations?id={r.id}",
+                      title=r.title)
+    else:
+        notify.notify(db, r.buyer_id, "reservation_cancelled_store", f"/reservations?id={r.id}", title=r.title,
+                      store=r.store.name, reason=reason or "")
     db.commit()
     return r
 

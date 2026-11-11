@@ -27,6 +27,13 @@ ACTIONS = (
 ACTIVE_RES = (ReservationStatus.new, ReservationStatus.confirmed, ReservationStatus.ready)
 
 
+def _tell(db: Session, store, kind: str, **params) -> None:
+    """Phase 12.5: an admin decision goes to the seller's bell (the overview shows the details)."""
+    from app.services import notifications as notify
+
+    notify.notify(db, notify.owner(db, store), kind, "/seller", **params)
+
+
 class AdminError(ValueError):
     """code -> admin.error.<code> in ru.json."""
 
@@ -168,6 +175,7 @@ def set_store_blocked(db: Session, admin: User, store: Store, blocked: bool, rea
     store.block_reason = _text(reason, 300) if blocked else None
     log(db, admin, action or ("store_block" if blocked else "store_unblock"), "store", store.id, store.name, reason,
         **(details or {}))
+    _tell(db, store, "admin_store", blocked=blocked, reason=store.block_reason or "")
     db.commit()
 
 
@@ -295,6 +303,7 @@ def resolve_flag(db: Session, admin: User, flag_id: int, decision: str, answer: 
     f.resolution, f.admin_answer, f.resolved_at = decision, _text(answer), utcnow()
     log(db, admin, f"flag_{decision}", "flag", f.id, f"{f.offer.store.name} · {f.offer.product.normalized_name}",
         answer, type=f.type)
+    _tell(db, f.offer.store, "admin_flag", decision=decision, name=f.offer.product.normalized_name)
     db.commit()
 
 
@@ -308,6 +317,9 @@ def dispute_flag(db: Session, store: Store, flag_id: int, comment: str | None) -
     if not _text(comment):
         raise AdminError("comment_required")
     f.status, f.dispute_comment, f.disputed_at = FlagStatus.disputed, _text(comment), utcnow()
+    from app.services import notifications as notify  # phase 12.5
+
+    notify.notify_admins(db, "flag_disputed", "/admin/flags", store=store.name, name=f.offer.product.normalized_name)
     db.commit()
     return f
 
@@ -465,6 +477,7 @@ def accept_fix(db: Session, admin: User, fix_id: int, comment: str | None = None
     log(db, admin, "fix_merge" if merged else "fix_accept", "fix", fix.id, name, comment,
         product_id=fix.product_id, **({"merged_into": other.id, **{k: v for k, v in merged.items() if k != "target"}}
                                      if merged else {}))
+    _tell(db, fix.store_id, "admin_fix", status="accepted", name=name)
     db.commit()
     return {"status": "merged" if merged else "applied", "product_id": product.id, "merge": merged}
 
@@ -477,6 +490,7 @@ def reject_fix(db: Session, admin: User, fix_id: int, reason: str | None) -> Non
         raise AdminError("reason_required")
     fix.status, fix.reject_reason, fix.resolved_at = "rejected", _text(reason, 300), utcnow()
     log(db, admin, "fix_reject", "fix", fix.id, (fix.before or {}).get("name"), reason)
+    _tell(db, fix.store_id, "admin_fix", status="rejected", name=(fix.before or {}).get("name") or "")
     db.commit()
 
 
@@ -524,8 +538,11 @@ def resolve_barcode(db: Session, admin: User, code: str, product_id: int | None,
         raise AdminError("bad_card")
     common.admin_status = "resolved" if product_id is not None else "rejected"
     common.admin_product_id = product_id
+    stores = {s for c in (common.conflict_json or []) for s in c.get("stores", [])}
     refresh_common(db, code)
     name = db.get(Product, product_id).normalized_name if product_id else None
+    for store_id in sorted(stores):
+        _tell(db, store_id, "admin_barcode", code=code, status=common.admin_status)
     log(db, admin, "barcode_resolve" if product_id else "barcode_reject", "barcode", code, name or code, comment,
         product_id=product_id)
     db.commit()

@@ -95,7 +95,19 @@ def file_to_markdown(data: bytes, filename: str, notices: list[str] | None = Non
 def _set(import_id: int, **fields) -> None:
     with SessionLocal() as db:
         db.execute(update(PriceImport).where(PriceImport.id == import_id).values(**fields))
+        if fields.get("status") in (ImportStatus.ready, ImportStatus.failed):
+            _notify_parsed(db, import_id, fields["status"] == ImportStatus.ready, len(fields.get("rows_json") or []))
         db.commit()
+
+
+def _notify_parsed(db: Session, import_id: int, ok: bool, rows: int) -> None:
+    """Phase 12.5: "прайс разобран" / "ошибка разбора" in the seller's bell."""
+    from app.services import notifications as notify
+
+    imp = db.get(PriceImport, import_id)
+    if imp is not None:
+        notify.notify(db, notify.owner(db, imp.store_id), "import_ready" if ok else "import_failed",
+                      f"/seller/imports/{import_id}", name=imp.filename or "", rows=rows)
 
 
 def _preview_row(r: CleanRow, parsed: dict | None, source: str) -> dict:

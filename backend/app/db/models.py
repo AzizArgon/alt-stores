@@ -828,3 +828,22 @@ class AdminAction(Base):
     comment: Mapped[str | None] = mapped_column(String(500))
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Notification(Base):
+    """Phase 12.5: the bell. A short text as an i18n key + params (`notify.<kind>` in ru.json), where to go, read or
+    not. Made by events of the existing code; `group_key` joins repeats (several messages in one conversation — one
+    notification with a number; "заканчивается" once a day per item). Older than 30 days are deleted."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # message / reservation_new / low_stock / ...
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    link: Mapped[str] = mapped_column(String(255))
+    group_key: Mapped[str | None] = mapped_column(String(64), index=True)
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    demo_key: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

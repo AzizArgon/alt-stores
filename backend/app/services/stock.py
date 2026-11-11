@@ -385,6 +385,21 @@ def operate_price_mode(db: Session, store: Store, user: User, kind: str, lines: 
     return {"doc": None, "count": len(lines)}
 
 
+def _sale_notices(db: Session, store: Store, offer: Offer, branch_id: int, m: StockMovement | None) -> None:
+    """Phase 12.5: the seller's bell after a sale — "продано больше, чем по учёту" and "товар заканчивается" (at
+    most once a day per item)."""
+    from app.services import notifications as notify
+
+    uid = notify.owner(db, store)
+    name = offer.product.normalized_name if offer.product is not None else ""
+    if m is not None and m.reason == "oversold":
+        notify.notify(db, uid, "oversold", "/seller/stock?tab=stocktake", name=name)
+    left = free(_row(offer, branch_id))
+    if left <= (store.low_stock if store.low_stock is not None else 1):
+        notify.notify_once(db, uid, "low_stock", f"/seller/stock?tab=receipt&offer={offer.id}", f"low:{offer.id}",
+                           name=name, left=left)
+
+
 def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict], scan: bool = False,
             confirm: bool = False) -> dict:
     """A document of one kind (receipt / sale / adjust / move / return): all lines or none (an error names the line).
@@ -419,6 +434,7 @@ def operate(db: Session, store: Store, user: User, kind: str, lines: list[dict],
                 price = float(price) if price not in (None, "") else offer.price
                 m = sell(db, offer, bid, int(line["qty"]), confirm=confirm, user_id=user.id, doc=doc, comment=comment,
                          price=price, currency=offer.currency.value)
+                _sale_notices(db, store, offer, bid, m)
             elif kind == "move":
                 m = put_out(db, store, offer, bid, int(line["qty"]), user_id=user.id, doc=doc, comment=comment)
             elif kind == "return":
