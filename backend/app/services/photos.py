@@ -171,7 +171,8 @@ def create(db: Session, owner_type: str, owner_id: int, data: bytes, store_id: i
     src, src_key = _source(img)
     ow, oh = _orig(orig_w, orig_h, *img.size)
     auto = imaging.auto_mode(src)
-    p = Photo(owner_type=owner_type, owner_id=owner_id, store_id=store_id, status=status, src_key=src_key,
+    box = list(imaging.product_box(src)) if owner_type == "product" else None
+    p = Photo(box=box, owner_type=owner_type, owner_id=owner_id, store_id=store_id, status=status, src_key=src_key,
               src_w=src.width, src_h=src.height, orig_w=ow, orig_h=oh, mode=mode or auto, auto_mode=auto,
               source=source, key="", thumb_key="", position=10_000, zoom=1.0, ox=0.0, oy=0.0,
               is_main=False)
@@ -217,6 +218,8 @@ def adjust(db: Session, p: Photo, mode: str | None = None, zoom: float | None = 
             p.orig_w, p.orig_h = p.orig_h, p.orig_w
         _trash(db, old_src)
         p.zoom, p.ox, p.oy = 1.0, 0.0, 0.0
+        if p.owner_type == "product":
+            p.box = list(imaging.product_box(src))
     if mode in ("white", "blur"):
         p.mode = mode
     if zoom is not None:
@@ -314,7 +317,7 @@ def seller_out(p: Photo, store_id: int) -> dict:
     return {**out(p), "status": p.status, "own": p.store_id == store_id, "mode": p.mode, "auto_mode": p.auto_mode,
             "zoom": p.zoom, "ox": p.ox, "oy": p.oy, "src": get_storage().url(p.src_key), "src_w": p.src_w,
             "src_h": p.src_h, "small": imaging.is_small(p.orig_w, p.orig_h), "reason": p.reject_reason,
-            "box": None, "demo": p.is_demo}
+            "box": p.box, "trim": p.owner_type == "product", "demo": p.is_demo}
 
 
 def _ordered(q):

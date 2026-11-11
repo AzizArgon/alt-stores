@@ -1,7 +1,7 @@
 // Phase 13: the admin panel — the third interface on the Workspace frame (after the storefront and the cabinet).
 // Its own top bar "ALT STORES · администрирование", the sections on the left, tabs on a phone, its own login.
 import {
-  Barcode, BookOpenText, Flag, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
+  Barcode, BookOpenText, Flag, Image, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
 } from 'lucide-react'
 import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +26,7 @@ export const ADMIN_SECTIONS = [
   { to: '/admin/flags', key: 'flags', icon: Flag, tab: true },
   { to: '/admin/fixes', key: 'fixes', icon: PencilLine, tab: true },
   { to: '/admin/barcodes', key: 'barcodes', icon: Barcode },
+  { to: '/admin/photos', key: 'photos', icon: Image },
   { to: '/admin/channels', key: 'channels', icon: Send, tab: true },
   { to: '/admin/users', key: 'users', icon: Users },
   { to: '/admin/log', key: 'log', icon: BookOpenText },
@@ -217,7 +218,7 @@ export function ActionModal({ action, onClose }) {
 // --- overview ---------------------------------------------------------------------------------------------------------
 
 const WAITING = [['stores', '/admin/stores?verified=false'], ['reports', '/admin/reports'], ['flags', '/admin/flags'],
-  ['fixes', '/admin/fixes'], ['barcodes', '/admin/barcodes']]
+  ['fixes', '/admin/fixes'], ['barcodes', '/admin/barcodes'], ['photos', '/admin/photos']]
 
 export function ChannelState({ ch }) {
   const { t } = useTranslation()
@@ -255,7 +256,7 @@ export function AdminOverview() {
           <div className="grid gap-6">
             <section>
               <h2 className="mb-3 text-h3">{t('admin.overview.waiting')}</h2>
-              <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+              <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
                 {WAITING.map(([key, to]) => (
                   <li key={key}>
                     <Link to={to} className="flex h-full flex-col justify-between gap-2 rounded-xl border border-line bg-surface p-4 shadow-card outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-primary">

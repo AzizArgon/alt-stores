@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, ChevronDown, Download, Info, OctagonAlert, PackageSearch, TriangleAlert, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, Camera, ChevronDown, Download, Info, OctagonAlert, PackageSearch, TriangleAlert, Upload } from 'lucide-react'
 import { QtyInput, branchLabel, stockOf } from '../components/BranchStock'
 import { StockImport, download } from '../components/Warehouse'
 import { CategoryIcon } from '../components/CategoryIcon'
 import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
+import OfferPhotosModal from '../components/OfferPhotos'
 import { Dropdown, DropdownItem, Modal, useToast } from '../components/overlays'
 import { Badge, Button, Card, Checkbox, EmptyState, Pagination, Skeleton, Switch, inputClass } from '../components/ui'
 import api, { errorKey } from '../services/api'
@@ -95,7 +96,7 @@ function SortHeader({ k, sort, desc, onSort, className = '', children }) {
   )
 }
 
-function Filters({ params, setParam, categories, branches }) {
+export function Filters({ params, setParam, categories, branches }) {
   const { t } = useTranslation()
   const [q, setQ] = useState(params.get('q') || '')
   // The search waits until the seller stops typing
@@ -131,6 +132,7 @@ function Filters({ params, setParam, categories, branches }) {
       <div className="flex flex-wrap gap-x-5">
         <Checkbox label={t('cabinet.filter.flagged')} checked={params.get('flagged') === '1'} onChange={(e) => setParam('flagged', e.target.checked ? '1' : '')} />
         <Checkbox label={t('cabinet.filter.stale')} checked={params.get('stale') === '1'} onChange={(e) => setParam('stale', e.target.checked ? '1' : '')} />
+        <Checkbox label={t('photo.noPhoto')} checked={params.get('no_photo') === '1'} onChange={(e) => setParam('no_photo', e.target.checked ? '1' : '')} />
       </div>
     </div>
   )
@@ -217,6 +219,7 @@ export default function GoodsPage() {
   const [busy, setBusy] = useState(false)
   // ?edit=<offer id>: opened from a reservation ("Take it off sale" - the seller decides, the site changes nothing)
   const [editing, setEditing] = useState(() => Number(params.get('edit')) || null)
+  const [photosFor, setPhotosFor] = useState(null)
   // Phase 12.4: "Открыть товар" of the scanner's panel on this same page
   const editParam = Number(params.get('edit')) || null
   useEffect(() => { if (editParam) setEditing(editParam) }, [editParam])
@@ -238,6 +241,7 @@ export default function GoodsPage() {
     const p = Object.fromEntries(new URLSearchParams(query))
     if (p.flagged) p.flagged = true
     if (p.stale) p.stale = true
+    if (p.no_photo) p.no_photo = true
     api.get('/seller/offers', { params: p }).then((res) => setData(res.data)).catch(() => setData({ total: 0, items: [], page_size: 50 }))
   }, [query, reloadKey])
 
@@ -293,7 +297,7 @@ export default function GoodsPage() {
     if (!allByFilter) return { ids: [...selected], action, percent, ...extra }
     const f = Object.fromEntries(new URLSearchParams(query))
     delete f.page; delete f.sort; delete f.desc
-    return { filter: { ...f, flagged: Boolean(f.flagged), stale: Boolean(f.stale) }, action, percent, ...extra }
+    return { filter: { ...f, flagged: Boolean(f.flagged), stale: Boolean(f.stale), no_photo: Boolean(f.no_photo) }, action, percent, ...extra }
   }
   const askBulk = async (action, percent, branchId) => {
     try {
@@ -395,7 +399,9 @@ export default function GoodsPage() {
                     <td className={`${STICKY_NAME} ${NAME_COL} ${stickyBg(selected.has(o.id) || allByFilter)} px-2 py-2 align-top`}>
                       {/* 240 px (352 px from 1280): a long name takes two lines instead of pushing the other columns out */}
                       <button type="button" onClick={() => setEditing(o.id)} className="flex w-60 min-w-0 gap-2 text-left xl:w-[22rem]">
-                        <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />
+                        {o.photo
+                          ? <img src={o.photo} alt="" loading="lazy" className="size-9 shrink-0 rounded-sm border border-line bg-white object-contain" />
+                          : <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />}
                         <span className="min-w-0">
                           {/* Two lines at most, by words; the whole name in the hint */}
                           <span className="line-clamp-2 font-medium break-words hover:text-primary" title={o.name}>{o.name}</span>
@@ -407,6 +413,8 @@ export default function GoodsPage() {
                       <div className="mt-1 flex flex-wrap gap-1 pl-7">
                         {stockCols && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
                         <FlagBadges flags={o.flags} />
+                        {/* Phase 14: photos straight from the row, without the editor */}
+                        <PhotoButton o={o} onClick={() => setPhotosFor(o)} />
                       </div>
                     </td>
                     <td className="px-2 py-2 align-top">
@@ -438,14 +446,16 @@ export default function GoodsPage() {
                   <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={allByFilter || selected.has(o.id)} onChange={() => toggle(o.id)} aria-label={o.name} />
                   <div className="min-w-0 flex-1">
                     <button type="button" onClick={() => setEditing(o.id)} className="flex w-full min-w-0 gap-2 text-left">
-                      <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />
+                      {o.photo
+                        ? <img src={o.photo} alt="" loading="lazy" className="size-10 shrink-0 rounded-sm border border-line bg-white object-contain" />
+                        : <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />}
                       <span className="min-w-0">
                         <span className="block font-medium break-words">{o.name}</span>
                         <span className="block truncate text-xs text-faint">{o.raw_name}</span>
                         <Codes o={o} />
                       </span>
                     </button>
-                    <div className="mt-2 flex flex-wrap items-center gap-1"><MarketLabel info={o.market} /><FlagBadges flags={o.flags} /></div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1"><MarketLabel info={o.market} /><FlagBadges flags={o.flags} /><PhotoButton o={o} onClick={() => setPhotosFor(o)} /></div>
                     <div className="mt-2 flex items-start justify-between gap-3">
                       <div className="w-40 min-w-0">
                         <PriceInput offer={o} onSave={patch} />
@@ -476,6 +486,7 @@ export default function GoodsPage() {
       </Card>
 
       <BulkConfirm preview={preview} busy={busy} onCancel={() => setPreview(null)} onApply={applyBulk} />
+      <OfferPhotosModal offer={photosFor} onClose={() => { setPhotosFor(null); setReloadKey((k) => k + 1) }} />
       <OfferEditor offerId={editing} rate={rate} branches={branches} onClose={() => setEditing(null)}
         onChanged={(row) => (row ? replaceRow(row) : setReloadKey((k) => k + 1))} />
     </div>
@@ -559,6 +570,18 @@ function Codes({ o }) {
   )
 }
 
+// Phase 14: "Фото N" / "Добавить фото" in a row of «Мои товары»
+export function PhotoButton({ o, onClick }) {
+  const { t } = useTranslation()
+  const n = (o.photos?.own || 0) + (o.photos?.card || 0)
+  return (
+    <button type="button" onClick={onClick}
+      className={`inline-flex min-h-7 items-center gap-1 rounded-sm px-1.5 text-xs outline-none hover:bg-primary-soft focus-visible:ring-2 focus-visible:ring-primary ${n ? 'text-muted' : 'font-medium text-primary'}`}>
+      <Camera className="size-3.5" aria-hidden />{n ? `${t('photo.photos')} ${n}` : t('photo.add')}
+    </button>
+  )
+}
+
 function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
   const { t } = useTranslation()
   const toast = useToast()
@@ -568,6 +591,7 @@ function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
     delete p.page; delete p.sort; delete p.desc
     if (p.flagged) p.flagged = true
     if (p.stale) p.stale = true
+    if (p.no_photo) p.no_photo = true
     download('/seller/stock/offers.xlsx', { ...p, cost: withCost }, 'goods.xlsx').catch((err) => toast(t(errorKey(err)), 'danger'))
   }
   return (

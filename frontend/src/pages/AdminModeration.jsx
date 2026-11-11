@@ -625,3 +625,88 @@ export function AdminChannels() {
     </>
   )
 }
+
+// --- Phase 14: card photos ------------------------------------------------------------------------------------------
+
+function AdminPhoto({ p, suggested, actions }) {
+  const { t } = useTranslation()
+  return (
+    <li className={`grid content-start gap-1.5 rounded-lg border p-2 ${suggested ? 'border-primary ring-2 ring-primary-soft' : 'border-line'}`}>
+      <a href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-md border border-line bg-white">
+        <img src={p.thumb} alt="" loading="lazy" className="aspect-square w-full object-contain" />
+      </a>
+      <p className="flex flex-wrap items-center gap-1 text-xs">
+        <Badge tone={p.small ? 'warning' : 'neutral'}>{t('admin.photos.resolution', { w: p.w, h: p.h })}</Badge>
+        {p.main && <Badge tone="warning">{t('photo.main')}</Badge>}
+      </p>
+      {suggested && <p className="text-xs font-medium text-primary">{t('admin.photos.suggested')}</p>}
+      {p.store && <p className="text-xs text-muted">{t('admin.photos.from', { store: p.store, date: dateTime(p.created_at) })}</p>}
+      {p.rights_at && <p className="text-xs text-muted">{t('admin.photos.rights', { date: dateTime(p.rights_at) })}</p>}
+      <div className="flex flex-wrap gap-1.5">{actions}</div>
+    </li>
+  )
+}
+
+export function AdminPhotos() {
+  const { t } = useTranslation()
+  const [data, reload] = useAdminData('/admin/photos')
+  const [action, setAction] = useState(null)
+  const toast = useToast()
+  const post = async (url, body) => {
+    try {
+      await api.post(url, body)
+      toast(t('admin.done'))
+      adminChanged()
+      reload()
+    } catch (err) {
+      toast(t(adminErrorKey(err)), 'danger')
+    }
+  }
+  const reject = (p) => setAction({
+    title: t('admin.photos.rejectTitle'), danger: true, required: true, hint: t('admin.photos.rejectHint'), label: t('admin.photos.reason'),
+    onConfirm: async (reason) => { await api.post(`/admin/photos/${p.id}`, { accept: false, reason }); reload() },
+  })
+  return (
+    <>
+      <PageTitle title={t('admin.photos.title')} hint={t('admin.photos.hint')} />
+      <Loading data={data === null ? null : data?.items} empty={t('admin.photos.empty')}>
+        <ul className="grid gap-4">
+          {data?.items.map((c) => (
+            <li key={c.product.id}>
+              <Card>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="text-h3 break-words">{c.product.name}</h2>
+                  <Ext to={productLink(c.product.id)}>{t('admin.photos.open')}</Ext>
+                </div>
+                <p className="text-sm text-muted">{t(`categories.${c.product.category || 'other'}`)} · {t('admin.photos.sellers', { count: c.sellers })}</p>
+                <h3 className="mt-3 mb-2 text-sm font-semibold">{t('admin.photos.pending')}</h3>
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {c.pending.map((p) => (
+                    <AdminPhoto key={p.id} p={p} suggested={p.id === c.suggested_main} actions={<>
+                      <Button size="sm" onClick={() => post(`/admin/photos/${p.id}`, { accept: true, main: p.id === c.suggested_main })}>
+                        {p.id === c.suggested_main ? t('admin.photos.acceptMain') : t('admin.photos.accept')}
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => reject(p)}>{t('admin.photos.reject')}</Button>
+                    </>} />
+                  ))}
+                </ul>
+                <h3 className="mt-4 mb-2 text-sm font-semibold">{t('admin.photos.current')}</h3>
+                {c.published.length ? (
+                  <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                    {c.published.map((p) => (
+                      <AdminPhoto key={p.id} p={p} suggested={p.id === c.suggested_main} actions={<>
+                        {!p.main && <Button size="sm" variant="secondary" onClick={() => post(`/admin/photos/${p.id}/main`)}>{t('admin.photos.makeMain')}</Button>}
+                        <Button size="sm" variant="text" onClick={() => reject(p)}>{t('admin.photos.reject')}</Button>
+                      </>} />
+                    ))}
+                  </ul>
+                ) : <p className="text-sm text-muted">{t('admin.photos.none')}</p>}
+              </Card>
+            </li>
+          ))}
+        </ul>
+      </Loading>
+      <ActionModal action={action} onClose={() => setAction(null)} />
+    </>
+  )
+}

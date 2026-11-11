@@ -15,6 +15,7 @@ import { MarketLabel } from './Market'
 import NewProductForm from './NewProductForm'
 import { Modal, Sheet, useToast } from './overlays'
 import { Button, Skeleton, Switch, inputClass as input } from './ui'
+import { OfferPhotos } from './OfferPhotos'
 
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished', 'unknown']
 const OWN_FIELDS = ['price', 'currency', 'is_in_stock', 'condition', 'raw_name', 'note']
@@ -306,6 +307,9 @@ export default function OfferEditor({ offerId, rate, branches = [], onClose, onC
               <StockEditor offer={detail} branches={branches} onSaved={(row) => { setDetail((d) => ({ ...d, ...row })); onChanged(row) }} />
             </Section>
           )}
+          <Section title={t('photo.manage')}>
+            <div className="mt-2"><OfferPhotos key={`photos-${detail.id}`} offer={detail} onSaved={() => onChanged(null)} /></div>
+          </Section>
           <Section title={t('barcode.field.title')}>
             <div className="mt-2"><BarcodeField offer={detail} onChanged={() => onChanged(null)} /></div>
           </Section>

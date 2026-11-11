@@ -6,6 +6,7 @@ import { ErrorText } from '../components/AuthForm'
 import BuildParts from '../components/BuildParts'
 import { PrecisionBadge } from '../components/BuildTile'
 import { ProductVisual } from '../components/CategoryIcon'
+import { ProductGallery } from '../components/Gallery'
 import Flags from '../components/Flags'
 import Price from '../components/Price'
 import { Badge, Breadcrumbs, Button, Card, Skeleton } from '../components/ui'
@@ -78,7 +79,9 @@ export default function BuildPage() {
       <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6">
         <div className="grid min-w-0 gap-4">
           <div className="flex gap-4">
-            <ProductVisual category="desktop" className="hidden size-24 sm:flex" />
+            {build.photos?.length > 0
+              ? <ProductGallery photos={build.photos} label={t('photo.build')} className="w-28 shrink-0 sm:w-40" />
+              : <ProductVisual category="desktop" className="hidden size-24 sm:flex" />}
             <div className="min-w-0">
               <p className="flex flex-wrap gap-1.5">
                 <Badge tone="primary">{t(`builds.purpose.${build.purpose}`)}</Badge>

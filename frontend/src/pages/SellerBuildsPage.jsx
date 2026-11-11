@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import BuildEditor from '../components/BuildEditor'
+import PhotoUploader from '../components/PhotoUploader'
 import { PrecisionBadge } from '../components/BuildTile'
 import { Modal, useToast } from '../components/overlays'
 import Price from '../components/Price'
@@ -164,6 +165,13 @@ export function SellerBuildEditPage() {
       {(id ? initial : method === 'form' || initial) && (
         <BuildEditor key={initial ? 'draft' : 'empty'} initial={initial} buildId={id} defaultCurrency={defaultCurrency}
           onSaved={saved} onCancel={cancel} />
+      )}
+      {/* Phase 14: photos of a saved build (a new one gets them after "Опубликовать") */}
+      {id && initial && (
+        <Card>
+          <h2 className="mb-3 text-h3">{t('photo.build')}</h2>
+          <PhotoUploader ownerType="build" ownerId={Number(id)} hint={t('photo.buildHint')} />
+        </Card>
       )}
     </div>
   )

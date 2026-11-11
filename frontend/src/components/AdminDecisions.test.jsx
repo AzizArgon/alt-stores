@@ -41,7 +41,7 @@ describe('the admin panel', () => {
     expect(html(<NoAccessPage />)).toContain('Нет доступа')
   })
   it('every section is in the menu, six fit the phone bar', () => {
-    expect(ADMIN_SECTIONS.map((s) => s.key)).toEqual(['overview', 'stores', 'reports', 'flags', 'fixes', 'barcodes', 'channels', 'users', 'log'])
+    expect(ADMIN_SECTIONS.map((s) => s.key)).toEqual(['overview', 'stores', 'reports', 'flags', 'fixes', 'barcodes', 'photos', 'channels', 'users', 'log'])
     expect(ADMIN_SECTIONS.filter((s) => s.tab)).toHaveLength(6)
   })
   it('helpers: the error text, the journal group, empty filters', () => {

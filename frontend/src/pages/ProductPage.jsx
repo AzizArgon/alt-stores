@@ -8,6 +8,7 @@ import { BranchAvailability } from '../components/BranchList'
 import { MapButtons, StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import { ProductVisual } from '../components/CategoryIcon'
+import { PhotoThumbs, ProductGallery } from '../components/Gallery'
 import Flags from '../components/Flags'
 import { MarketLabel, ProductMarket } from '../components/Market'
 import { Badge, Breadcrumbs, Button, Card, Skeleton, Tabs } from '../components/ui'
@@ -93,6 +94,7 @@ function OfferCard({ offer, usdRate, rateDate, market, title, city }) {
           {!ad && <BranchAvailability stock={offer.stock} city={city} />}
           {offer.note && <p className="mt-1 text-sm text-muted">{offer.note}</p>}
           <p className="mt-1 text-xs break-words text-faint" title={offer.raw_name}>{offer.raw_name}</p>
+          <PhotoThumbs photos={offer.photos} label={t('photo.seller')} big={offer.group === 'used'} className="mt-2" />
         </div>
         <div className="shrink-0 sm:text-right">
           <Price price={offer.price} currency={offer.currency} usdRate={usdRate} rateDate={rateDate} />
@@ -231,8 +233,10 @@ export default function ProductPage() {
       ]} />
 
       <Card className="mt-3 flex flex-col gap-4 sm:flex-row sm:gap-6">
-        <ProductVisual category={product.category} image={product.image} alt={product.name}
-          className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />
+        {product.photos?.length > 0
+          ? <ProductGallery photos={product.photos} label={t('photo.model')} className="w-full sm:w-56 md:w-64" />
+          : <ProductVisual category={product.category} alt={product.name}
+              className="aspect-[5/2] w-full sm:aspect-square sm:w-44 md:w-56" iconClassName="size-1/2 max-h-20 max-w-20 md:max-h-24 md:max-w-24" />}
         <div className="min-w-0 flex-1">
           <p className="text-sm text-muted">{t(`categories.${product.category}`)}{product.brand && ` · ${product.brand}`}</p>
           <h1 className="mt-1 text-h2 break-words md:text-h1">{product.name}</h1>

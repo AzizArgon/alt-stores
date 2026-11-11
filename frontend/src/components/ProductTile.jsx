@@ -15,7 +15,7 @@ export default function ProductTile({ item, usdRate, rateDate, to, className = '
   return (
     <Link to={to || `/products/${item.id}`}
       className={`group relative flex min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:p-4 ${className}`}>
-      <ProductVisual category={item.category} image={item.image} className="aspect-[4/3] w-full" />
+      <ProductVisual category={item.category} image={item.image} alt={item.name} className="aspect-square w-full" />
       {item.flag_level && (
         <span title={t('catalog.flagHint')} aria-label={t('catalog.flagHint')}
           className={`absolute top-4 right-4 flex size-7 items-center justify-center rounded-full md:top-5 md:right-5 ${FLAG_TONE[item.flag_level]}`}>

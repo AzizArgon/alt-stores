@@ -7,6 +7,8 @@ import { WriteButton } from '../components/Chat'
 import { StoreName } from '../components/StoreWhere'
 import { ReserveButton } from '../components/Reservation'
 import Flags from '../components/Flags'
+import { ProductVisual } from '../components/CategoryIcon'
+import { Lightbox } from '../components/Gallery'
 import { Sheet } from '../components/overlays'
 import Price from '../components/Price'
 import { Breadcrumbs, Button, Card, Checkbox, EmptyState, Input, Pagination, Select, SkeletonCards, Tabs } from '../components/ui'
@@ -54,10 +56,21 @@ function FiltersPanel({ categories, params, setParam, selected, toggle }) {
 function UsedOffer({ item, usdRate, rateDate }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [viewer, setViewer] = useState(false)
   const ad = isAd(item)
+  // Phase 14: the photo of the item itself, else the card's, else the category icon
+  const visual = <ProductVisual category={item.category} image={item.image} alt={item.name} className="size-20 sm:size-28" />
   return (
     <Card as="li" padded={false} className="min-w-0 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="flex min-w-0 gap-3 sm:gap-4">
+        {item.photos?.length > 0 ? (
+          <button type="button" onClick={() => setViewer(true)} aria-label={t('photo.open', { n: 1 })} className="h-fit shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            {visual}
+            <span className="mt-1 block text-center text-[11px] text-muted">{t('photo.seller')}{item.photos.length > 1 && ` · ${item.photos.length}`}</span>
+          </button>
+        ) : <Link to={`/products/${item.product_id}`} tabIndex={-1} className="h-fit shrink-0">{visual}</Link>}
+        {viewer && <Lightbox photos={item.photos} index={0} label={t('photo.seller')} onClose={() => setViewer(false)} />}
         <div className="min-w-0">
           <p className="text-xs text-muted">{t(`categories.${item.category}`)}</p>
           <Link to={`/products/${item.product_id}`} className="text-h3 break-words hover:text-primary">{item.name}</Link>
@@ -75,6 +88,7 @@ function UsedOffer({ item, usdRate, rateDate }) {
           </p>
           {item.note && <p className="mt-1 text-sm text-muted">{item.note}</p>}
           <p className="mt-1 line-clamp-2 text-xs break-words text-faint" title={item.raw_name}>{item.raw_name}</p>
+        </div>
         </div>
         <div className="shrink-0 sm:text-right">
           <Price price={item.price} currency={item.currency} usdRate={usdRate} rateDate={rateDate} />

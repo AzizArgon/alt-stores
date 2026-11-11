@@ -407,4 +407,4 @@ def test_overview_counts(client, db, world):
     _fix(db, world, world["cpu"], {"name": "x", "category": "cpu"})
     db.commit()
     w = client.get("/api/admin/overview", headers=_h(world["admin"])).json()["waiting"]
-    assert w == {"stores": 2, "reports": 1, "flags": 1, "fixes": 1, "barcodes": 0}
+    assert w == {"stores": 2, "reports": 1, "flags": 1, "fixes": 1, "barcodes": 0, "photos": 0}

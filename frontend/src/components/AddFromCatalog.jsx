@@ -8,6 +8,7 @@ import { Button, inputClass as input } from './ui'
 import Flags from './Flags'
 import NewProductForm from './NewProductForm'
 import Price from './Price'
+import { OfferPhotos } from './OfferPhotos'
 
 const CURRENCIES = ['USD', 'UZS']
 const CONDITIONS = ['new', 'new_openbox', 'used', 'refurbished']
@@ -164,6 +165,13 @@ export default function AddFromCatalog({ defaultCurrency, onAdded }) {
             <Link to={`/products/${done.product.id}`} className="font-medium underline">{done.product.name}</Link>
           </p>
           <Flags flags={done.flags} className="mt-2 grid gap-1" />
+          {/* Phase 14: photos right away — of the item itself (used goods) and of the model */}
+          {done.offer && (
+            <div className="mt-3 rounded-md bg-surface p-3 text-ink">
+              <p className="mb-2 font-medium">{t('photo.manage')}</p>
+              <OfferPhotos key={done.offer.id} offer={{ id: done.offer.id, product_id: done.product.id, condition: done.offer.condition }} />
+            </div>
+          )}
         </div>
       )}
     </div>

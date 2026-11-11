@@ -879,6 +879,7 @@ class Photo(Base):
     zoom: Mapped[float] = mapped_column(Float, default=1.0)
     ox: Mapped[float] = mapped_column(Float, default=0.0)
     oy: Mapped[float] = mapped_column(Float, default=0.0)
+    box: Mapped[list | None] = mapped_column(JSON)  # card photos: the product without white margins, source pixels
     # Card photos: "У меня есть право использовать это фото" — when and by which account
     rights_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rights_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

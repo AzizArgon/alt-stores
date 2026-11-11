@@ -24,7 +24,7 @@ TYPES = {
     "stock": ("low_stock", "oversold"),
     "imports": ("import_ready", "import_failed"),
     "admin": ("admin_flag", "admin_fix", "admin_barcode", "admin_store", "report", "flag_disputed", "fix_suggested",
-              "barcode_conflict"),
+              "barcode_conflict", "photo_review", "photo_approved", "photo_rejected"),
 }
 TYPE_OF = {k: t for t, kinds in TYPES.items() for k in kinds}
 

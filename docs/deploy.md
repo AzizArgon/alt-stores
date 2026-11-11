@@ -106,7 +106,7 @@ ssh pcmarket "cd /opt/alt-stores && docker compose logs --tail 200 backend"
 
 Ежедневная копия базы фото **не включает** (иначе копии стали бы большими). В базе — только записи о фото (`photos`), сами файлы — в `data/media/` (имена случайные, по две буквы в подпапках). Копировать папку целиком, без sudo:
 
-- **Скачать на ноутбук** (из Git Bash, папка `_localackups\server\media\`; повторный запуск докачивает только новые файлы):
+- **Скачать на ноутбук** (из Git Bash, папка `_local\backups\server\media\`; повторный запуск докачивает только новые файлы):
   ```bash
   mkdir -p /f/claudy/diplom/_local/backups/server/media && ssh pcmarket "cd /opt/alt-stores/data && tar -cf - media" | tar -xf - -C /f/claudy/diplom/_local/backups/server
   ```

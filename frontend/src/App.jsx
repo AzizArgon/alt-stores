@@ -25,7 +25,7 @@ import WarehousePage, { ReportsPage } from './pages/WarehousePage'
 import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
 import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
 import AdminLayout, { AdminAuthLayout, AdminLog, AdminLoginPage, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
-import { AdminBarcodes, AdminChannels, AdminFixes, AdminFlags, AdminReports, AdminStoreCard, AdminStores } from './pages/AdminModeration'
+import { AdminBarcodes, AdminChannels, AdminFixes, AdminFlags, AdminPhotos, AdminReports, AdminStoreCard, AdminStores } from './pages/AdminModeration'
 import { NotificationsPage } from './components/Notifications'
 import { useAuth } from './services/auth.jsx'
 import { adminGate, homeFor, returnTo, sellerGate } from './services/roles'
@@ -165,6 +165,7 @@ export default function App() {
         <Route path="flags" element={<AdminFlags />} />
         <Route path="fixes" element={<AdminFixes />} />
         <Route path="barcodes" element={<AdminBarcodes />} />
+        <Route path="photos" element={<AdminPhotos />} />
         <Route path="channels" element={<AdminChannels />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="log" element={<AdminLog />} />

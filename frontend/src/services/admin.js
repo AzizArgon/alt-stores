@@ -9,7 +9,7 @@ export function adminErrorKey(err) {
 }
 
 // The journal filter: an action "store_block" belongs to the group "store"
-export const LOG_GROUPS = ['store', 'report', 'flag', 'fix', 'barcode', 'channel', 'user']
+export const LOG_GROUPS = ['store', 'report', 'flag', 'fix', 'barcode', 'channel', 'user', 'photo']
 export const actionGroup = (action) => action.split('_')[0]
 
 // "10.11.2026, 14:05"

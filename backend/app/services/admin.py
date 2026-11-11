@@ -90,7 +90,14 @@ def counts(db: Session) -> dict:
         "flags": db.scalar(select(func.count(FraudFlag.id)).where(FraudFlag.status == FlagStatus.disputed)),
         "fixes": db.scalar(select(func.count(ProductFix.id)).where(ProductFix.status == "pending")),
         "barcodes": db.scalar(select(func.count(BarcodeCode.id)).where(BarcodeCode.status == "conflict")),
+        "photos": _photos_waiting(db),  # phase 14
     }
+
+
+def _photos_waiting(db: Session) -> int:
+    from app.services.photos import pending_count
+
+    return pending_count(db)
 
 
 def overview(db: Session) -> dict:
