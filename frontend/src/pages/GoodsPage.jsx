@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Download, Info, OctagonAlert, PackageSearch, TriangleAlert, Upload } from 'lucide-react'
-import { QtyInput, branchLabel } from '../components/BranchStock'
+import { ArrowDown, ArrowUp, ChevronDown, Download, Info, OctagonAlert, PackageSearch, TriangleAlert, Upload } from 'lucide-react'
+import { QtyInput, branchLabel, stockOf } from '../components/BranchStock'
 import { StockImport, download } from '../components/Warehouse'
 import { CategoryIcon } from '../components/CategoryIcon'
 import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
-import { Modal, useToast } from '../components/overlays'
+import { Dropdown, DropdownItem, Modal, useToast } from '../components/overlays'
 import { Badge, Button, Card, Checkbox, EmptyState, Pagination, Skeleton, Switch, inputClass } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum, roundUsd } from '../services/format'
@@ -322,9 +322,10 @@ export default function GoodsPage() {
   const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
   const anySelected = selected.size > 0 || allByFilter
   const hasFilters = filterKey.length > 0
-  // Columns by branch (phase 12.1): the chosen branch, else all of them up to three
+  // Columns by branch (phase 12.1): the chosen branch, else all; 3+ places fold into one "Остатки"
   const chosen = branches.find((b) => String(b.id) === params.get('branch'))
-  const columns = chosen ? [chosen] : branches.slice(0, 3)
+  const { places, columns, folded } = stockColumns(branches, chosen)
+  const stockCols = columns.length > 0 || folded
   const stockMode = store?.stock_mode === 'stock'
   // The general switch of an item kept by branch: in "Учёт остатков" only operations change it
   const lockStock = (o) => stockMode && Object.keys(o.stocks || {}).length > 0
@@ -364,42 +365,47 @@ export default function GoodsPage() {
         {data?.items.length > 0 && (
           <>
             {/* Computer: a table; the condition and the date fold under the name on a narrower screen */}
-            <table className="hidden w-full table-fixed text-sm lg:table">
+            {/* Many columns (the stock, the purchase and the markup): the table scrolls sideways inside its block, the
+                tick and the name stay on the left; the name is never narrower than 240 px */}
+            <div className="hidden overflow-x-auto overscroll-x-contain lg:block" data-testid="goods-table">
+            <table className="w-full text-sm">
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
-                  <th className="w-10 px-3"><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
-                  <SortHeader k="name" sort={sort} desc={desc} onSort={onSort}>{t('cabinet.col.name')}</SortHeader>
-                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={columns.length ? 'w-32' : 'w-40'}>{t('cabinet.col.price')}</SortHeader>
-                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden w-32 ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
+                  <th className={`${STICKY_TICK} w-10 bg-surface-2 px-3`}><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
+                  <SortHeader k="name" sort={sort} desc={desc} onSort={onSort} className={`${STICKY_NAME} ${NAME_COL} bg-surface-2`}>{t('cabinet.col.name')}</SortHeader>
+                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={stockCols ? 'w-32 min-w-32' : 'w-40 min-w-40'}>{t('cabinet.col.price')}</SortHeader>
+                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden w-32 ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
                   <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className="w-24">{t('cabinet.col.stock')}</SortHeader>
                   {columns.map((b) => (
-                    <th key={b.id} className="w-[4.5rem] px-1 py-2 font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
+                    <th key={b.id} className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 font-medium" title={b.address}><span className="block max-w-[5rem] truncate">{branchLabel(b)}</span></th>
                   ))}
-                  {showCost && <th className="hidden w-24 px-2 py-2 font-medium 2xl:table-cell">{t('warehouse.cost.column')}</th>}
-                  {showCost && <th className="hidden w-20 px-2 py-2 font-medium 2xl:table-cell">{t('warehouse.cost.markup')}</th>}
-                  <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`w-36 ${columns.length ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>
-                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className={`hidden w-28 ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.updated')}</SortHeader>
+                  {folded && <th className="w-24 min-w-24 px-2 py-2 font-medium">{t('cabinet.col.stockTotal')}</th>}
+                  {showCost && <th className="w-24 min-w-24 px-2 py-2 font-medium">{t('warehouse.cost.column')}</th>}
+                  {showCost && <th className="w-20 min-w-20 px-2 py-2 font-medium">{t('warehouse.cost.markup')}</th>}
+                  <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`w-36 ${stockCols ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>
+                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className={`hidden w-28 ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.updated')}</SortHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.items.map((o) => (
-                  <tr key={o.id} className={selected.has(o.id) || allByFilter ? 'bg-primary-soft/40' : 'hover:bg-surface-2/50'}>
-                    <td className="px-3 py-2 align-top">
+                  <tr key={o.id} className={`group ${selected.has(o.id) || allByFilter ? 'bg-primary-soft/40' : 'hover:bg-surface-2'}`}>
+                    <td className={`${STICKY_TICK} ${stickyBg(selected.has(o.id) || allByFilter)} px-3 py-2 align-top`}>
                       <input type="checkbox" className="mt-1 size-4 accent-primary" checked={allByFilter || selected.has(o.id)} onChange={() => toggle(o.id)} aria-label={o.name} />
                     </td>
-                    <td className="px-2 py-2 align-top">
-                      <button type="button" onClick={() => setEditing(o.id)} className="flex w-full min-w-0 gap-2 text-left">
+                    <td className={`${STICKY_NAME} ${NAME_COL} ${stickyBg(selected.has(o.id) || allByFilter)} px-2 py-2 align-top`}>
+                      {/* 240 px (352 px from 1280): a long name takes two lines instead of pushing the other columns out */}
+                      <button type="button" onClick={() => setEditing(o.id)} className="flex w-60 min-w-0 gap-2 text-left xl:w-[22rem]">
                         <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />
                         <span className="min-w-0">
-                          <span className="block font-medium break-words hover:text-primary">{o.name}</span>
+                          {/* Two lines at most, by words; the whole name in the hint */}
+                          <span className="line-clamp-2 font-medium break-words hover:text-primary" title={o.name}>{o.name}</span>
                           <span className="block truncate text-xs text-faint" title={o.raw_name}>{o.raw_name}</span>
                           <Codes o={o} />
-                          <span className={`block text-xs text-muted ${columns.length ? '2xl:hidden' : 'xl:hidden'}`}>{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
-                          {showCost && <span className="block text-xs text-muted 2xl:hidden"><CostLine o={o} /></span>}
+                          <span className={`block text-xs text-muted ${stockCols ? '2xl:hidden' : 'xl:hidden'}`}>{t(`condition.${o.condition}`)} · {formatDate(o.updated_at)}</span>
                         </span>
                       </button>
                       <div className="mt-1 flex flex-wrap gap-1 pl-7">
-                        {columns.length > 0 && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
+                        {stockCols && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
                         <FlagBadges flags={o.flags} />
                       </div>
                     </td>
@@ -407,21 +413,23 @@ export default function GoodsPage() {
                       <PriceInput offer={o} onSave={patch} />
                       <Converted price={o.price} currency={o.currency} rate={rate} className="mt-0.5 px-1 text-xs text-muted" />
                     </td>
-                    <td className={`hidden px-2 py-3 align-top ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
+                    <td className={`hidden px-2 py-3 align-top ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
                     <td className="px-2 py-2.5 align-top">
                       <Switch checked={o.is_in_stock} disabled={lockStock(o)} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
                     {columns.map((b) => (
                       <td key={b.id} className="px-1 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} /></td>
                     ))}
-                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums 2xl:table-cell">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
-                    {showCost && <td className="hidden px-2 py-3 align-top tabular-nums 2xl:table-cell">{o.markup != null ? `${o.markup}%` : '—'}</td>}
-                    <td className={`px-2 py-2.5 align-top ${columns.length ? 'hidden xl:table-cell' : ''}`}><MarketLabel info={o.market} /></td>
-                    <td className={`hidden px-2 py-3 align-top text-muted ${columns.length ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
+                    {folded && <td className="px-2 py-2 align-top"><StockTotal offer={o} places={places} onSaved={replaceRow} readOnly={stockMode} /></td>}
+                    {showCost && <td className="px-2 py-3 align-top tabular-nums">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
+                    {showCost && <td className="px-2 py-3 align-top tabular-nums">{o.markup != null ? `${o.markup}%` : '—'}</td>}
+                    <td className={`px-2 py-2.5 align-top ${stockCols ? 'hidden xl:table-cell' : ''}`}><MarketLabel info={o.market} /></td>
+                    <td className={`hidden px-2 py-3 align-top text-muted ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
 
             {/* Phone and tablet: cards, the price and stock are edited the same way */}
             <ul className="divide-y divide-line lg:hidden">
@@ -446,9 +454,9 @@ export default function GoodsPage() {
                       <Switch checked={o.is_in_stock} disabled={lockStock(o)} onChange={(v) => patch(o.id, { is_in_stock: v })}
                         label={<span className="text-xs">{t(o.is_in_stock ? 'import.inStock' : 'import.outOfStock')}</span>} />
                     </div>
-                    {columns.length > 0 && (
+                    {places.length > 0 && (
                       <div className="mt-2 grid grid-cols-3 gap-2">
-                        {columns.map((b) => (
+                        {places.map((b) => (
                           <label key={b.id} className="block min-w-0">
                             <span className="block truncate text-xs text-muted">{branchLabel(b)}</span>
                             <QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} />
@@ -475,6 +483,64 @@ export default function GoodsPage() {
 }
 
 // "Закупка 80 $ · наценка 25%" (only the seller sees it)
+// The tick and the name stay on the left while the table scrolls sideways (opaque: the cells pass under them)
+const STICKY_TICK = 'sticky left-0 z-10'
+const STICKY_NAME = 'sticky left-10 z-10 border-r border-line'
+export const NAME_COL = 'min-w-60'
+const stickyBg = (picked) => (picked ? 'bg-primary-soft' : 'bg-surface group-hover:bg-surface-2')
+
+// 1–2 places — a column each; 3 and more — one column "Остатки" with the total (phase 12.5 fix)
+export function stockColumns(branches, chosen = null) {
+  const places = chosen ? [chosen] : branches
+  return places.length >= 3 ? { places, columns: [], folded: true } : { places, columns: places, folded: false }
+}
+
+export function stockTotal(offer, places) {
+  let total = 0
+  let known = false
+  for (const b of places) {
+    const q = stockOf(offer, b)?.quantity
+    if (q != null) { total += q; known = true }
+  }
+  return known ? total : null
+}
+
+// "Остатки": the total; a hover or a click shows it by place (editable as the separate columns were)
+export function StockTotal({ offer, places, onSaved, readOnly }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => { if (!box.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  const total = stockTotal(offer, places)
+  const byPlace = places.map((b) => `${branchLabel(b)}: ${stockOf(offer, b)?.quantity ?? '—'}`).join('\n')
+  return (
+    <div ref={box} className="relative" onMouseLeave={() => setOpen(false)}>
+      <button type="button" onClick={() => setOpen(!open)} onMouseEnter={() => setOpen(true)} aria-expanded={open}
+        title={byPlace} aria-label={t('cabinet.col.stockByPlace', { count: total ?? 0 })}
+        className="inline-flex min-h-9 items-center gap-1 rounded-md border border-line px-2.5 font-semibold tabular-nums hover:border-primary">
+        {total ?? '—'}<span className="text-xs font-normal text-muted">{t('cabinet.col.places', { count: places.length })}</span>
+      </button>
+      {open && (
+        <div role="dialog" className="absolute top-full right-0 z-20 mt-1 w-56 rounded-lg border border-line bg-surface p-2 shadow-pop">
+          <ul className="grid gap-1.5">
+            {places.map((b) => (
+              <li key={b.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate text-muted" title={b.address}>{branchLabel(b)}</span>
+                <QtyInput offer={offer} branch={b} onSaved={onSaved} readOnly={readOnly} className="w-20 shrink-0" />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CostLine({ o }) {
   const { t } = useTranslation()
   return <>{t('warehouse.cost.column')}: {o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'} · {t('warehouse.cost.markup')}: {o.markup != null ? `${o.markup}%` : '—'}</>
@@ -496,9 +562,8 @@ function Codes({ o }) {
 function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
   const { t } = useTranslation()
   const toast = useToast()
-  const [withCost, setWithCost] = useState(false)
   const [importing, setImporting] = useState(false)
-  const dl = () => {
+  const dl = (withCost) => {
     const p = Object.fromEntries(new URLSearchParams(query))
     delete p.page; delete p.sort; delete p.desc
     if (p.flagged) p.flagged = true
@@ -507,8 +572,14 @@ function ExcelBar({ query, stockMode, showCost, setShowCost, onImported }) {
   }
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <Button size="sm" variant="secondary" onClick={dl}><Download className="size-4" aria-hidden />{t('warehouse.excel.download')}</Button>
-      <Checkbox label={t('warehouse.excel.withCost')} checked={withCost} onChange={(e) => setWithCost(e.target.checked)} />
+      <Dropdown align="left" panelClassName="w-64" trigger={({ open, toggle }) => (
+        <Button size="sm" variant="secondary" onClick={toggle} aria-expanded={open} aria-haspopup="menu">
+          <Download className="size-4" aria-hidden />{t('warehouse.excel.download')}<ChevronDown className="size-4" aria-hidden />
+        </Button>
+      )}>
+        <DropdownItem onClick={() => dl(false)}>{t('warehouse.excel.plain')}</DropdownItem>
+        <DropdownItem onClick={() => dl(true)}>{t('warehouse.excel.withCost')}</DropdownItem>
+      </Dropdown>
       {stockMode && <Button size="sm" variant="secondary" onClick={() => setImporting(true)}><Upload className="size-4" aria-hidden />{t('warehouse.excel.importStock')}</Button>}
       <Checkbox label={t('warehouse.cost.show')} checked={showCost} onChange={(e) => setShowCost(e.target.checked)} />
       {importing && <StockImport onClose={() => setImporting(false)} onDone={() => { setImporting(false); onImported() }} />}

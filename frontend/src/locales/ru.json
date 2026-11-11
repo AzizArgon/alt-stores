@@ -902,7 +902,13 @@
       "condition": "Состояние",
       "stock": "Наличие",
       "market": "Рынок",
-      "updated": "Обновлено"
+      "updated": "Обновлено",
+      "stockTotal": "Остатки",
+      "stockByPlace": "Остатки: {{count}} — по местам",
+      "places_one": "· {{count}} место",
+      "places_few": "· {{count}} места",
+      "places_many": "· {{count}} мест",
+      "places_other": "· {{count}} места"
     },
     "sort": "Сортировка",
     "sortDirection": "Направление сортировки",
@@ -1838,7 +1844,8 @@
       "unknown": "Не найдено в «Моих товарах»: {{count}} строк",
       "apply": "Применить",
       "applied": "Остатки обновлены — записи в журнале «Импорт остатков»",
-      "rows": "Строк с товарами: {{count}}"
+      "rows": "Строк с товарами: {{count}}",
+      "plain": "Обычный"
     },
     "reports": {
       "title": "Отчёты",
