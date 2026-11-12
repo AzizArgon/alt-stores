@@ -10,6 +10,7 @@ import { MovementRow } from './WarehousePage'
 import { Button, Card, Skeleton } from '../components/ui'
 import api from '../services/api'
 import i18n from '../i18n'
+import { intlLocale } from '../services/lang'
 
 // Each number opens "My goods" with the matching filter
 const STATS = [
@@ -45,7 +46,7 @@ export default function CabinetOverview() {
           <p className="mt-1 text-sm text-muted">
             {/* A link to the upload history: on a phone it is not in the tab bar */}
             {data?.last_upload
-              ? <Link to="/seller/imports" className="hover:text-primary hover:underline">{t('cabinet.overview.lastUpload', { date: new Date(data.last_upload.created_at).toLocaleDateString(i18n.language) })}</Link>
+              ? <Link to="/seller/imports" className="hover:text-primary hover:underline">{t('cabinet.overview.lastUpload', { date: new Date(data.last_upload.created_at).toLocaleDateString(intlLocale(i18n.language)) })}</Link>
               : data && t('cabinet.overview.noUpload')}
           </p>
         </div>
@@ -59,7 +60,7 @@ export default function CabinetOverview() {
         <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="min-w-0 text-sm break-words">
             <span className="font-medium">{t('undo.overview', { name: data.undo.filename || t('manual.source.text') })}</span>
-            <span className="block text-muted">{t('undo.deadline', { date: new Date(data.undo.deadline).toLocaleString(i18n.language, { dateStyle: 'short', timeStyle: 'short' }) })}</span>
+            <span className="block text-muted">{t('undo.deadline', { date: new Date(data.undo.deadline).toLocaleString(intlLocale(i18n.language), { dateStyle: 'short', timeStyle: 'short' }) })}</span>
           </p>
           <UndoUpload importId={data.undo.id} onDone={loadOverview} className="w-full shrink-0 sm:w-auto" />
         </div>
@@ -139,7 +140,7 @@ export default function CabinetOverview() {
   )
 }
 
-const day = (iso) => new Intl.DateTimeFormat(i18n.language, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+const day = (iso) => new Intl.DateTimeFormat(intlLocale(i18n.language), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
 
 // Phase 12.4: what needs the seller's eyes — sold more than the books had, reservations whose item was sold, an
 // unfinished stocktake, the last one, goods only in the warehouse

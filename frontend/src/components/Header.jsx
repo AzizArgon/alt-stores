@@ -214,7 +214,7 @@ export default function Header() {
           </button>
           <Logo />
           <div className="hidden md:block"><CityMenu /></div>
-          <HeaderSearch className="hidden flex-1 md:block" />
+          <HeaderSearch className="hidden min-w-40 flex-1 md:block" />
           <div className="flex-1 md:hidden" />
           <nav className="hidden shrink-0 items-center gap-1 xl:flex">
             {NAV_LINKS.map((link) => (
@@ -238,7 +238,8 @@ export default function Header() {
           ) : (
             <div className="flex shrink-0 items-center gap-2">
               <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
-              <span className="hidden sm:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
+              {/* With the full menu (xl) there is room for it only on wide screens: uz / en words are longer */}
+              <span className="hidden sm:block xl:hidden 2xl:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
             </div>
           )}
         </div>

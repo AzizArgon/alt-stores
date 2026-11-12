@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from './api'
 import i18n from '../i18n'
+import { intlLocale } from './lang'
 
 // Characteristics come from the dictionary as { key, kind, unit, value }: 16 + "GB" -> "16 ГБ", 1000 GB -> "1 ТБ"
 
@@ -13,7 +14,7 @@ export function formatSpec({ key, kind, unit, value }) {
   if (kind === 'yesno' || typeof value === 'boolean') return i18n.t(value ? 'specs.yes' : 'specs.no')
   if (kind === 'number') {
     const [v, u] = unit === 'GB' && value >= 1000 ? [value / 1000, 'TB'] : [value, unit]
-    const num = new Intl.NumberFormat(i18n.language || 'ru', { maximumFractionDigits: 1, useGrouping: v >= 10000 }).format(v) // "6000 МГц", "10 000 ВА"
+    const num = new Intl.NumberFormat(intlLocale(i18n.language), { maximumFractionDigits: 1, useGrouping: v >= 10000 }).format(v) // "6000 МГц", "10 000 ВА"
     return i18n.t(`specs.unit.${u}`, { count: v, value: num, defaultValue: `${num} ${u}` })
   }
   // Values with dots ("M.2", "2.5\"") can't be i18n key parts: the value names are read as one object

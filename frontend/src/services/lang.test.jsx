@@ -7,7 +7,7 @@ import Flags from '../components/Flags'
 import LangSwitch from '../components/LangSwitch'
 import { notifyText, timeAgo } from '../components/Notifications'
 import { AuthProvider } from './auth.jsx'
-import { formatDate, formatPrice } from './format'
+import { formatDate, formatMonthYear, formatPrice } from './format'
 import { browserLang, initialLang, LANG_KEY, profileLang, rememberLang } from './lang'
 import { formatSpec } from './specs'
 
@@ -71,6 +71,9 @@ describe('formats by language', () => {
     expect(timeAgo(t, '2026-11-11T09:55:00Z', now)).toBe('5 мин назад')
     await i18n.changeLanguage('uz')
     expect(timeAgo(t, '2026-11-11T09:55:00Z', now)).toBe('5 daqiqa oldin')
+    // Uzbek dates as written in Uzbekistan, whatever Intl data the browser has
+    expect(formatDate('2026-11-05T10:00:00Z')).toBe('05.11.2026')
+    expect(formatMonthYear('2022-12-05T10:00:00Z')).toBe('dekabr 2022')
     await i18n.changeLanguage('en')
     expect(timeAgo(t, '2026-11-11T09:55:00Z', now)).toBe('5 min ago')
     expect(timeAgo(t, '2026-11-11T09:59:50Z', now)).toBe('just now')

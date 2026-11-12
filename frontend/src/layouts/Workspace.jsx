@@ -25,7 +25,8 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
       <header className="sticky top-0 z-30 border-b border-line bg-surface">
         <div className="flex h-14 items-center gap-2 px-4 md:h-16 md:gap-3 md:px-6">
           {/* On a phone the subtitle goes under the name: side by side they don't fit */}
-          <div className="flex min-w-0 shrink-0 flex-col sm:flex-row sm:items-center sm:gap-3">
+          {/* Phase 15: it may shrink — a long subtitle ("администрирование") is cut, the logo never */}
+          <div className="flex min-w-0 shrink flex-col sm:flex-row sm:items-center sm:gap-3">
             <Logo to={home} />
             <span className="-mt-1.5 truncate pl-10 text-xs leading-tight font-medium text-muted sm:mt-0 sm:pl-0 sm:text-sm"><span aria-hidden className="hidden sm:inline">· </span>{subtitle}</span>
           </div>

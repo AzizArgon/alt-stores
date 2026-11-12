@@ -31,8 +31,13 @@ export function applyHtmlLang(lng) {
   if (typeof document !== 'undefined') document.documentElement.lang = lng
 }
 
-// Locale for Intl: "uz" is Uzbek Latin in every browser
-export const intlLocale = (lng) => valid(lng) || 'ru'
+// Locale for Intl. Browsers (Chrome among them) often ship no Uzbek data: Intl "uz" gives "1,250,000",
+// "2022-12-05" and "12-05" (month first). Uzbekistan writes numbers and dates as in ru — "1 250 000", "05.12.2022",
+// 24 hours — so uz formats with ru; only month names are Uzbek (UZ_MONTHS)
+export const intlLocale = (lng) => (lng === 'uz' ? 'ru' : valid(lng) || 'ru')
+
+export const UZ_MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr',
+  'noyabr', 'dekabr']
 
 // After login (or /auth/me): the profile's language wins (another device); a profile without one gets the current one
 export function profileLang(userLang, current) {

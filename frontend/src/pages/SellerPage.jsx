@@ -28,6 +28,7 @@ import { useNewReservations } from '../services/reservations'
 import { importTitle } from '../services/format'
 import LangSwitch from '../components/LangSwitch'
 import i18n from '../i18n'
+import { intlLocale } from '../services/lang'
 
 const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'hours', 'map_url', 'reservation_days']
 // Hints under the fields: where to go matters to the buyer (phase 12)
@@ -259,7 +260,7 @@ function ImportHistory({ items, onChanged }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString(i18n.language)} · {imp.status === 'undone'
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString(intlLocale(i18n.language))} · {imp.status === 'undone'
                 ? <Badge tone="warning">{t('import.status.undone')}</Badge> : t(`import.status.${imp.status}`)}
             </span>
             {imp.can_undo && <UndoUpload importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />}
