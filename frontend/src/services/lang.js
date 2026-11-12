@@ -33,3 +33,9 @@ export function applyHtmlLang(lng) {
 
 // Locale for Intl: "uz" is Uzbek Latin in every browser
 export const intlLocale = (lng) => valid(lng) || 'ru'
+
+// After login (or /auth/me): the profile's language wins (another device); a profile without one gets the current one
+export function profileLang(userLang, current) {
+  if (valid(userLang)) return userLang === current ? {} : { change: userLang }
+  return { save: current }
+}

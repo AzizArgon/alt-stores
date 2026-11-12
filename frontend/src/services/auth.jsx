@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import i18n from '../i18n'
 import api, { TOKEN_KEY } from './api'
-import { LANGS } from './lang'
+import { LANGS, profileLang } from './lang'
 
 const AuthContext = createContext(null)
 
@@ -21,11 +21,9 @@ export function AuthProvider({ children }) {
   // Phase 15: the profile keeps the language — it wins on login (another device); a profile without one gets this one
   useEffect(() => {
     if (!user) return
-    if (LANGS.includes(user.lang)) {
-      if (user.lang !== i18n.language) i18n.changeLanguage(user.lang)
-    } else {
-      api.put('/auth/me/lang', { lang: i18n.language }).catch(() => {})
-    }
+    const step = profileLang(user.lang, i18n.language)
+    if (step.change) i18n.changeLanguage(step.change)
+    if (step.save) api.put('/auth/me/lang', { lang: step.save }).catch(() => {})
   }, [user])
 
   const saveSession = (data) => {

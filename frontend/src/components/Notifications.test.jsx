@@ -29,9 +29,9 @@ describe('notifications (phase 12.5)', () => {
   it('"5 мин" style times', () => {
     const now = Date.parse('2026-11-11T10:00:00Z')
     expect(timeAgo(t, '2026-11-11T09:59:40Z', now)).toBe('только что')
-    expect(timeAgo(t, '2026-11-11T09:55:00Z', now)).toBe('5 мин')
-    expect(timeAgo(t, '2026-11-11T07:00:00Z', now)).toBe('3 ч')
-    expect(timeAgo(t, '2026-11-09T10:00:00Z', now)).toBe('2 дн')
+    expect(timeAgo(t, '2026-11-11T09:55:00Z', now)).toBe('5 мин назад')
+    expect(timeAgo(t, '2026-11-11T07:00:00Z', now)).toBe('3 ч назад')
+    expect(timeAgo(t, '2026-11-09T10:00:00Z', now)).toBe('2 дн назад')
   })
 
   it('a buyer filters only his types, the seller all of his', () => {
