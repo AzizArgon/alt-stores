@@ -87,6 +87,8 @@ class User(Base):
     # Phase 13: blocked on the whole site by the admin (no login, messages or reservations); the reason is shown
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     block_reason: Mapped[str | None] = mapped_column(String(300))
+    # Phase 15: the interface language (ru / uz / en) — the same on every device; None = not chosen yet
+    lang: Mapped[str | None] = mapped_column(String(5))
 
     stores: Mapped[list["Store"]] = relationship(back_populates="owner")
 

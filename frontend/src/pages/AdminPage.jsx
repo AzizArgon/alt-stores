@@ -14,6 +14,7 @@ import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
 import api, { errorKey } from '../services/api'
 import { LOG_GROUPS, actionGroup, adminErrorKey, dateTime, useAdminData } from '../services/admin'
+import LangSwitch from '../components/LangSwitch'
 import { useAuth } from '../services/auth.jsx'
 import { formatDate } from '../services/format'
 import { loginAtAdminDoor, returnTo } from '../services/roles'
@@ -41,13 +42,13 @@ function AdminFrame({ sections, children }) {
   return (
     <Workspace home="/admin" subtitle={t('admin.subtitle')} sections={sections} navKey="admin.nav" tabKey="admin.tab"
       menuLabel={t('admin.menu')} sideTitle={user?.role === 'admin' ? user.email : null}
-      actions={user?.role === 'admin' && (<>
+      actions={<><LangSwitch />{user?.role === 'admin' && (<>
         <NotificationBell allPath="/admin/notifications" />
         <Button variant="secondary" size="sm" onClick={() => startTransition(() => { logout(); navigate('/login') })}
           aria-label={t('admin.logout')} title={user.email} className="shrink-0 max-sm:!px-2.5">
           <LogOut className="size-4" aria-hidden /><span className="hidden sm:inline">{t('admin.logout')}</span>
         </Button>
-      </>)}>
+      </>)}</>}>
       {children}
     </Workspace>
   )

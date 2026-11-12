@@ -2,6 +2,7 @@
 // the unread counter every 30 seconds; while the browser tab is hidden nothing is asked.
 import { useEffect, useRef, useState } from 'react'
 import api, { errorKey } from './api'
+import i18n from '../i18n'
 
 export const THREAD_POLL_MS = 5000
 export const UNREAD_POLL_MS = 30000
@@ -62,6 +63,6 @@ export function chatErrorKey(err) {
 export function formatChatTime(iso, now = new Date()) {
   const at = new Date(iso)
   const sameDay = at.toDateString() === now.toDateString()
-  return new Intl.DateTimeFormat('ru', sameDay ? { hour: '2-digit', minute: '2-digit' }
+  return new Intl.DateTimeFormat(i18n.language, sameDay ? { hour: '2-digit', minute: '2-digit' }
     : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(at)
 }

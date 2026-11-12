@@ -1,6 +1,8 @@
 import secrets
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -61,4 +63,16 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
+    return user
+
+
+class LangIn(BaseModel):
+    lang: Literal["ru", "uz", "en"]
+
+
+@router.put("/me/lang", response_model=UserOut)
+def set_lang(data: LangIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Phase 15: the language switch — kept in the profile, so another device opens in the same language."""
+    user.lang = data.lang
+    db.commit()
     return user

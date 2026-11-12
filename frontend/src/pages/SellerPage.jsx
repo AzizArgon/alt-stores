@@ -26,6 +26,8 @@ import { useAuth } from '../services/auth.jsx'
 import { useUnread } from '../services/chat'
 import { useNewReservations } from '../services/reservations'
 import { importTitle } from '../services/format'
+import LangSwitch from '../components/LangSwitch'
+import i18n from '../i18n'
 
 const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'hours', 'map_url', 'reservation_days']
 // Hints under the fields: where to go matters to the buyer (phase 12)
@@ -257,7 +259,7 @@ function ImportHistory({ items, onChanged }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {imp.status === 'undone'
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString(i18n.language)} · {imp.status === 'undone'
                 ? <Badge tone="warning">{t('import.status.undone')}</Badge> : t(`import.status.${imp.status}`)}
             </span>
             {imp.can_undo && <UndoUpload importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />}
@@ -377,6 +379,8 @@ function AccountMenu({ store }) {
       {/* The storefront opens in a new tab: the cabinet stays where the seller left it */}
       <DropdownItem as="a" href={storeUrl('/')} target="_blank" rel="noreferrer" icon={ExternalLink}>{t('seller.openStore')}</DropdownItem>
       <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
+      {/* Phase 15: on a phone the language is chosen here, the top bar stays short */}
+      <div className="mt-1.5 border-t border-line p-2 sm:hidden"><LangSwitch wide /></div>
     </Dropdown>
   )
 }
@@ -390,6 +394,7 @@ function SellerFrame({ store, sections, top, place, children }) {
       menuLabel={t('cabinet.menu')} sideTitle={store?.name} top={top}
       actions={<>
         {place && <PlaceMenu {...place} />}
+        <LangSwitch className={user?.role === 'seller' ? 'hidden sm:flex' : ''} />
         {user?.role === 'seller' && store && <NotificationBell allPath="/seller/notifications" />}
         {user?.role === 'seller' && <AccountMenu store={store} />}
       </>}>

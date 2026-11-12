@@ -11,12 +11,13 @@ import { Badge, Button, Card, EmptyState, Input, Pagination, Select, Skeleton } 
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { placeFor, placeLabel } from '../services/place'
+import i18n from '../i18n'
 
 const KINDS = ['initial', 'receipt', 'move_out', 'move_in', 'sale', 'return', 'inventory', 'adjust', 'reserve', 'unreserve', 'res_sale', 'import', 'undo', 'manual']
 const TAB_KEY = 'alt_stock_tab'
 const BRANCHES_ONLY = ['move', 'sale', 'return']
 
-const when = (iso) => new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+const when = (iso) => new Intl.DateTimeFormat(i18n.language, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 
 // The modes of "Склад" (phase 12.4): Приёмка · Выкладка (only with a warehouse) · Продажа · Возврат · Ревизия ·
 // Журнал. A scan (the USB scanner even with no field focused, the camera) works in every mode. The chosen mode is

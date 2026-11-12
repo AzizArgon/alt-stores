@@ -12,6 +12,7 @@ import { useUnseenReservations } from '../services/reservations'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
+import LangSwitch from './LangSwitch'
 import { NotificationBell } from './Notifications'
 import { Button, Select, inputClass } from './ui'
 
@@ -180,6 +181,8 @@ function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
           ? <Button {...linkProps(sellerUrl())} className="mt-1 w-full"><LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}</Button>
           : user && <UserLinks logout={logout} Item={DropdownItem} unread={unread} unseen={unseen} />}
       </nav>
+      <p className="mt-4 mb-1.5 text-sm font-medium">{t('lang.label')}</p>
+      <LangSwitch wide />
       <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
         {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
       </Select>
@@ -221,6 +224,7 @@ export default function Header() {
               </NavLink>
             ))}
           </nav>
+          <LangSwitch className="hidden md:flex" />
           {/* A seller works in the cabinet: on the storefront he has only the way back there */}
           {user?.role === 'seller' ? (
             <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">

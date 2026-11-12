@@ -1,4 +1,5 @@
 import axios from 'axios'
+import i18n from '../i18n'
 
 export const TOKEN_KEY = 'pc_market_token'
 
@@ -9,6 +10,8 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) config.headers.Authorization = `Bearer ${token}`
+  // Phase 15: the server answers keys, but files it builds (the Excel of "My goods") need the reader's language
+  if (i18n.language) config.headers['Accept-Language'] = i18n.language
   return config
 })
 

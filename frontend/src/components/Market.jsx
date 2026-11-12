@@ -5,6 +5,7 @@ import { CategoryIcon } from './CategoryIcon'
 import LineChart, { SERIES_COLORS } from './LineChart'
 import { Badge, Card, Tabs } from './ui'
 import { formatDayMonth, formatMonthYear, formatPrice, roundSum } from '../services/format'
+import i18n from '../i18n'
 
 export const PERIODS = ['week', 'month', 'quarter']
 // Categories drawn on the index chart, each always in its own colour (colour follows the category)
@@ -13,7 +14,7 @@ const CHART_CATEGORIES = ['ram', 'ssd', 'gpu', 'cpu', 'motherboard', 'monitor', 
 export function formatPct(value) {
   if (value == null) return '—'
   const sign = value > 0 ? '+' : value < 0 ? '−' : ''
-  return `${sign}${Math.abs(value).toLocaleString('ru', { maximumFractionDigits: 1 })}%`
+  return `${sign}${Math.abs(value).toLocaleString(i18n.language, { maximumFractionDigits: 1 })}%`
 }
 
 const PCT_COLOR = (v) => (v > 0.5 ? 'text-danger' : v < -0.5 ? 'text-success' : 'text-muted')
@@ -118,7 +119,7 @@ export function IndexSection({ indices, period, onPeriod, demo }) {
       data: indices.series[c].map((p) => p.index) }))
     return { labels, datasets }
   }, [indices, t])
-  const formatValue = useMemo(() => (v) => v.toLocaleString('ru', { maximumFractionDigits: 1 }), [])
+  const formatValue = useMemo(() => (v) => v.toLocaleString(i18n.language, { maximumFractionDigits: 1 }), [])
 
   return (
     <Card as="section" className="min-w-0">
