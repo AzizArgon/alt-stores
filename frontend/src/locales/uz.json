@@ -65,13 +65,10 @@
   },
   "home": {
     "title": "Oʻzbekistonning barcha doʻkonlaridagi kompyuter texnikasi narxlari — bir joyda",
-    "hint": "Doʻkon prayslari yagona standartga keltirilgan: bitta mahsulot — bitta kartochka, barcha takliflar yonma-yon.",
     "searchSubmit": "Topish",
     "sections": "Boʻlimlar",
     "allCatalog": "Butun katalog",
     "allSections": "Barcha boʻlimlar ({{count}})",
-    "products_one": "{{count}} ta mahsulot",
-    "products_other": "{{count}} ta mahsulot",
     "popular": "Ommabop mahsulotlar",
     "popularHint": "Doʻkonlar koʻp — narxlarni solishtirish oson",
     "marketTitle": "Bozordagi narxlar",
@@ -86,9 +83,19 @@
       "fraud": "Shubhali takliflar haqida ogohlantirish",
       "fraudText": "Narx juda past yoki tavsif gʻalati boʻlsa — sotuvchiga qoʻngʻiroq qilishingizdan oldin tizim yumshoq ogohlantiradi."
     },
-    "sellerTitle": "Doʻkoningizni qoʻshing",
-    "sellerText": "Prayslarni istalgan formatda yuklang — tizim uni oʻzi tahlil qiladi, katalogdan mahsulotlarni topadi va narxlaringizni xaridorlarga koʻrsatadi.",
-    "sellerCta": "Sotuvchi boʻlish"
+    "groups": {
+      "components": "Butlovchi qismlar",
+      "peripherals": "Periferiya",
+      "devices": "Tayyor qurilmalar",
+      "office": "Ofis",
+      "other": "Aksessuarlar va boshqalar"
+    },
+    "buildsTitle": "Tayyor kompyuterlar",
+    "buildsHint": "Doʻkonlardan yigʻmalar",
+    "buildsCount_one": "{{count}} ta yigʻma",
+    "buildsCount_other": "{{count}} ta yigʻma",
+    "sellerBanner": "ALT STORESʼda sotmoqchimisiz?",
+    "sellerBannerHint": "Istalgan formatdagi narxlar roʻyxati, qoldiqlar hisobi, bron va xaridorlar bilan chat"
   },
   "product": {
     "back": "Orqaga",
@@ -127,7 +134,8 @@
   },
   "price": {
     "rateHint": "MB kursi boʻyicha qayta hisoblangan, {{date}}",
-    "rateNote": "≈ — MB kursi boʻyicha qayta hisob, {{date}}: 1 $ = {{rate}}"
+    "rateTip": "MB kursi boʻyicha qayta hisoblangan, {{date}}: 1 $ = {{rate}}",
+    "rateTipNoDate": "MB kursi boʻyicha qayta hisoblangan: 1 $ = {{rate}}"
   },
   "currency": {
     "UZS": "soʻm"
@@ -764,10 +772,14 @@
     "soonHint": "Bu yerda akkaunt maʼlumotlari va sozlamalarni oʻzgartirish mumkin boʻladi."
   },
   "footer": {
-    "about": "Oʻzbekiston doʻkonlarida kompyuter texnikasi narxlarini solishtirish: yagona katalog, bozor narxlari va shubhali takliflarni tekshirish.",
+    "about": "Oʻzbekiston kompyuter texnikasining yagona bazasi: barcha doʻkonlar, narxlarni halol taqqoslash.",
     "forSellers": "Sotuvchilar uchun",
     "github": "GitHub",
-    "thesis": "Diplom loyihasi, 2026"
+    "thesis": "Diplom loyihasi, 2026",
+    "buyers": "Xaridorlarga",
+    "sellers": "Sotuvchilarga",
+    "project": "Loyiha haqida",
+    "cabinetLogin": "Kabinetga kirish"
   },
   "importSummary": {
     "title": "Eʼlon qilingandan keyin nima oʻzgaradi",
@@ -1132,9 +1144,7 @@
     "updated": "Yangilangan: {{date}}",
     "homeTitle": "Tayyor yigʻmalar",
     "homeHint": "Doʻkonlardan tayyor kompyuterlar: qaysi detallar aniq koʻrsatilgani koʻrinadi",
-    "homeAll": "Barcha yigʻmalar",
-    "homeTile": "Tayyor kompyuterlar",
-    "homeTileHint": "Doʻkonlar yigʻmalari"
+    "homeAll": "Barcha yigʻmalar"
   },
   "sellerBuilds": {
     "title": "Mening yigʻmalarim",
@@ -2444,5 +2454,30 @@
       "uz": "Oʻzbekcha",
       "en": "English"
     }
+  },
+  "search": {
+    "placeholder": "Nima qidiryapsiz?",
+    "detect": "Aniqlash",
+    "open": "Qidiruv",
+    "close": "Qidiruvni yopish"
+  },
+  "forSellers": {
+    "title": "Doʻkoningiz — Oʻzbekiston kompyuter texnikasining yagona bazasida",
+    "subtitle": "Narxlar roʻyxatini qanday boʻlsa shunday yuklang: tizim uni standartga keltiradi, narxlaringizni bozor narxi yonida xaridorlarga koʻrsatadi va mavjudlikni tartibda saqlashga yordam beradi.",
+    "register": "Doʻkonni roʻyxatdan oʻtkazish",
+    "login": "Kabinetingiz bormi? Kirish",
+    "benefitsTitle": "Doʻkon nima oladi",
+    "benefit": {
+      "price": "Istalgan formatdagi narxlar roʻyxati → katalog",
+      "priceText": "Excel, PDF, matn yoki Telegram post — tizim mahsulotlar, xususiyatlar va narxlarni oʻzi topadi. Siz tekshirib, eʼlon qilasiz.",
+      "stock": "Qoldiqlar hisobi va skanerli ombor",
+      "stockText": "Filiallar boʻyicha qoldiqlar, qabul, vitrinaga chiqarish, sotuv va inventarizatsiya — shtrix-kod skaner yoki telefon kamerasi bilan. Excelʼdan yoʻqotishlarsiz oʻtish.",
+      "buyers": "Bron va xaridorlar bilan chat",
+      "buyersText": "Xaridor mahsulotni toʻlovsiz bron qiladi va aniq mahsulot yoki yigʻma boʻyicha sizga yozadi — hammasi bitta kabinetda.",
+      "market": "Bozor tahlili va Anti-Fraud",
+      "marketText": "Narxlaringiz bozor narxi yonida, toifalar boʻyicha indekslar va halol sotuvchilarni himoya qiladigan shubhali takliflar tekshiruvi."
+    },
+    "ctaTitle": "Bitta narxlar roʻyxatidan boshlang",
+    "ctaText": "Roʻyxatdan oʻtish bepul: faylni yuklang — bir necha daqiqada mahsulotlaringiz katalogda."
   }
 }

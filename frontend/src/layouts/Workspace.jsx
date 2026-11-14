@@ -21,8 +21,7 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
   const tabs = sections?.filter((s) => s.tab) || []
   return (
     <div className="flex min-h-screen flex-col">
-      <DemoBanner />
-      <header className="sticky top-0 z-30 border-b border-line bg-surface">
+      <header className="sticky top-0 z-30 border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
         <div className="flex h-14 items-center gap-2 px-4 md:h-16 md:gap-3 md:px-6">
           {/* On a phone the subtitle goes under the name: side by side they don't fit */}
           {/* Phase 15: it may shrink — a long subtitle ("администрирование") is cut, the logo never */}
@@ -34,6 +33,7 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
           {actions}
         </div>
       </header>
+      <DemoBanner />
 
       {sections ? (
         <div className="flex flex-1">

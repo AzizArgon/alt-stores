@@ -1,103 +1,29 @@
-import { ChevronDown, CalendarCheck, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Search, UserCog, UserRound } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { CalendarCheck, ChartLine, LayoutDashboard, LogOut, Menu, MessageSquare, Search, UserCog, UserRound, X } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { CITIES } from '../config/cities'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
-import api from '../services/api'
-import { checkBarcode, looksLikeBarcode } from '../services/barcode'
 import { useUnread } from '../services/chat'
 import { useUnseenReservations } from '../services/reservations'
 import { loginState } from '../services/roles'
-import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
 import LangSwitch from './LangSwitch'
 import { NotificationBell } from './Notifications'
-import { Button, Select, inputClass } from './ui'
+import SearchBar, { SEARCH_ROW_PATHS } from './SearchBar'
+import { Button } from './ui'
 
-const SEARCH_DELAY_MS = 300
-const NAV_LINKS = [
+// Phase 16.2: the header is light — sections only; the search and the city live in the search row under it
+export const NAV_LINKS = [
   { to: '/catalog', label: 'nav.catalog' },
   { to: '/used', label: 'nav.used' },
   { to: '/builds', label: 'nav.builds' },
-  { to: '/stores', label: 'nav.stores' },
-  { to: '/market', label: 'nav.market' },
 ]
+// "Цены на рынке" is a small chart icon in the header row, a labelled item in the phone menu
+export const MARKET_LINK = { to: '/market', label: 'nav.market' }
 const AVATAR_COLORS = ['#2546e8', '#0f7a55', '#a64b00', '#7c3aed', '#be185d', '#0b6a94']
-
-// In the catalog the search works as you type (through the address); on other pages Enter opens the catalog
-function HeaderSearch({ className = '' }) {
-  const { t } = useTranslation()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const onCatalog = location.pathname === '/catalog'
-  const urlQuery = onCatalog ? new URLSearchParams(location.search).get('q') || '' : null
-  const [value, setValue] = useState(urlQuery || '')
-
-  const openResults = (text, replace) => {
-    const next = new URLSearchParams(onCatalog ? location.search : '')
-    if (text) next.set('q', text)
-    else next.delete('q')
-    next.delete('page')
-    navigate({ pathname: '/catalog', search: next.toString() }, { replace })
-  }
-
-  // The address changed from outside (logo, "back"): the field follows it
-  useEffect(() => {
-    if (urlQuery !== null && urlQuery !== value.trim()) setValue(urlQuery)
-  }, [urlQuery]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Phase 12.3: a code from a box opens its card — only a code confirmed in the common base (two stores bound it);
-  // the live search of the catalog does the same, so it never takes the buyer back to the empty results
-  const go = async (text, replace) => {
-    if (looksLikeBarcode(text) && !checkBarcode(text).error) {
-      const id = await api.get(`/catalog/barcode/${encodeURIComponent(checkBarcode(text).code)}`).then((r) => r.data.product_id).catch(() => null)
-      if (id) { navigate(`/products/${id}`); return }
-    }
-    openResults(text, replace)
-  }
-
-  useEffect(() => {
-    if (!onCatalog || value.trim() === urlQuery) return
-    const timer = setTimeout(() => go(value.trim(), true), SEARCH_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const onSubmit = (e) => {
-    e.preventDefault()
-    go(value.trim(), onCatalog)
-  }
-
-  return (
-    <form role="search" onSubmit={onSubmit} className={`relative min-w-0 ${className}`}>
-      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-      <input type="search" enterKeyHint="search" value={value} onChange={(e) => setValue(e.target.value)}
-        placeholder={t('catalog.searchPlaceholder')} aria-label={t('catalog.searchPlaceholder')}
-        className={`${inputClass} bg-surface-2 pl-9 hover:border-line-strong focus:bg-surface`} />
-    </form>
-  )
-}
-
-export function CityMenu({ className = 'max-w-48 px-2 hover:bg-surface-2' }) {
-  const { t } = useTranslation()
-  const { city, setCity } = useCity()
-  return (
-    <Dropdown align="left" panelClassName="max-h-96 w-56 overflow-y-auto" trigger={({ open, toggle }) => (
-      <button type="button" onClick={toggle} aria-expanded={open} aria-label={t('nav.city')} title={t('nav.city')}
-        className={`flex min-h-11 items-center gap-1.5 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}>
-        <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
-        <span className="truncate">{t(`cities.${city}`)}</span>
-        <ChevronDown className="size-4 shrink-0 text-muted" aria-hidden />
-      </button>
-    )}>
-      {CITIES.map((c) => (
-        <DropdownItem key={c} selected={c === city} onClick={() => setCity(c)}>{t(`cities.${c}`)}</DropdownItem>
-      ))}
-    </Dropdown>
-  )
-}
+const ICON_BUTTON = 'flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary'
 
 export function Avatar({ email, className = 'size-10 text-base' }) {
   const code = [...email].reduce((sum, ch) => sum + ch.codePointAt(0), 0)
@@ -162,7 +88,6 @@ function UserMenu({ user, logout, unread, unseen }) {
 // Phone and tablet menu: everything the desktop header shows in its row
 function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
   const { t } = useTranslation()
-  const { city, setCity } = useCity()
   const row = 'flex min-h-11 items-center rounded-md px-2.5 text-sm font-medium hover:bg-surface-2'
   return (
     <Sheet open={open} onClose={onClose} side="left" title={<BrandName />}>
@@ -177,6 +102,7 @@ function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
       )}
       <nav onClick={(e) => e.target.closest('a,button') && onClose()} className="grid gap-0.5">
         {NAV_LINKS.map((link) => <Link key={link.to} to={link.to} className={row}>{t(link.label)}</Link>)}
+        <Link to={MARKET_LINK.to} className={`${row} gap-2`}><ChartLine className="size-4 text-muted" aria-hidden />{t(MARKET_LINK.label)}</Link>
         {user && <div className="my-2 border-t border-line" />}
         {user?.role === 'seller'
           ? <Button {...linkProps(sellerUrl())} className="mt-1 w-full"><LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}</Button>
@@ -184,9 +110,6 @@ function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
       </nav>
       <p className="mt-4 mb-1.5 text-sm font-medium">{t('lang.label')}</p>
       <LangSwitch wide />
-      <Select label={t('nav.city')} className="mt-4" value={city} onChange={(e) => setCity(e.target.value)}>
-        {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
-      </Select>
       {!user && (
         <div className="mt-5 grid" onClick={(e) => e.target.closest('a') && onClose()}>
           <SignInButton />
@@ -207,27 +130,43 @@ function SignInButton({ size = 'md', className = '' }) {
   )
 }
 
+// A small chart icon with a tooltip on hover/focus (the label is in the phone menu)
+function MarketIcon() {
+  const { t } = useTranslation()
+  return (
+    <NavLink to={MARKET_LINK.to} aria-label={t(MARKET_LINK.label)} title={t(MARKET_LINK.label)}
+      className={({ isActive }) => `group relative ${ICON_BUTTON} ${isActive ? 'text-primary' : 'text-ink'}`}>
+      <ChartLine className="size-5" aria-hidden />
+      <span role="tooltip" className="pointer-events-none absolute top-full left-1/2 z-40 mt-1.5 hidden -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-xs font-medium whitespace-nowrap text-white shadow-pop group-hover:block group-focus-visible:block">
+        {t(MARKET_LINK.label)}
+      </span>
+    </NavLink>
+  )
+}
+
 export default function Header() {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const { pathname } = useLocation()
+  // The magnifier's row belongs to the page it was opened on: another page starts with it closed
+  const [searchOn, setSearchOn] = useState(null)
+  const searchOpen = searchOn === pathname
+  const setSearchOpen = (open) => setSearchOn(open ? pathname : null)
   const unread = useUnread(!!user && user.role !== 'seller')
   const unseen = useUnseenReservations(!!user && user.role !== 'seller')
+  // Home and catalog have the search row under the header; on the other pages a magnifier opens the same row
+  const searchRow = SEARCH_ROW_PATHS.includes(pathname)
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface">
+    <header className="sticky top-0 z-30 border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
       <div className="mx-auto max-w-7xl px-4 md:px-6">
-        <div className="flex h-16 items-center gap-2 md:gap-3">
-          <button type="button" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')}
-            className="-ml-2 flex size-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary xl:hidden">
+        <div className="flex h-16 items-center gap-1.5 md:gap-3">
+          <button type="button" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')} className={`-ml-2 ${ICON_BUTTON} lg:hidden`}>
             <Menu className="size-6" aria-hidden />
           </button>
           <Logo />
-          <div className="hidden md:block"><CityMenu /></div>
-          <HeaderSearch className="hidden min-w-40 flex-1 md:block" />
-          <div className="flex-1 md:hidden" />
-          <nav className="hidden shrink-0 items-center gap-1 xl:flex">
+          <nav className="ml-4 hidden min-w-0 items-center gap-1 lg:flex">
             {NAV_LINKS.map((link) => (
               <NavLink key={link.to} to={link.to} end className={({ isActive }) =>
                 `rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-surface-2 ${isActive ? 'text-primary' : 'text-ink'}`}>
@@ -235,11 +174,19 @@ export default function Header() {
               </NavLink>
             ))}
           </nav>
+          <div className="flex-1" />
+          {!searchRow && (
+            <button type="button" onClick={() => setSearchOpen(!searchOpen)} aria-expanded={searchOpen}
+              aria-label={searchOpen ? t('search.close') : t('search.open')} title={searchOpen ? t('search.close') : t('search.open')} className={ICON_BUTTON}>
+              {searchOpen ? <X className="size-5" aria-hidden /> : <Search className="size-5" aria-hidden />}
+            </button>
+          )}
+          <div className="hidden lg:block"><MarketIcon /></div>
           <LangSwitch className="hidden md:flex" />
           {/* A seller works in the cabinet: on the storefront he has only the way back there */}
           {user?.role === 'seller' ? (
             <Button {...linkProps(sellerUrl())} size="sm" className="shrink-0">
-              <LayoutDashboard className="size-4" aria-hidden />{t('nav.myCabinet')}
+              <LayoutDashboard className="size-4" aria-hidden /><span className="max-sm:sr-only">{t('nav.myCabinet')}</span>
             </Button>
           ) : user ? (
             <div className="flex shrink-0 items-center gap-1">
@@ -250,8 +197,7 @@ export default function Header() {
             <SignInButton size="sm" className="shrink-0" />
           )}
         </div>
-        {/* The home page has its own big search: the phone row would repeat it */}
-        {pathname !== '/' && <div className="pb-3 md:hidden"><HeaderSearch /></div>}
+        {!searchRow && searchOpen && <div className="pb-3"><SearchBar autoFocus /></div>}
       </div>
       <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} user={user} logout={logout} unread={unread} unseen={unseen} />
     </header>

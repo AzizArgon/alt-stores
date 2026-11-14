@@ -6,7 +6,7 @@ import Logo from '../components/Logo'
 export default function AuthLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-bg">
-      <header className="border-b border-line bg-surface">
+      <header className="border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 md:px-6">
           <Logo />
           <LangSwitch />

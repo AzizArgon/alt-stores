@@ -1,28 +1,58 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { BRAND } from '../config/brand'
-import { sellerUrl } from '../config/sites'
-import { SiteLink } from './ui'
 import { BrandName } from './Logo'
+
+// Phase 16.2: three columns of links; the description is short, the thesis line sits with the copyright
+export const FOOTER_COLUMNS = [
+  { title: 'footer.buyers', links: [
+    { to: '/catalog', label: 'nav.catalog' },
+    { to: '/used', label: 'nav.used' },
+    { to: '/builds', label: 'nav.builds' },
+    { to: '/stores', label: 'nav.stores' },
+    { to: '/reservations', label: 'nav.reservations' },
+    { to: '/messages', label: 'chat.title' },
+  ] },
+  { title: 'footer.sellers', links: [
+    { to: '/for-sellers', label: 'footer.forSellers' },
+    { to: '/login', label: 'footer.cabinetLogin' },
+  ] },
+  { title: 'footer.project', links: [
+    { to: '/market', label: 'nav.market' },
+    { href: BRAND.githubUrl, label: 'footer.github' },
+  ] },
+]
 
 export default function Footer() {
   const { t } = useTranslation()
   const link = 'text-muted hover:text-ink'
   return (
-    <footer className="mt-10 border-t border-line bg-surface">
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 text-sm md:grid-cols-[1fr_auto] md:gap-12 md:px-6">
-        <div>
-          <BrandName className="text-lg" />
-          <p className="mt-2 max-w-md text-muted">{t('footer.about')}</p>
+    <footer className="mt-8 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 pt-6 pb-4 text-sm md:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] md:gap-8 md:px-6">
+        <div className="max-md:col-span-full">
+          <BrandName className="text-base" />
+          <p className="mt-1 max-w-xs text-xs text-muted">{t('footer.about')}</p>
         </div>
-        <nav className="flex flex-wrap gap-x-6 gap-y-2 md:grid md:content-start md:gap-2">
-          <Link to="/catalog" className={link}>{t('nav.catalog')}</Link>
-          <Link to="/market" className={link}>{t('nav.market')}</Link>
-          <SiteLink url={sellerUrl('/login')} className={link}>{t('footer.forSellers')}</SiteLink>
-          <a href={BRAND.githubUrl} target="_blank" rel="noreferrer" className={link}>{t('footer.github')}</a>
-        </nav>
-        <p className="text-xs text-faint md:col-span-2">{t('footer.thesis')}</p>
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:contents">
+          {FOOTER_COLUMNS.map((col) => (
+            <nav key={col.title} aria-label={t(col.title)}>
+              <p className="mb-1.5 text-xs font-semibold tracking-wide text-faint uppercase">{t(col.title)}</p>
+              <ul className="grid gap-1">
+                {col.links.map((l) => (
+                  <li key={l.label}>
+                    {l.href
+                      ? <a href={l.href} target="_blank" rel="noreferrer" className={link}>{t(l.label)}</a>
+                      : <Link to={l.to} className={link}>{t(l.label)}</Link>}
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
+        </div>
       </div>
+      <p className="mx-auto max-w-7xl border-t border-line px-4 py-3 text-xs text-faint md:px-6">
+        © {new Date().getFullYear()} {BRAND.name} · {t('footer.thesis')}
+      </p>
     </footer>
   )
 }

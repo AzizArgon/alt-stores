@@ -16,7 +16,7 @@ import api, { errorKey } from '../services/api'
 import Price from '../components/Price'
 import { useCity } from '../services/city.jsx'
 import { cityParam } from '../config/cities'
-import { formatDate, formatDayMonth, formatPrice, roundSum, telegramUrl } from '../services/format'
+import { formatDate, formatPrice, roundSum, telegramUrl } from '../services/format'
 import { formatSpec, specLabel, specsLine } from '../services/specs'
 import { defaultGroup, groupCounts } from '../services/used'
 
@@ -279,9 +279,6 @@ export default function ProductPage() {
             <Tabs value={sort} onChange={setSort} tabs={SORTS.map((s) => ({ value: s, label: t(`product.sort.${s}`) }))} />
           </div>
           {sort === 'recommended' && <p className="mt-1 text-sm text-muted">{t('product.recommendedHint')}</p>}
-          {product.usd_rate && (
-            <p className="mt-1 text-sm text-muted">{t('price.rateNote', { date: formatDayMonth(product.usd_rate_date), rate: formatPrice(product.usd_rate, 'UZS') })}</p>
-          )}
           <div className="mt-4">
             {here.length > 0 ? <OfferList offers={here} product={product} /> : (
               <Card className="text-center">

@@ -65,13 +65,10 @@
   },
   "home": {
     "title": "Computer hardware prices in all stores of Uzbekistan — in one place",
-    "hint": "Store price lists are brought to one standard: one product — one card, all offers side by side.",
     "searchSubmit": "Search",
     "sections": "Sections",
     "allCatalog": "Whole catalog",
     "allSections": "All sections ({{count}})",
-    "products_one": "{{count}} product",
-    "products_other": "{{count}} products",
     "popular": "Popular products",
     "popularHint": "Most stores — easiest to compare prices",
     "marketTitle": "Market prices",
@@ -86,9 +83,19 @@
       "fraud": "Warnings about suspicious offers",
       "fraudText": "A price that is too low or an odd description — the system gently warns you before you call the seller."
     },
-    "sellerTitle": "Add your store",
-    "sellerText": "Upload a price list in any format — the system parses it, finds the products in the catalog and shows your prices to buyers.",
-    "sellerCta": "Become a seller"
+    "groups": {
+      "components": "Components",
+      "peripherals": "Peripherals",
+      "devices": "Ready devices",
+      "office": "Office",
+      "other": "Accessories and more"
+    },
+    "buildsTitle": "Ready PCs",
+    "buildsHint": "Builds from stores",
+    "buildsCount_one": "{{count}} build",
+    "buildsCount_other": "{{count}} builds",
+    "sellerBanner": "Want to sell on ALT STORES?",
+    "sellerBannerHint": "Price lists in any format, stock keeping, reservations and chat with buyers"
   },
   "product": {
     "back": "Back",
@@ -127,7 +134,8 @@
   },
   "price": {
     "rateHint": "Converted at the Central Bank rate of {{date}}",
-    "rateNote": "≈ — converted at the Central Bank rate of {{date}}: $1 = {{rate}}"
+    "rateTip": "Converted at the CBU rate of {{date}}: 1 $ = {{rate}}",
+    "rateTipNoDate": "Converted at the CBU rate: 1 $ = {{rate}}"
   },
   "currency": {
     "UZS": "UZS"
@@ -764,10 +772,14 @@
     "soonHint": "Here you will be able to change your account details and settings."
   },
   "footer": {
-    "about": "Comparing computer hardware prices in the stores of Uzbekistan: one catalog, market prices and checks of suspicious offers.",
+    "about": "A single database of computer hardware in Uzbekistan: every store, honest price comparison.",
     "forSellers": "For sellers",
     "github": "GitHub",
-    "thesis": "Graduation project, 2026"
+    "thesis": "Graduation project, 2026",
+    "buyers": "For buyers",
+    "sellers": "For sellers",
+    "project": "About",
+    "cabinetLogin": "Sign in to the cabinet"
   },
   "importSummary": {
     "title": "What changes after publishing",
@@ -1132,9 +1144,7 @@
     "updated": "Updated {{date}}",
     "homeTitle": "Ready PC builds",
     "homeHint": "Ready PCs from stores: you see which parts are given exactly",
-    "homeAll": "All builds",
-    "homeTile": "Ready PCs",
-    "homeTileHint": "Builds from stores"
+    "homeAll": "All builds"
   },
   "sellerBuilds": {
     "title": "My builds",
@@ -2444,5 +2454,30 @@
       "uz": "Oʻzbekcha",
       "en": "English"
     }
+  },
+  "search": {
+    "placeholder": "What are you looking for?",
+    "detect": "Detect",
+    "open": "Search",
+    "close": "Close search"
+  },
+  "forSellers": {
+    "title": "Your store in the single database of computer hardware in Uzbekistan",
+    "subtitle": "Upload your price list as it is: the system brings it to the standard, shows your prices to buyers next to the market and helps keep your stock up to date.",
+    "register": "Register a store",
+    "login": "Already have a cabinet? Sign in",
+    "benefitsTitle": "What a store gets",
+    "benefit": {
+      "price": "A price list in any format → the catalog",
+      "priceText": "Excel, PDF, text or a Telegram post — the system finds products, specs and prices itself. You check and publish.",
+      "stock": "Stock keeping and a warehouse with a scanner",
+      "stockText": "Stock by branch, receiving, shelving, sales and stocktaking — barcodes by a scanner or a phone camera. Move from Excel without losing anything.",
+      "buyers": "Reservations and chat with buyers",
+      "buyersText": "A buyer reserves a product without paying and writes to you about a specific product or build — all in one cabinet.",
+      "market": "Market analytics and Anti-Fraud",
+      "marketText": "Your prices next to the market price, indices by category and checks of suspicious offers that protect honest sellers."
+    },
+    "ctaTitle": "Start with one price list",
+    "ctaText": "Registration is free: upload a file and your products are in the catalog in a few minutes."
   }
 }

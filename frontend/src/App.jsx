@@ -13,6 +13,7 @@ import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
 import StorePage from './pages/StorePage'
 import StoresPage from './pages/StoresPage'
+import ForSellersPage from './pages/ForSellersPage'
 import UsedPage from './pages/UsedPage'
 import ProfilePage from './pages/ProfilePage'
 import ReservationsPage from './pages/ReservationsPage'
@@ -125,6 +126,7 @@ export default function App() {
         <Route path="/builds" element={<BuildsPage />} />
         <Route path="/builds/:id" element={<BuildPage />} />
         <Route path="/stores" element={<StoresPage />} />
+        <Route path="/for-sellers" element={<ForSellersPage />} />
         <Route path="/store/:id" element={<StorePage />} />
         <Route path="/messages" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
         <Route path="/messages/new" element={<BuyerOnly><OpenConversation /></BuyerOnly>} />
