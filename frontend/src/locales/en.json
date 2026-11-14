@@ -752,6 +752,7 @@
     "banner": "Demo version of a graduation project. Stores and some prices are for demonstration"
   },
   "common": {
+    "cancel": "Cancel",
     "close": "Close"
   },
   "cities": {
@@ -1775,8 +1776,14 @@
       "withCost": "With cost and markup",
       "importStock": "Load stock from Excel",
       "importTitle": "Stock from Excel",
-      "importHint": "Quantities only, prices do not change. A file downloaded from \"My products\" works: columns named after branches. A number is the new stock, an empty cell or \"+\" means no change.",
-      "choose": "Choose file",
+      "point1": "Only quantities change, prices do not",
+      "point2": "A file from “My products” works — columns named after branches",
+      "point3": "An empty cell or “+” — no change",
+      "drop": "Drag an .xlsx here or choose a file",
+      "dropHere": "Drop the file",
+      "template": "Download template",
+      "upload": "Upload",
+      "onlyXlsx": "An .xlsx file is needed",
       "summary": "What will change",
       "nothing": "Nothing will change — the stock in the file matches the current one",
       "branchLine": "{{branch}}: {{changed}} items (+{{plus}} / −{{minus}} pcs)",

@@ -752,6 +752,7 @@
     "banner": "Diplom loyihasining demo-versiyasi. Doʻkonlar va narxlarning bir qismi — namunaviy"
   },
   "common": {
+    "cancel": "Bekor qilish",
     "close": "Yopish"
   },
   "cities": {
@@ -1775,8 +1776,14 @@
       "withCost": "Xarid narxi va ustama bilan",
       "importStock": "Qoldiqlarni Exceldan yuklash",
       "importTitle": "Exceldan qoldiqlar",
-      "importHint": "Faqat miqdor, narxlar oʻzgarmaydi. «Mahsulotlarim»dan yuklab olingan fayl mos keladi: filiallar nomlari bilan ustunlar. Raqam — yangi qoldiq, boʻsh katak yoki «+» — oʻzgarishsiz.",
-      "choose": "Fayl tanlash",
+      "point1": "Faqat miqdor oʻzgaradi, narxlar — yoʻq",
+      "point2": "«Mahsulotlarim»dan olingan fayl mos keladi — filiallar nomlari bilan ustunlar",
+      "point3": "Boʻsh katak yoki «+» — oʻzgarishsiz",
+      "drop": ".xlsx faylni shu yerga torting yoki tanlang",
+      "dropHere": "Faylni qoʻyib yuboring",
+      "template": "Shablonni yuklab olish",
+      "upload": "Yuklash",
+      "onlyXlsx": ".xlsx fayl kerak",
       "summary": "Nima oʻzgaradi",
       "nothing": "Hech narsa oʻzgarmaydi — fayldagi qoldiqlar joriylari bilan bir xil",
       "branchLine": "{{branch}}: {{changed}} poz. (+{{plus}} / −{{minus}} dona)",
