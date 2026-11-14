@@ -1215,6 +1215,10 @@
     "parsing": "Parsing the post…",
     "parsed": "Check the parts: each part has a precision level. Refine where you can.",
     "currencyCheck": "The post gives no currency — please check.",
+    "progress": "Reading the parts… {{done}} of {{total}}",
+    "noWait": "Don't wait for the AI — show what is read",
+    "aiMissed": "Lines left unread without the AI: {{count}} — please specify them by hand.",
+    "conditionCheck": "Taken from the post's words (\"serviced\", \"used\"…) — please check.",
     "noParts": "No build parts found in the text",
     "error": {
       "build_required": "Required parts are missing",

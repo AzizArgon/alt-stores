@@ -1215,6 +1215,10 @@
     "parsing": "Post tahlil qilinmoqda…",
     "parsed": "Tarkibni tekshiring: har bir detalning aniqlik darajasi bor. Imkoni boricha aniqlashtiring.",
     "currencyCheck": "Postda valyuta koʻrsatilmagan — tekshiring.",
+    "progress": "Qismlar tahlil qilinmoqda… {{done}} / {{total}}",
+    "noWait": "SIni kutmaslik — tahlil qilinganini koʻrsatish",
+    "aiMissed": "SIsiz tahlil qilinmagan qatorlar: {{count}} — ularni qoʻlda aniqlang.",
+    "conditionCheck": "Post soʻzlaridan aniqlandi («xizmat koʻrsatilgan», «b/u»…) — tekshiring.",
     "noParts": "Matnda yigʻma detallari topilmadi",
     "error": {
       "build_required": "Majburiy detallar yetishmayapti",

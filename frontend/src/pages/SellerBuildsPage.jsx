@@ -1,5 +1,5 @@
-import { ClipboardPaste, ExternalLink, ListChecks, Monitor, Pencil, Trash2, TriangleAlert } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ClipboardPaste, ExternalLink, ListChecks, Loader2, Monitor, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
@@ -92,24 +92,45 @@ export default function SellerBuildsPage() {
   )
 }
 
-// "Paste as text": the post -> a draft by slots in the editor (nothing is saved before "Publish")
+// "Paste as text": the post -> a draft by slots in the editor (nothing is saved before "Publish").
+// Phase 17.2: code first (instant), then one AI request only for the parts the code did not read, with progress;
+// "Don't wait" or an AI failure shows what the code read
 function PasteBox({ onParsed }) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [error, setError] = useState('')
+  const pending = useRef(null)
+  const finish = (draft) => {
+    pending.current = null
+    setBusy(false)
+    setProgress(null)
+    onParsed(draft, text)
+  }
   const parse = async (e) => {
     e.preventDefault()
     setBusy(true)
     setError('')
     try {
-      onParsed((await api.post('/seller/builds/parse', { text })).data, text)
+      const rules = (await api.post('/seller/builds/parse', { text, ai: false })).data
+      if (!rules.ai_pending) return finish(rules)
+      const ticket = {}
+      pending.current = { ticket, rules }
+      setProgress({ done: rules.parts_total - rules.ai_pending, total: rules.parts_total })
+      let draft = { ...rules, ai: 'failed' }
+      try {
+        draft = (await api.post('/seller/builds/parse', { text, ai: true })).data
+      } catch { /* the AI step failed: the draft keeps what the code read */ }
+      if (pending.current?.ticket === ticket) finish(draft)
     } catch (err) {
       const code = err.response?.data?.detail?.code
       setError(code ? t(`sellerBuilds.error.${code}`, { defaultValue: t(errorKey(err)) }) : t(errorKey(err)))
+      setBusy(false)
+      setProgress(null)
     }
-    setBusy(false)
   }
+  const skip = () => pending.current && finish({ ...pending.current.rules, ai: 'skipped' })
   return (
     <Card as="form" onSubmit={parse} className="grid gap-3">
       <h2 className="text-h3">{t('sellerBuilds.textTitle')}</h2>
@@ -117,7 +138,20 @@ function PasteBox({ onParsed }) {
       <textarea rows={6} required minLength={3} className={inputClass} placeholder={t('sellerBuilds.textPlaceholder')}
         aria-label={t('sellerBuilds.textTitle')} value={text} onChange={(e) => setText(e.target.value)} />
       <ErrorText>{error}</ErrorText>
-      <Button type="submit" disabled={busy} className="justify-self-start">{busy ? t('sellerBuilds.parsing') : t('sellerBuilds.parse')}</Button>
+      {progress ? (
+        <div className="grid gap-2" role="status">
+          <p className="flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin text-primary" aria-hidden />
+            {t('sellerBuilds.progress', progress)}
+          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+          </div>
+          <Button type="button" variant="text" size="sm" className="justify-self-start" onClick={skip}>{t('sellerBuilds.noWait')}</Button>
+        </div>
+      ) : (
+        <Button type="submit" disabled={busy} className="justify-self-start">{busy ? t('sellerBuilds.parsing') : t('sellerBuilds.parse')}</Button>
+      )}
     </Card>
   )
 }
@@ -161,7 +195,12 @@ export function SellerBuildEditPage() {
       {!id && <TrustHint />}
       {id && initial === undefined && !error && <Skeleton className="h-64 w-full rounded-xl" />}
       {!id && method === 'text' && !initial && <PasteBox onParsed={(draft, text) => setInitial(draftToInitial(draft, text))} />}
-      {!id && method === 'text' && initial && <p className="rounded-md bg-surface-2 p-3 text-sm">{t('sellerBuilds.parsed')}</p>}
+      {!id && method === 'text' && initial && (
+        <div className="rounded-md bg-surface-2 p-3 text-sm">
+          <p>{t('sellerBuilds.parsed')}</p>
+          {initial.ai_pending > 0 && initial.ai !== 'done' && <p className="mt-1 text-muted">{t('sellerBuilds.aiMissed', { count: initial.ai_pending })}</p>}
+        </div>
+      )}
       {(id ? initial : method === 'form' || initial) && (
         <BuildEditor key={initial ? 'draft' : 'empty'} initial={initial} buildId={id} defaultCurrency={defaultCurrency}
           onSaved={saved} onCancel={cancel} />
