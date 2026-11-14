@@ -9,7 +9,8 @@ import { CityProvider } from '../services/city.jsx'
 import Footer, { FOOTER_COLUMNS } from './Footer'
 import { MARKET_LINK, NAV_LINKS } from './Header'
 import Price from './Price'
-import SearchBar, { SEARCH_ROW_PATHS, catalogSearch } from './SearchBar'
+import SearchBar, { CityMenu, SEARCH_ROW_PATHS, catalogSearch } from './SearchBar'
+import { cityParam } from '../config/cities'
 
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} }
 
@@ -42,6 +43,23 @@ describe('search row (phase 16.2)', () => {
     expect(out).toContain('Найти')
     expect(out.indexOf('Что ищете?')).toBeLessThan(out.indexOf('Весь Узбекистан'))
     expect(out.indexOf('Весь Узбекистан')).toBeLessThan(out.indexOf('Найти'))
+  })
+})
+
+describe('city choice (phase 17.1)', () => {
+  it('the row does not cut off the list: no overflow-hidden on the form', () => {
+    const form = html(<SearchBar />).match(/<form[^>]*>/)[0]
+    expect(form).not.toContain('overflow-hidden')
+  })
+  it('the list opens: "Определить" first, then all of Uzbekistan and the cities', () => {
+    const out = html(<CityMenu initialOpen />)
+    expect(out).toContain('role="menu"')
+    expect(out.indexOf('Определить')).toBeLessThan(out.indexOf('Ташкент'))
+    expect(out).toContain('aria-expanded="true"')
+  })
+  it('the choice is remembered and reaches the catalog requests', () => {
+    expect(cityParam('samarkand')).toBe('samarkand')
+    expect(cityParam('all')).toBeUndefined()
   })
 })
 

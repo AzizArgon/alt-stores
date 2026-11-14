@@ -22,7 +22,7 @@ export function catalogSearch(text, currentSearch = '') {
 }
 
 // City choice: "Определить" first (asks the browser only on a click), then the list
-export function CityMenu({ className = '' }) {
+export function CityMenu({ className = '', initialOpen = false }) {
   const { t } = useTranslation()
   const { city, setCity } = useCity()
   const [busy, setBusy] = useState(false)
@@ -32,7 +32,7 @@ export function CityMenu({ className = '' }) {
     setBusy(false)
   }
   return (
-    <Dropdown align="left" panelClassName="max-h-96 w-60 overflow-y-auto" trigger={({ open, toggle }) => (
+    <Dropdown align="left" initialOpen={initialOpen} panelClassName="max-h-96 w-60 overflow-y-auto" trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={`${t('nav.city')}: ${t(`cities.${city}`)}`} title={t('nav.city')}
         className={`flex h-full min-h-11 items-center gap-1.5 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${className}`}>
         {busy ? <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" aria-hidden /> : <MapPin className="size-4 shrink-0 text-primary" aria-hidden />}
@@ -50,6 +50,7 @@ export function CityMenu({ className = '' }) {
 }
 
 // One row, one height, one white background: words → city → "Найти".
+// Phase 17.1: no overflow-hidden on the row — it cut off the city list (the button lit up, the list did not show)
 // In the catalog the results follow the typing (through the address); elsewhere "Найти"/Enter opens the catalog
 export default function SearchBar({ autoFocus = false, className = '' }) {
   const { t } = useTranslation()
@@ -89,7 +90,7 @@ export default function SearchBar({ autoFocus = false, className = '' }) {
 
   return (
     <form role="search" onSubmit={onSubmit}
-      className={`flex h-12 min-w-0 items-stretch overflow-hidden rounded-lg border border-line-strong bg-surface shadow-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary-soft ${className}`}>
+      className={`flex h-12 min-w-0 items-stretch rounded-lg border border-line-strong bg-surface shadow-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary-soft ${className}`}>
       <label className="relative flex min-w-0 flex-1 items-center">
         <Search className="pointer-events-none absolute left-3 size-5 text-muted" aria-hidden />
         <input ref={input} type="search" enterKeyHint="search" value={value} onChange={(e) => setValue(e.target.value)}
@@ -100,7 +101,7 @@ export default function SearchBar({ autoFocus = false, className = '' }) {
         <CityMenu className="max-w-56 px-2.5 sm:px-3" />
       </div>
       <button type="submit"
-        className="shrink-0 bg-primary px-4 text-sm font-semibold text-white outline-none hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-inset md:px-7">
+        className="shrink-0 rounded-r-[calc(var(--radius-lg)-1px)] bg-primary px-4 text-sm font-semibold text-white outline-none hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-inset md:px-7">
         {t('home.searchSubmit')}
       </button>
     </form>

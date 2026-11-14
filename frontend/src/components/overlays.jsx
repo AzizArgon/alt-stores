@@ -90,8 +90,9 @@ const DropdownContext = createContext(null)
 // Dropdown menu: closes on a click outside, on Esc and after choosing an item.
 // `trigger` gets { open, toggle } and draws the button
 // `up`: the panel opens above the trigger (a button at the bottom of a card, above the phone tab bar)
-export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', children }) {
-  const [open, setOpen] = useState(false)
+// `initialOpen`: for the static tests
+export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', initialOpen = false, children }) {
+  const [open, setOpen] = useState(initialOpen)
   const box = useRef(null)
   const close = useCallback(() => setOpen(false), [])
   useEsc(open, close)
