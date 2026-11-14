@@ -100,13 +100,18 @@ CATEGORIES = {
            "psu": "Quvvat bloklari", "ups": "UPS (UBP)", "case": "Korpuslar", "cooling": "Sovutish",
            "monitor": "Monitorlar", "laptop": "Noutbuklar", "aio": "Monobloklar", "desktop": "Tizim bloklari",
            "keyboard": "Klaviaturalar", "mouse": "Sichqonchalar", "headphones": "Quloqchinlar", "speakers": "Karnaylar",
-           "printer": "Printerlar va KFQ", "projector": "Proyektorlar", "chair": "Geymer kreslolari", "other": "Boshqalar"},
+           "printer": "Printerlar va KFQ", "projector": "Proyektorlar", "chair": "Geymer kreslolari", "other": "Boshqalar",
+           "consumables": "Sarf materiallari", "accessories": "Aksessuarlar", "bags": "Sumkalar va ryukzaklar",
+           "webcams": "Veb-kameralar", "microphones": "Mikrofonlar", "scanners": "Skanerlar",
+           "screens": "Proyeksion ekranlar", "panels": "Interaktiv panellar"},
     "en": {"cpu": "Processors", "motherboard": "Motherboards", "gpu": "Graphics cards", "ram": "RAM", "ssd": "SSDs",
            "hdd": "Hard drives (HDD)", "flash": "Flash drives and memory cards", "psu": "Power supplies", "ups": "UPS",
            "case": "Cases", "cooling": "Cooling", "monitor": "Monitors", "laptop": "Laptops", "aio": "All-in-ones",
            "desktop": "Desktop PCs", "keyboard": "Keyboards", "mouse": "Mice", "headphones": "Headphones",
            "speakers": "Speakers", "printer": "Printers and MFPs", "projector": "Projectors", "chair": "Gaming chairs",
-           "other": "Other"},
+           "other": "Other", "consumables": "Consumables", "accessories": "Accessories", "bags": "Bags and backpacks",
+           "webcams": "Webcams", "microphones": "Microphones", "scanners": "Scanners",
+           "screens": "Projection screens", "panels": "Interactive panels"},
 }
 
 

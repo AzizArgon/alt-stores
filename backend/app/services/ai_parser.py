@@ -76,7 +76,15 @@ class GroqAnswer(BaseModel):
 
 _items_adapter = TypeAdapter(list[CompactItem])
 
-_CATEGORY_LIST = ", ".join(f"{slug} ({name})" for slug, name, _ in CATEGORIES)
+# Phase 16.1: what goes where when the name alone does not tell (the rules check the answer: categorize.py)
+_CATEGORY_HINTS = {
+    "printer": "только сами принтеры и МФУ", "consumables": "чернила, картриджи, тонер, печатающие головки, "
+    "заправочные комплекты, фотобарабаны, бумага", "accessories": "коврики, подставки, кабели, переходники, хабы, "
+    "док-станции, сетевые фильтры, крепления", "bags": "рюкзаки, сумки, чехлы для ноутбуков",
+    "panels": "интерактивные дисплеи, видеостены, инфокиоски",
+}
+_CATEGORY_LIST = ", ".join(f"{slug} ({name}{': ' + _CATEGORY_HINTS[slug] if slug in _CATEGORY_HINTS else ''})"
+                           for slug, name, _ in CATEGORIES)
 
 
 def _spec_hint(spec) -> str:

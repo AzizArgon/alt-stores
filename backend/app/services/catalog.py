@@ -167,13 +167,14 @@ def resolve_merged(db: Session, product_id: int) -> int:
 
 
 def rebuild_specs(db: Session, trace: dict | None = None, demo_store_ids: set[int] = frozenset(),
-                  commit: bool = True) -> dict:
+                  commit: bool = True, ids: set[int] | None = None) -> dict:
     """Recomputes product specs by the dictionary from what the stores wrote. No AI requests.
 
     Sources: original rows (offers.raw_name) and specs already confirmed by those rows. Demo stores copy
     product names, not real rows, so they are used only if a product has no other offers.
     """
-    products = db.scalars(select(Product).options(selectinload(Product.category), selectinload(Product.offers))).all()
+    query = select(Product).options(selectinload(Product.category), selectinload(Product.offers))
+    products = db.scalars(query.where(Product.id.in_(ids)) if ids is not None else query).all()  # 16.1: only these
     changed = 0
     for p in products:
         category = p.category.slug if p.category else "other"

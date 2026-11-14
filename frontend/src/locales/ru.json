@@ -279,7 +279,8 @@
         "mechanical": "Механическая",
         "membrane": "Мембранная",
         "printer": "Принтер",
-        "mfp": "МФУ",
+        "3in1": "3 в 1 (принтер, сканер, копир)",
+        "4in1": "4 в 1 (+ факс)",
         "usb": "USB-флешка",
         "microsd": "microSD",
         "sd": "SD"
@@ -315,6 +316,7 @@
       "gpu_vendor_by_chip": "Выведено правилом: чипы GeForce RTX/GTX выпускает NVIDIA, Radeon RX — AMD, Arc — Intel",
       "board_size_by_chipset": "Выведено правилом: буква M после чипсета (B760M) означает Micro-ATX, буква I — Mini-ITX",
       "resolution_by_name": "Выведено правилом: FHD = 1920×1080, QHD = 2560×1440, UHD/4K = 3840×2160",
+      "printer_single_by_default": "Выведено правилом: МФУ продавцы всегда называют («МФУ», «MFP», «3 в 1», факс); без таких слов это просто принтер",
       "ram_dimm_by_default": "Выведено правилом: память для ноутбуков (SODIMM) продавцы всегда помечают; без такой пометки это обычная память DIMM для ПК",
       "ram_brand_by_series": "Продавец не указал бренд — он выведен по названию серии (Trident Z → G.Skill, Vengeance → Corsair, Fury → Kingston)"
     },
@@ -560,7 +562,15 @@
     "printer": "Принтеры и МФУ",
     "projector": "Проекторы",
     "chair": "Игровые кресла",
-    "other": "Прочее"
+    "other": "Прочее",
+    "consumables": "Расходники",
+    "accessories": "Аксессуары",
+    "bags": "Сумки и рюкзаки",
+    "webcams": "Веб-камеры",
+    "microphones": "Микрофоны",
+    "scanners": "Сканеры",
+    "screens": "Проекционные экраны",
+    "panels": "Интерактивные панели"
   },
   "flags": {
     "ai": "по мнению ИИ",

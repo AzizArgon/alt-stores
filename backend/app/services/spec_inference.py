@@ -90,6 +90,12 @@ def _ram_brand(text: str, specs: dict):
     return next((brand for pattern, brand in RAM_SERIES if re.search(pattern, text, re.I)), None)
 
 
+def _printer_single(text: str, specs: dict):
+    # Why: a multifunction device is always sold as one ("МФУ", "MFP", "3 в 1", "All-in-One", a fax), and the
+    # normalizer and the AI have already looked for those words; a printer row without any of them prints only.
+    return "printer"
+
+
 INFERENCES = (
     Inference("intel_f_graphics", "cpu", "graphics", _intel_graphics),
     Inference("cpu_brand_by_series", "cpu", "brand", _cpu_brand),
@@ -99,11 +105,15 @@ INFERENCES = (
     Inference("resolution_by_name", "projector", "resolution", _resolution),
     Inference("ram_dimm_by_default", "ram", "form_factor", _ram_dimm),
     Inference("ram_brand_by_series", "ram", "brand", _ram_brand),
+    Inference("printer_single_by_default", "printer", "type", _printer_single),
 )
+# A default, not a reading of the row: a value written earlier (the AI's "MFP" of "Canon PIXMA G2416") is kept
+_KEEP_WRITTEN = {"printer_single_by_default"}
 
 INFERABLE: dict[str, set[str]] = {}
 for _rule in INFERENCES:
-    INFERABLE.setdefault(_rule.category, set()).add(_rule.key)
+    if _rule.rule_id not in _KEEP_WRITTEN:
+        INFERABLE.setdefault(_rule.category, set()).add(_rule.key)
 
 
 def infer(category: str, text: str, specs: dict) -> dict[str, tuple[object, str]]:

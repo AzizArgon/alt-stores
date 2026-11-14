@@ -263,7 +263,8 @@
         "mechanical": "Mechanical",
         "membrane": "Membrane",
         "printer": "Printer",
-        "mfp": "MFP",
+        "3in1": "3 in 1 (print, scan, copy)",
+        "4in1": "4 in 1 (+ fax)",
         "usb": "USB flash drive",
         "microsd": "microSD",
         "sd": "SD"
@@ -299,6 +300,7 @@
       "gpu_vendor_by_chip": "Derived by a rule: GeForce RTX/GTX chips are made by NVIDIA, Radeon RX by AMD, Arc by Intel",
       "board_size_by_chipset": "Derived by a rule: the letter M after the chipset (B760M) means Micro-ATX, the letter I — Mini-ITX",
       "resolution_by_name": "Derived by a rule: FHD = 1920×1080, QHD = 2560×1440, UHD/4K = 3840×2160",
+      "printer_single_by_default": "Derived by a rule: sellers always name a multifunction device (MFP, 3 in 1, fax); without such words it is a plain printer",
       "ram_dimm_by_default": "Derived by a rule: sellers always mark laptop memory (SODIMM); without that mark it is regular DIMM memory for a PC",
       "ram_brand_by_series": "The seller did not give the brand — it is derived from the series name (Trident Z → G.Skill, Vengeance → Corsair, Fury → Kingston)"
     },
@@ -540,7 +542,15 @@
     "printer": "Printers and MFPs",
     "projector": "Projectors",
     "chair": "Gaming chairs",
-    "other": "Other"
+    "other": "Other",
+    "consumables": "Consumables",
+    "accessories": "Accessories",
+    "bags": "Bags and backpacks",
+    "webcams": "Webcams",
+    "microphones": "Microphones",
+    "scanners": "Scanners",
+    "screens": "Projection screens",
+    "panels": "Interactive panels"
   },
   "flags": {
     "ai": "according to AI",

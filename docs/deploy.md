@@ -64,6 +64,17 @@ ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python script
 ```
 Полный `seed_demo` на сервере не запускать: он перетасует ассортимент демо-магазинов.
 
+**Качество базы (фаза 16.1) — один раз после выкладки 16.1.** Скрипты те же, что на ПК, работают на серверной базе без изменений; ИИ не нужен. Порядок (каждый `--apply` сам делает копию базы в `/data/backups`):
+```bash
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/backup_db.py before_phase16_1 10"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/find_duplicates.py"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/find_duplicates.py --apply"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/recategorize.py"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/recategorize.py --apply"
+ssh pcmarket "cd /opt/alt-stores && docker compose exec -T backend python scripts/recheck_flags.py"
+```
+Сначала читать отчёт (без `--apply`), потом применять. Предложения Age Computers при слиянии могут переехать на другую карточку, но не исчезают: число его предложений до и после одинаковое (на копии 14.11: 2425 → 2425). Спорные пары («возможный дубль») ждут решения в админке: «Исправления карточек». Индексы рынка пересчитываются сами (кэш видит смену категорий).
+
 Cloudflare хранит `favicon.svg` до 4 часов, браузер посетителя — тоже: новый значок появляется не сразу.
 
 Настройки публичной сборки frontend — `frontend/.env.public` (плашка «Демо-версия», адрес API `/api`); образ `web` собирается с ними.

@@ -263,7 +263,8 @@
         "mechanical": "Mexanik",
         "membrane": "Membranali",
         "printer": "Printer",
-        "mfp": "KFQ (MFU)",
+        "3in1": "3 tasi 1 da (printer, skaner, nusxa)",
+        "4in1": "4 tasi 1 da (+ faks)",
         "usb": "USB-fleshka",
         "microsd": "microSD",
         "sd": "SD"
@@ -299,6 +300,7 @@
       "gpu_vendor_by_chip": "Qoida boʻyicha aniqlangan: GeForce RTX/GTX chiplarini NVIDIA, Radeon RX ni AMD, Arc ni Intel chiqaradi",
       "board_size_by_chipset": "Qoida boʻyicha aniqlangan: chipsetdan keyingi M harfi (B760M) Micro-ATX, I harfi — Mini-ITX degani",
       "resolution_by_name": "Qoida boʻyicha aniqlangan: FHD = 1920×1080, QHD = 2560×1440, UHD/4K = 3840×2160",
+      "printer_single_by_default": "Qoida boʻyicha aniqlangan: KFQni sotuvchilar doim nomlaydi («KFQ», «MFP», «3 tasi 1 da», faks); bunday soʻzlar boʻlmasa, bu oddiy printer",
       "ram_dimm_by_default": "Qoida boʻyicha aniqlangan: noutbuk xotirasini (SODIMM) sotuvchilar doim belgilaydi; bunday belgi boʻlmasa, bu kompyuter uchun oddiy DIMM xotira",
       "ram_brand_by_series": "Sotuvchi brendni koʻrsatmagan — u seriya nomidan aniqlangan (Trident Z → G.Skill, Vengeance → Corsair, Fury → Kingston)"
     },
@@ -540,7 +542,15 @@
     "printer": "Printerlar va KFQ",
     "projector": "Proyektorlar",
     "chair": "Geymer kreslolari",
-    "other": "Boshqalar"
+    "other": "Boshqalar",
+    "consumables": "Sarf materiallari",
+    "accessories": "Aksessuarlar",
+    "bags": "Sumkalar va ryukzaklar",
+    "webcams": "Veb-kameralar",
+    "microphones": "Mikrofonlar",
+    "scanners": "Skanerlar",
+    "screens": "Proyeksion ekranlar",
+    "panels": "Interaktiv panellar"
   },
   "flags": {
     "ai": "SI fikricha",

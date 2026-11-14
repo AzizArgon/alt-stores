@@ -152,7 +152,7 @@ DICTIONARY: dict[str, tuple[Spec, ...]] = {
     "desktop": (CPU, RAM_SIZE, STORAGE, GPU_CHIP, BRAND),
     "ups": (Spec("power_va", NUMBER, "VA", at_least=True), Spec("power_w", NUMBER, "W"), BRAND),
     "printer": (
-        Spec("type", CHOICE, values=("printer", "mfp")),
+        Spec("type", CHOICE, values=("printer", "3in1", "4in1")),  # 16.1: "МФУ" -> 3 in 1 / 4 in 1 (with fax)
         Spec("technology", CHOICE, values=("laser", "inkjet")),
         Spec("color_print", YESNO),
         Spec("paper", CHOICE, values=("A4", "A3")),
@@ -163,6 +163,9 @@ DICTIONARY: dict[str, tuple[Spec, ...]] = {
     "flash": (Spec("capacity", NUMBER, "GB"), Spec("type", CHOICE, values=("usb", "microsd", "sd")), BRAND),
     "chair": (COLOR, BRAND),
     "other": (BRAND,),
+    # Phase 16.1: new categories; their own characteristics come later, the brand filter works now
+    **{slug: (BRAND,) for slug in ("consumables", "accessories", "bags", "webcams", "microphones", "scanners",
+                                   "screens", "panels")},
 }
 
 # "Without the box" is possible for any product: the last key of every category

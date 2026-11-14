@@ -27,13 +27,19 @@ const ICONS = {
   other: <><path d="m21 8-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" /></>,
 }
 
+// Phase 16.1: new categories take the nearest icon of the set
+const SAME_AS = {
+  consumables: 'printer', scanners: 'printer', accessories: 'mouse', bags: 'laptop', webcams: 'monitor',
+  microphones: 'headphones', screens: 'projector', panels: 'monitor',
+}
+
 export const ICON_CATEGORIES = Object.keys(ICONS)
 
 export function CategoryIcon({ category, className = 'size-6' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
       strokeLinejoin="round" aria-hidden className={className}>
-      {ICONS[category] || ICONS.other}
+      {ICONS[category] || ICONS[SAME_AS[category]] || ICONS.other}
     </svg>
   )
 }
