@@ -2105,6 +2105,7 @@
       "after": "Suggested",
       "result": "After the dictionary and normalizer it becomes",
       "by": "Suggested by: {{store}}",
+      "duplicate": "Possible duplicate (found by the database check)",
       "selling": "Stores selling the card: {{count}}",
       "field": {
         "name": "Name",

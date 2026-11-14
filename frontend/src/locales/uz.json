@@ -2105,6 +2105,7 @@
       "after": "Taklif qilingan",
       "result": "Lugʻat va normalizatordan keyin shunday boʻladi",
       "by": "Taklif qildi: {{store}}",
+      "duplicate": "Ehtimoliy dublikat (baza tekshiruvida topildi)",
       "selling": "Kartochkani sotayotgan doʻkonlar: {{count}}",
       "field": {
         "name": "Nomi",

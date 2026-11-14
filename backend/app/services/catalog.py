@@ -30,7 +30,15 @@ TYPE_WORDS = {
     "gaming", "geforce", "radeon", "ssd", "hdd", "nvme", "sata", "sataiii", "sata3", "desktop",
     "проц", "видюха", "видяха", "озу", "оперативка", "мать", "материнка", "моник", "винт", "ссд",
     "дюйм", "дюйма", "дюймов", "inch",
+    # Phase 16.1: uz (Latin) type words, more slang and plural forms
+    "protsessor", "videokarta", "noutbuk", "klaviatura", "sichqoncha", "quloqchin", "naushnik", "ona", "platasi",
+    "operativ", "xotira", "xotirasi", "kompyuter", "kompyuterning", "korpus", "sovutgich", "quvvat", "manbai",
+    "bloki", "printeri", "monitori", "videokartasi", "protsessori", "uchun", "va",
+    "процессоры", "видеокарты", "мониторы", "ноутбуки", "видеокарту", "процессора", "видео", "камп", "комп",
+    "мать", "мамка", "оператива", "оперативки",
 }
+# Phase 16.1: packaging is a characteristic of the offer, not a different CPU ("12400F OEM" == "12400F BOX")
+_PACK_WORDS = {"oem", "box", "boxed", "tray", "mpk", "wof", "бокс", "оем", "коробка"}
 UNITS = r"gb|tb|mb|ghz|mhz|hz|w|va|mm|ms|mah|lm"
 _RU_UNITS = (("гб", "gb"), ("тб", "tb"), ("мб", "mb"), ("мгц", "mhz"), ("ггц", "ghz"), ("гц", "hz"), ("вт", "w"))
 # Characteristics an AI name or a long store name adds to the model: clocks, refresh rate, resolution, panel,
@@ -55,7 +63,7 @@ _CPU_CODENAMES = re.compile(
 # Values that tell two products apart, read from the seller's row even when a name leaves them out
 # ("Gigabyte B860M Gaming" with "DDR5" in the row is not the DDR4 board; "i5-12400F" written "OEM")
 # (the same monitor name with 240 Hz and 320 Hz is two models)
-IDENTITY_SPECS = {"motherboard": ("memory_type",), "cpu": ("pack",), "ram": ("type",), "monitor": ("refresh_rate",)}
+IDENTITY_SPECS = {"motherboard": ("memory_type",), "ram": ("type",), "monitor": ("refresh_rate",)}
 PAGE_SIZE = 24
 NUMBER_FACET_VALUES = 12  # numbers (capacity, diagonal) are offered by their most popular values
 
@@ -80,6 +88,8 @@ def make_match_key(category: str, name: str, brand: str | None = None, specs: di
         text = re.sub(r"\b(\d{4})\b(?!\s*mhz)", r"\1mhz", text)  # "DDR4 3200" == "DDR4 3200MHz"
     text = re.sub(rf"(\d)\s+({UNITS})\b", r"\1\2", text)  # "16 GB" == "16GB"
     tokens = re.findall(r"[a-zа-я0-9]+", text)
+    if category == "cpu":  # "Core i5-12400F" == "i5 12400F": the series number says it is a Core
+        tokens = [t for t in tokens if t not in _PACK_WORDS and t != "core"]
     words = {t for t in tokens if t not in TYPE_WORDS} or set(tokens)
     for key in IDENTITY_SPECS.get(category, ()):
         value = (specs or {}).get(key)
@@ -91,7 +101,7 @@ def make_match_key(category: str, name: str, brand: str | None = None, specs: di
 
 
 # Key words that come from IDENTITY_SPECS
-_IDENTITY_WORD = {"motherboard": r"ddr\d", "cpu": r"oem|box", "ram": r"ddr\d", "monitor": r"\d+hz"}
+_IDENTITY_WORD = {"motherboard": r"ddr\d", "ram": r"ddr\d", "monitor": r"\d+hz"}
 
 
 def split_identity(key: str) -> tuple[str, frozenset[str]]:
@@ -142,6 +152,18 @@ def rebuild_match_keys(db: Session) -> dict:
         merged += 1
     db.commit()
     return {"products": len(by_key), "merged": merged}
+
+
+def resolve_merged(db: Session, product_id: int) -> int:
+    """Phase 16.1: a card merged into another (a duplicate) -> the kept card, along the chain."""
+    seen = set()
+    while product_id not in seen:
+        seen.add(product_id)
+        nxt = db.scalar(select(Product.merged_into).where(Product.id == product_id))
+        if not nxt:
+            break
+        product_id = nxt
+    return product_id
 
 
 def rebuild_specs(db: Session, trace: dict | None = None, demo_store_ids: set[int] = frozenset(),

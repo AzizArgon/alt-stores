@@ -5,7 +5,8 @@ from app.db.database import get_db
 from app.db.models import Condition
 from app.db.seed import CITIES
 from app.services.catalog import (
-    PAGE_SIZE, category_summary, counts_demo, parse_spec_filters, product_card, search_products, used_offers,
+    PAGE_SIZE, category_summary, counts_demo, parse_spec_filters, product_card, resolve_merged, search_products,
+    used_offers,
 )
 from app.services.exchange import get_usd_rate
 from app.services.market import product_market
@@ -104,6 +105,7 @@ def get_product(product_id: int, sort: str = Query("recommended", pattern="^(rec
     """Product card with store offers: "recommended" order by default, or by price.
     `city` (phase 12.1): "в наличии" and "есть в N из M филиалов" by the branches of that city."""
     usd_rate, rate_date = _rate(db)
+    product_id = resolve_merged(db, product_id)  # phase 16.1: an old address of a merged duplicate
     card = product_card(db, product_id, usd_rate, sort, _city(city))
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Product not found")

@@ -416,7 +416,9 @@ export function AdminFixes() {
               <Card className="grid gap-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   {fix.product ? <Ext to={productLink(fix.product.id)}>{fix.product.name}</Ext> : <span>—</span>}
-                  <span className="text-sm text-muted">{t('admin.fixes.by', { store: fix.store?.name })} · {t('admin.fixes.selling', { count: fix.stores_selling })}</span>
+                  {fix.kind === 'duplicate'
+                    ? <Badge tone="warning">{t('admin.fixes.duplicate')}</Badge>
+                    : <span className="text-sm text-muted">{t('admin.fixes.by', { store: fix.store?.name })} · {t('admin.fixes.selling', { count: fix.stores_selling })}</span>}
                 </div>
                 <FixCompare fix={fix} />
                 {fix.result && <p className="text-sm"><span className="text-muted">{t('admin.fixes.result')}: </span><span className="font-medium break-words">{fix.result.name}</span></p>}

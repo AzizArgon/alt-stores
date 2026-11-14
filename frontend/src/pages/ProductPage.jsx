@@ -1,7 +1,7 @@
 import { BadgeCheck, ExternalLink, MapPin, Phone, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { WriteButton } from '../components/Chat'
 import { BranchAvailability } from '../components/BranchList'
@@ -188,6 +188,7 @@ function priceRange(offers, usdRate) {
 export default function ProductPage() {
   const { t } = useTranslation()
   const { id } = useParams()
+  const navigate = useNavigate()
   const { city, setCity } = useCity()
   const [sort, setSort] = useState('recommended')
   const [tab, setTab] = useState(null) // "new" / "used"; by default "new", or "used" when there are no new ones
@@ -197,9 +198,13 @@ export default function ProductPage() {
   useEffect(() => {
     // The city (phase 12.1): "в наличии" and "есть в N из M филиалов" by the branches of that city
     api.get(`/catalog/products/${id}`, { params: { sort, city: cityParam(city) } })
-      .then((res) => { setProduct(res.data); setError('') })
+      .then((res) => {
+        // Phase 16.1: the old address of a merged duplicate leads to the kept card
+        if (String(res.data.id) !== String(id)) navigate(`/products/${res.data.id}`, { replace: true })
+        setProduct(res.data); setError('')
+      })
       .catch((err) => setError(t(errorKey(err))))
-  }, [id, sort, city, t])
+  }, [id, sort, city, t, navigate])
 
   if (error) return <ErrorText>{error}</ErrorText>
   if (!product) {

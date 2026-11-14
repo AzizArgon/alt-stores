@@ -162,6 +162,8 @@ class Product(Base):
     normalized_name: Mapped[str] = mapped_column(String(512), index=True)
     # Lowercased brand+model used to merge the same product from different stores
     match_key: Mapped[str] = mapped_column(String(512), index=True)
+    # Phase 16.1: a duplicate merged into another card — its old address leads there (the row keeps history)
+    merged_into: Mapped[int | None] = mapped_column(Integer, index=True)
     specs_json: Mapped[dict] = mapped_column(JSON, default=dict)
     # Set when a seller created the card by hand (not from a price list): to be moderated later
     manual_store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id", ondelete="SET NULL"))
@@ -241,6 +243,8 @@ class ProductFix(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     merged_into: Mapped[int | None] = mapped_column(Integer)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Phase 16.1: "fix" — a seller's correction; "duplicate" — find_duplicates.py is not sure two cards are one
+    kind: Mapped[str] = mapped_column(String(16), default="fix", server_default="fix")
 
 
 class PriceHistory(Base):
