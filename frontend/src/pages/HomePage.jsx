@@ -248,7 +248,7 @@ export default function HomePage() {
           <h2 className="text-h2">{t('home.sellerTitle')}</h2>
           <p className="mt-1 text-sm text-muted md:text-base">{t('home.sellerText')}</p>
         </div>
-        <Button {...linkProps(user?.role === 'seller' ? sellerUrl() : sellerUrl('/register'))} size="lg" className="w-full shrink-0 md:w-auto">
+        <Button {...linkProps(user?.role === 'seller' ? sellerUrl() : '/register?role=seller')} size="lg" className="w-full shrink-0 md:w-auto">
           {user?.role === 'seller' ? t('nav.myCabinet') : t('home.sellerCta')}<ArrowRight className="size-4" aria-hidden />
         </Button>
       </section>

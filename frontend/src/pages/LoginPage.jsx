@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { AuthCard, ErrorText, SocialButtons, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
-import { Input, PasswordInput, SiteLink } from '../components/ui'
-import { goTo, sellerUrl, storeUrl } from '../config/sites'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { AuthShell, ErrorText, SubmitButton, brand, emailErrorKey, fieldOfError } from '../components/AuthForm'
+import { Input, PasswordInput } from '../components/ui'
+import { goTo } from '../config/sites'
 import { errorKey } from '../services/api'
 import { useAuth } from '../services/auth.jsx'
 import { returnTo } from '../services/roles'
 
-// `seller`: the cabinet's own login (/seller/login); after any login each role goes to its own interface
-export default function LoginPage({ seller = false }) {
+// Phase 16.3: one login for buyers, stores and the admin. The role is not chosen: the account knows it, and
+// returnTo() sends each role to its own section (or back to the page the guest came from).
+// The server keeps the admin's strict attempt limit and login journal on this same door.
+export default function LoginPage() {
   const { t } = useTranslation()
   const { login } = useAuth()
   const navigate = useNavigate()
@@ -33,18 +35,16 @@ export default function LoginPage({ seller = false }) {
       goTo(navigate, returnTo(user, location.state?.from))
     } catch (err) {
       const key = errorKey(err)
-      const detail = err.response?.data?.detail  // a blocked user: {code: 'user_blocked', reason}
+      const detail = err.response?.data?.detail  // a blocked user: {code: 'user_blocked', reason}; the limit: {minutes}
       setErrors({ [fieldOfError(key)]: t(key, typeof detail === 'object' ? detail : {}) })
-    } finally {
       setBusy(false)
     }
   }
 
   return (
-    <AuthCard title={t(seller ? 'seller.loginTitle' : 'auth.loginTitle')} hint={t(seller ? 'seller.loginHint' : 'auth.loginHint')}>
-      <SocialButtons />
+    <AuthShell mode="login" title={t('auth.signInTitle', brand)}>
       <form onSubmit={onSubmit} noValidate className="grid gap-4">
-        <Input label={t('auth.email')} type="email" autoComplete="email" error={errors.email}
+        <Input label={t('auth.email')} type="email" autoComplete="username" error={errors.email}
           value={email} onChange={(e) => setEmail(e.target.value)} />
         <PasswordInput label={t('auth.password')} autoComplete="current-password" error={errors.password}
           value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -53,16 +53,6 @@ export default function LoginPage({ seller = false }) {
           <SubmitButton busy={busy} busyText={t('auth.loading')}>{t('auth.submitLogin')}</SubmitButton>
         </div>
       </form>
-      <p className="mt-6 text-center text-sm text-muted">
-        {t('auth.noAccount')}{' '}
-        <Link to={seller ? '/seller/register' : '/register'} state={location.state} className="font-semibold text-primary hover:underline">{t('nav.register')}</Link>
-      </p>
-      <p className="mt-2 text-center text-sm text-muted">
-        {t(seller ? 'seller.areYouBuyer' : 'seller.areYouSeller')}{' '}
-        <SiteLink url={seller ? storeUrl('/login') : sellerUrl('/login')} className="font-semibold text-primary hover:underline">
-          {t(seller ? 'seller.buyerLogin' : 'seller.sellerLogin')}
-        </SiteLink>
-      </p>
-    </AuthCard>
+    </AuthShell>
   )
 }

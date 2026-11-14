@@ -39,7 +39,8 @@ describe('reservation form', () => {
     expect(from).toBe('/products/7?tab=used&reserve=offer%3A5')
     expect(returnTo({ role: 'buyer' }, from)).toBe(from)
     expect(returnTo({ role: 'buyer' }, '/reservations')).toBe('/reservations')
-    expect(returnTo({ role: 'buyer' }, '/products/7')).not.toBe('/products/7')
+    // Phase 16.3: a buyer returns to any storefront page he came from ("Вход" in the header remembers it)
+    expect(returnTo({ role: 'buyer' }, '/products/7')).toBe('/products/7')
   })
 })
 

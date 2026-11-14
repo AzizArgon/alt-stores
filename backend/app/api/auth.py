@@ -50,14 +50,24 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    ip = client_ip(request)
+    """One login for every role (phase 16.3). An admin account keeps the admin door's strict limit and journal."""
+    from app.api import admin as admin_api  # the admin router imports auth helpers: import here, no cycle
+
+    ip, email = client_ip(request), data.email.lower()
     check_login_allowed(ip)
-    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    user = db.scalar(select(User).where(User.email == email))
+    is_admin = user is not None and user.role == UserRole.admin
+    if is_admin:
+        admin_api.admin_door_check(ip, email)
     if user is None or not verify_password(data.password, user.password_hash):
         login_failures.hit(ip)
+        if is_admin:
+            admin_api.admin_door_failed(db, user, ip, email)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if user.blocked_at is not None:
         raise blocked_error(user)
+    if is_admin:
+        admin_api.admin_door_passed(db, user, ip)
     return _token_response(user)
 
 

@@ -47,12 +47,6 @@ export function AuthProvider({ children }) {
     return saveSession(res.data)
   }
 
-  // Phase 13: the admin entrance (/admin/login) — its own endpoint, only the admin role, its own attempt limit
-  const adminLogin = async (email, password) => {
-    const res = await api.post('/admin/login', { email, password })
-    return saveSession(res.data)
-  }
-
   const register = async (email, password, role, inviteCode = '') => {
     const res = await api.post('/auth/register', { email, password, role, invite_code: inviteCode })
     return saveSession(res.data)
@@ -64,7 +58,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, adminLogin, register, logout, setLang }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, setLang }}>
       {children}
     </AuthContext.Provider>
   )

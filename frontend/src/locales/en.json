@@ -4,7 +4,6 @@
   },
   "nav": {
     "login": "Log in",
-    "register": "Sign up",
     "logout": "Log out",
     "seller": "Seller cabinet",
     "market": "Market prices",
@@ -17,7 +16,8 @@
     "myCabinet": "My cabinet",
     "builds": "Ready PC builds",
     "reservations": "My reservations",
-    "stores": "Stores"
+    "stores": "Stores",
+    "signIn": "Sign in"
   },
   "catalog": {
     "searchPlaceholder": "Model, brand or product type",
@@ -312,14 +312,12 @@
     "admin": "Administrator"
   },
   "auth": {
-    "loginTitle": "Log in",
-    "registerTitle": "Sign up",
     "email": "Email",
     "password": "Password",
     "passwordConfirm": "Repeat the password",
     "role": "I am —",
-    "roleBuyerHint": "looking for and comparing products",
-    "roleSellerHint": "uploading my store's price list",
+    "roleBuyerHint": "I compare prices and reserve",
+    "roleSellerHint": "Seller cabinet: price lists, stock, buyers",
     "submitLogin": "Log in",
     "submitRegister": "Create account",
     "noAccount": "No account?",
@@ -332,9 +330,19 @@
     "google": "Log in with Google",
     "oneid": "Log in with OneID",
     "soon": "soon",
-    "loginHint": "Welcome back to {{brand}}",
-    "registerHint": "Compare store prices or put your price list on {{brand}}",
-    "or": "or"
+    "or": "or",
+    "signInTitle": "Sign in to {{brand}}",
+    "signUpTitle": "Join {{brand}}",
+    "tabLogin": "Sign in",
+    "tabRegister": "Sign up",
+    "roleLabel": "Who are you?",
+    "roleBuyer": "I am a buyer",
+    "roleSeller": "I am a store",
+    "roleRequired": "Choose who you are",
+    "panelTitle": "One database of computer hardware in Uzbekistan",
+    "perkCompare": "One product — prices from every store",
+    "perkHonest": "Anti-Fraud checks prices and stores",
+    "perkReserve": "Reserve in a store without prepayment"
   },
   "errors": {
     "passwordLength": "The password must be 8 to 72 characters",
@@ -1024,16 +1032,6 @@
   "seller": {
     "subtitle": "for sellers",
     "openStore": "Open the storefront",
-    "loginTitle": "Seller login",
-    "loginHint": "The store cabinet: price lists, products and market prices",
-    "registerTitle": "Store sign-up",
-    "registerHint": "Upload a price list — the system lays it out on catalog cards by itself",
-    "areYouBuyer": "Are you a buyer?",
-    "areYouSeller": "Are you a store?",
-    "buyerLogin": "Storefront login",
-    "sellerLogin": "Seller login",
-    "buyerRegister": "Buyer sign-up",
-    "sellerRegister": "Store sign-up",
     "notSellerTitle": "This section is for sellers",
     "notSellerText": "The cabinet opens only for a store account. Log in as a seller or go back to shopping on the storefront.",
     "loginAsSeller": "Log in as a seller",
@@ -1969,8 +1967,6 @@
       "users": "People",
       "log": "Journal"
     },
-    "loginTitle": "Administrator login",
-    "loginHint": "There is no sign-up: the administrator account is created by a script on the server",
     "noAccessTitle": "No access",
     "noAccessText": "This section opens only for the administrator.",
     "loginAsAdmin": "Log in as administrator",
@@ -2200,7 +2196,8 @@
         "barcode": "Barcodes",
         "channel": "Channels",
         "user": "Users",
-        "photo": "Photos"
+        "photo": "Photos",
+        "login": "Sign-ins"
       },
       "empty": "No actions yet"
     },
@@ -2229,7 +2226,9 @@
       "user_unblock": "User unblocked",
       "photo_accept": "Card photo accepted",
       "photo_reject": "Card photo rejected",
-      "photo_main": "Main card photo chosen"
+      "photo_main": "Main card photo chosen",
+      "login_admin": "Administrator signed in",
+      "login_failed": "Wrong administrator password"
     },
     "error": {
       "not_found": "Not found — refresh the page",
@@ -2250,7 +2249,6 @@
       "barcode_checksum": "Wrong check digit of the code",
       "barcode_format": "Wrong code format"
     },
-    "toSite": "← To the site · login for sellers and buyers",
     "photos": {
       "title": "Card photos",
       "hint": "All stores selling the card see the model photo. Check that the photo shows that very product, without others' watermarks or ads. The largest photo is suggested as the main one by default.",

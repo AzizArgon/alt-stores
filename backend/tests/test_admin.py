@@ -87,6 +87,33 @@ def test_admin_login_refuses_others_and_is_rate_limited(client, world):
     assert client.post("/api/admin/login", json={"email": "admin@example.com", "password": "admin12345"}).status_code == 429
 
 
+def test_one_login_keeps_the_admin_limit_and_journal(client, db, world):
+    """Phase 16.3: the admin logs in through the one /api/auth/login — the door is not weaker than /api/admin/login."""
+    login = lambda pw, email="admin@example.com": client.post("/api/auth/login", json={"email": email, "password": pw})  # noqa: E731
+    ok = login("admin12345")
+    assert ok.status_code == 200 and ok.json()["user"]["role"] == "admin"
+    for _ in range(admin_api.ADMIN_MAX_FAILURES):
+        assert login("wrong").status_code == 401
+    # Locked for the window even with the right password, the same 5 failures / 15 min as the admin door
+    locked = login("admin12345")
+    assert locked.status_code == 429 and locked.json()["detail"] == {"code": "too_many_logins", "minutes": admin_api.ADMIN_WINDOW_MINUTES}
+    # The two doors share one counter: the old admin door is locked too
+    assert client.post("/api/admin/login", json={"email": "admin@example.com", "password": "admin12345"}).status_code == 429
+    # The journal keeps the admin's sign-in and every wrong password with the address
+    actions = [a.action for a in db.scalars(select(AdminAction).order_by(AdminAction.id))]
+    assert actions.count("login_admin") == 1 and actions.count("login_failed") == admin_api.ADMIN_MAX_FAILURES
+    assert all(a.details.get("ip") for a in db.scalars(select(AdminAction).where(AdminAction.action.like("login_%"))))
+    admin_api.admin_failures.clear()
+
+
+def test_one_login_journal_is_only_for_admins(client, db, world):
+    assert client.post("/api/auth/login", json={"email": "buyer@example.com", "password": "nope"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "buyer@example.com", "password": "buyer12345"}).status_code == 200
+    assert db.scalar(select(func.count(AdminAction.id)).where(AdminAction.action.like("login_%"))) == 0
+    # A wrong password of a buyer does not count against the admin's lock
+    assert client.post("/api/auth/login", json={"email": "admin@example.com", "password": "admin12345"}).status_code == 200
+
+
 def test_no_admin_registration_and_script_makes_one(client, db, world):
     r = client.post("/api/auth/register", json={"email": "x@example.com", "password": "12345678", "role": "admin"})
     assert r.status_code == 422

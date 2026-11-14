@@ -379,7 +379,7 @@ function AccountMenu({ store }) {
       {store && <DropdownItem as={Link} to="/seller/profile" icon={Store}>{t('cabinet.nav.profile')}</DropdownItem>}
       {/* The storefront opens in a new tab: the cabinet stays where the seller left it */}
       <DropdownItem as="a" href={storeUrl('/')} target="_blank" rel="noreferrer" icon={ExternalLink}>{t('seller.openStore')}</DropdownItem>
-      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
+      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/login') }}>{t('nav.logout')}</DropdownItem>
       {/* Phase 15: on a phone the language is chosen here, the top bar stays short */}
       <div className="mt-1.5 border-t border-line p-2 sm:hidden"><LangSwitch wide /></div>
     </Dropdown>
@@ -404,11 +404,6 @@ function SellerFrame({ store, sections, top, place, children }) {
   )
 }
 
-// Login and register of sellers: the cabinet frame without the menu
-export function SellerAuthLayout() {
-  return <SellerFrame><Outlet /></SellerFrame>
-}
-
 // A buyer (or anyone but a seller) opened /seller/...
 export function NotSellerPage() {
   const { t } = useTranslation()
@@ -421,7 +416,7 @@ export function NotSellerPage() {
         <h1 className="mt-4 text-h1">{t('seller.notSellerTitle')}</h1>
         <p className="mt-2 text-sm text-muted">{t('seller.notSellerText')}</p>
         <div className="mt-6 grid gap-2">
-          <Button size="lg" onClick={() => { logout(); navigate('/seller/login') }}>{t('seller.loginAsSeller')}</Button>
+          <Button size="lg" onClick={() => { logout(); navigate('/login', { state: { from: '/seller' } }) }}>{t('seller.loginAsSeller')}</Button>
           <Button size="lg" variant="secondary" {...linkProps(storeUrl('/'))}>{t('seller.backToStore')}</Button>
         </div>
       </Card>

@@ -4,7 +4,6 @@
   },
   "nav": {
     "login": "Kirish",
-    "register": "Roʻyxatdan oʻtish",
     "logout": "Chiqish",
     "seller": "Sotuvchi kabineti",
     "market": "Bozordagi narxlar",
@@ -17,7 +16,8 @@
     "myCabinet": "Mening kabinetim",
     "builds": "Tayyor yigʻmalar",
     "reservations": "Mening bronlarim",
-    "stores": "Doʻkonlar"
+    "stores": "Doʻkonlar",
+    "signIn": "Kirish"
   },
   "catalog": {
     "searchPlaceholder": "Model, brend yoki mahsulot turi",
@@ -312,14 +312,12 @@
     "admin": "Administrator"
   },
   "auth": {
-    "loginTitle": "Kirish",
-    "registerTitle": "Roʻyxatdan oʻtish",
     "email": "Elektron pochta",
     "password": "Parol",
     "passwordConfirm": "Parolni takrorlang",
     "role": "Men —",
-    "roleBuyerHint": "mahsulotlarni qidiraman va solishtiraman",
-    "roleSellerHint": "doʻkon praysini yuklayman",
+    "roleBuyerHint": "Narxlarni solishtiraman va band qilaman",
+    "roleSellerHint": "Sotuvchi kabineti: narxlar, ombor, xaridorlar",
     "submitLogin": "Kirish",
     "submitRegister": "Akkaunt yaratish",
     "noAccount": "Akkauntingiz yoʻqmi?",
@@ -332,9 +330,19 @@
     "google": "Google orqali kirish",
     "oneid": "OneID orqali kirish",
     "soon": "tez orada",
-    "loginHint": "{{brand}}ga xush kelibsiz",
-    "registerHint": "Doʻkon narxlarini solishtiring yoki praysingizni {{brand}}da joylang",
-    "or": "yoki"
+    "or": "yoki",
+    "signInTitle": "{{brand}}ga kirish",
+    "signUpTitle": "{{brand}}da roʻyxatdan oʻtish",
+    "tabLogin": "Kirish",
+    "tabRegister": "Roʻyxatdan oʻtish",
+    "roleLabel": "Siz kimsiz?",
+    "roleBuyer": "Men xaridorman",
+    "roleSeller": "Men doʻkonman",
+    "roleRequired": "Kim ekaningizni tanlang",
+    "panelTitle": "Oʻzbekiston kompyuter texnikasining yagona bazasi",
+    "perkCompare": "Bitta mahsulot — barcha doʻkonlar narxlari",
+    "perkHonest": "Anti-Fraud narxlar va doʻkonlarni tekshiradi",
+    "perkReserve": "Doʻkonda oldindan toʻlovsiz band qilish"
   },
   "errors": {
     "passwordLength": "Parol 8 dan 72 belgigacha boʻlishi kerak",
@@ -1024,16 +1032,6 @@
   "seller": {
     "subtitle": "sotuvchilar uchun",
     "openStore": "Vitrinani ochish",
-    "loginTitle": "Sotuvchilar uchun kirish",
-    "loginHint": "Doʻkon kabineti: prayslar, mahsulotlar va bozor narxlari",
-    "registerTitle": "Doʻkonni roʻyxatdan oʻtkazish",
-    "registerHint": "Prays yuklang — tizim uni katalog kartochkalariga oʻzi joylaydi",
-    "areYouBuyer": "Siz xaridormisiz?",
-    "areYouSeller": "Siz doʻkonmisiz?",
-    "buyerLogin": "Vitrinaga kirish",
-    "sellerLogin": "Sotuvchilar uchun kirish",
-    "buyerRegister": "Xaridor sifatida roʻyxatdan oʻtish",
-    "sellerRegister": "Doʻkonni roʻyxatdan oʻtkazish",
     "notSellerTitle": "Bu boʻlim sotuvchilar uchun",
     "notSellerText": "Kabinet faqat doʻkon akkauntiga ochiladi. Sotuvchi sifatida kiring yoki vitrinadagi xaridlarga qayting.",
     "loginAsSeller": "Sotuvchi sifatida kirish",
@@ -1969,8 +1967,6 @@
       "users": "Odamlar",
       "log": "Jurnal"
     },
-    "loginTitle": "Administrator kirishi",
-    "loginHint": "Roʻyxatdan oʻtish yoʻq: administrator akkauntini serverdagi skript yaratadi",
     "noAccessTitle": "Ruxsat yoʻq",
     "noAccessText": "Bu boʻlim faqat administratorga ochiladi.",
     "loginAsAdmin": "Administrator sifatida kirish",
@@ -2200,7 +2196,8 @@
         "barcode": "Shtrix-kodlar",
         "channel": "Kanallar",
         "user": "Foydalanuvchilar",
-        "photo": "Rasmlar"
+        "photo": "Rasmlar",
+        "login": "Kirishlar"
       },
       "empty": "Hozircha amallar yoʻq"
     },
@@ -2229,7 +2226,9 @@
       "user_unblock": "Foydalanuvchi blokdan chiqarildi",
       "photo_accept": "Kartochka rasmi qabul qilindi",
       "photo_reject": "Kartochka rasmi rad etildi",
-      "photo_main": "Kartochkaning asosiy rasmi tanlandi"
+      "photo_main": "Kartochkaning asosiy rasmi tanlandi",
+      "login_admin": "Administrator kirishi",
+      "login_failed": "Administrator paroli notoʻgʻri"
     },
     "error": {
       "not_found": "Topilmadi — sahifani yangilang",
@@ -2250,7 +2249,6 @@
       "barcode_checksum": "Kodning nazorat raqami notoʻgʻri",
       "barcode_format": "Kod formati notoʻgʻri"
     },
-    "toSite": "← Saytga · sotuvchilar va xaridorlar uchun kirish",
     "photos": {
       "title": "Kartochka rasmlari",
       "hint": "Model rasmini kartochkani sotadigan barcha doʻkonlar koʻradi. Rasmda aynan shu mahsulot ekanini, begona suv belgilari va reklama yoʻqligini tekshiring. Asosiy rasm sifatida odatda eng katta rasm taklif qilinadi.",

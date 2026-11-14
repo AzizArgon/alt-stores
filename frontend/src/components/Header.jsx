@@ -1,4 +1,4 @@
-import { ChevronDown, CalendarCheck, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Search, UserCog } from 'lucide-react'
+import { ChevronDown, CalendarCheck, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Search, UserCog, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -9,6 +9,7 @@ import api from '../services/api'
 import { checkBarcode, looksLikeBarcode } from '../services/barcode'
 import { useUnread } from '../services/chat'
 import { useUnseenReservations } from '../services/reservations'
+import { loginState } from '../services/roles'
 import { useCity } from '../services/city.jsx'
 import Logo, { BrandName } from './Logo'
 import { Dropdown, DropdownItem, Sheet } from './overlays'
@@ -187,12 +188,22 @@ function MobileMenu({ open, onClose, user, logout, unread, unseen }) {
         {CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
       </Select>
       {!user && (
-        <div className="mt-5 grid gap-2" onClick={(e) => e.target.closest('a') && onClose()}>
-          <Button to="/login" variant="secondary">{t('nav.login')}</Button>
-          <Button to="/register">{t('nav.register')}</Button>
+        <div className="mt-5 grid" onClick={(e) => e.target.closest('a') && onClose()}>
+          <SignInButton />
         </div>
       )}
     </Sheet>
+  )
+}
+
+// Phase 16.3: one button for guests — the one login (registration is a tab there); the page is kept to come back to
+function SignInButton({ size = 'md', className = '' }) {
+  const { t } = useTranslation()
+  const location = useLocation()
+  return (
+    <Button to="/login" state={loginState(location)} variant="secondary" size={size} className={className}>
+      <UserRound className="size-4" aria-hidden />{t('nav.signIn')}
+    </Button>
   )
 }
 
@@ -236,11 +247,7 @@ export default function Header() {
               <UserMenu user={user} logout={logout} unread={unread} unseen={unseen} />
             </div>
           ) : (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button to="/login" variant="secondary" size="sm">{t('nav.login')}</Button>
-              {/* With the full menu (xl) there is room for it only on wide screens: uz / en words are longer */}
-              <span className="hidden sm:block xl:hidden 2xl:block"><Button to="/register" size="sm">{t('nav.register')}</Button></span>
-            </div>
+            <SignInButton size="sm" className="shrink-0" />
           )}
         </div>
         {/* The home page has its own big search: the phone row would repeat it */}
