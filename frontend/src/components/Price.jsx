@@ -12,7 +12,9 @@ export function RateMark({ tip }) {
   const [open, setOpen] = useState(false)
   // The price is often inside a link (a tile): the tap shows the rate, it does not open the card
   const toggle = (e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open) }
+  // The space stays outside the inline-block: inside it would be collapsed and "≈" would touch the number
   return (
+    <>
     <span className="group/rate relative inline-block">
       <button type="button" onClick={toggle} onBlur={() => setOpen(false)} aria-label={tip} title={tip}
         className="cursor-help rounded-sm font-normal text-muted underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-primary">≈</button>
@@ -20,8 +22,8 @@ export function RateMark({ tip }) {
         className={`pointer-events-none absolute bottom-full left-0 z-30 mb-1.5 w-max max-w-60 rounded-md bg-ink px-2 py-1 text-xs font-normal tracking-normal whitespace-normal text-white shadow-pop group-hover/rate:block ${open ? 'block' : 'hidden'}`}>
         {tip}
       </span>
-      {' '}
-    </span>
+    </span>{' '}
+    </>
   )
 }
 
