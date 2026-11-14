@@ -9,7 +9,9 @@ import { CityProvider } from '../services/city.jsx'
 import Footer, { FOOTER_COLUMNS } from './Footer'
 import { MARKET_LINK, NAV_LINKS } from './Header'
 import Price from './Price'
-import SearchBar, { CityMenu, SEARCH_ROW_PATHS, catalogSearch } from './SearchBar'
+import SearchBar, { CityMenu, HERO_PATH, SEARCH_ROW_PATHS, catalogSearch } from './SearchBar'
+import { Hero } from '../pages/HomePage'
+import StoreLayoutCode from '../layouts/StoreLayout.jsx?raw'
 import { cityParam } from '../config/cities'
 
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} }
@@ -60,6 +62,28 @@ describe('city choice (phase 17.1)', () => {
   it('the choice is remembered and reaches the catalog requests', () => {
     expect(cityParam('samarkand')).toBe('samarkand')
     expect(cityParam('all')).toBeUndefined()
+  })
+})
+
+describe('blue banner and the compact row (phase 17.1)', () => {
+  it('the banner: title, hint, city → words → "Найти"', () => {
+    const out = html(<Hero />)
+    expect(out).toContain('bg-gradient-to-br')
+    expect(out).toContain('Цены на компьютерную технику во всех магазинах Узбекистана')
+    expect(out).toContain('один товар — одна карточка')
+    expect(out).toContain('data-variant="hero"')
+    expect(out.indexOf('Весь Узбекистан')).toBeLessThan(out.indexOf('Модель, бренд или тип товара'))
+  })
+  it('the banner only on the home page: the layout draws the row everywhere else', () => {
+    expect(HERO_PATH).toBe('/')
+    expect(StoreLayoutCode).toContain('pathname !== HERO_PATH && SEARCH_ROW_PATHS.includes(pathname)')
+  })
+  it('the other pages: compact — 40 px high, limited width, full width on a phone', () => {
+    const form = html(<SearchBar />, '/catalog').match(/<form[^>]*>/)[0]
+    expect(form).toContain('data-variant="compact"')
+    expect(form).toContain('h-10')
+    expect(form).toContain('md:max-w-[680px]')
+    expect(form).toContain('w-full')
   })
 })
 

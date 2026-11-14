@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
-import SearchBar, { SEARCH_ROW_PATHS } from '../components/SearchBar'
+import SearchBar, { HERO_PATH, SEARCH_ROW_PATHS } from '../components/SearchBar'
 
 // Set only for the public server build (deploy.bat)
 const PUBLIC_DEMO = import.meta.env.VITE_PUBLIC_DEMO === '1'
@@ -26,7 +26,8 @@ export default function StoreLayout() {
       <Header />
       <DemoBanner />
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
-        {SEARCH_ROW_PATHS.includes(pathname) && <SearchBar className="mb-6 md:mb-8" />}
+        {/* Phase 17.1: the home page has the row in its banner; the catalog — a compact row close to the breadcrumbs */}
+        {pathname !== HERO_PATH && SEARCH_ROW_PATHS.includes(pathname) && <SearchBar className="-mt-2 mb-3 md:-mt-3 md:mb-4" />}
         <Outlet />
       </main>
       <Footer />

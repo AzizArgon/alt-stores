@@ -6,6 +6,7 @@ import { CategoryIcon } from '../components/CategoryIcon'
 import { DemoNote, PctText } from '../components/Market'
 import BuildTile from '../components/BuildTile'
 import ProductTile from '../components/ProductTile'
+import SearchBar from '../components/SearchBar'
 import { Button, Card, EmptyState, Skeleton, SkeletonCards } from '../components/ui'
 import { cityParam } from '../config/cities'
 import { groupLayout, groupSections, sideTileClass } from '../config/homeGroups'
@@ -117,6 +118,18 @@ function SellerBanner() {
   )
 }
 
+// Phase 17.1: the blue banner is back (as before 16.2), with the search row inside — the only search row of the home page
+export function Hero() {
+  const { t } = useTranslation()
+  return (
+    <section className="rounded-xl bg-gradient-to-br from-primary to-primary-hover px-4 py-6 text-white md:px-10 md:py-9">
+      <h1 className="max-w-3xl text-h2 md:text-[2.25rem] md:leading-tight">{t('home.title')}</h1>
+      <p className="mt-2 max-w-2xl text-sm text-white/85 md:text-base">{t('home.hint')}</p>
+      <SearchBar variant="hero" className="mt-5 max-w-4xl" />
+    </section>
+  )
+}
+
 const MoreLink = ({ to, children }) => (
   <Link to={to} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary hover:underline">
     {children}<ArrowRight className="size-4" aria-hidden />
@@ -176,7 +189,7 @@ export default function HomePage() {
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 md:gap-10">
-      <h1 className="sr-only">{t('home.title')}</h1>
+      <Hero />
       <section>
         <SectionHead title={t('home.sections')} demo={sections?.includes_demo}
           hint={city !== 'all' ? t('catalog.inCity', { city: t(`cities.${city}`) }) : undefined}

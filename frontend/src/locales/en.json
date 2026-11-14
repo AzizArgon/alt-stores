@@ -65,6 +65,8 @@
   },
   "home": {
     "title": "Computer hardware prices in all stores of Uzbekistan — in one place",
+    "hint": "Store price lists are brought to one standard: one product — one card, all offers side by side.",
+    "searchPlaceholder": "Model, brand or product type",
     "searchSubmit": "Search",
     "sections": "Sections",
     "allCatalog": "Whole catalog",

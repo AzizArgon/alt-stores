@@ -65,6 +65,8 @@
   },
   "home": {
     "title": "Oʻzbekistonning barcha doʻkonlaridagi kompyuter texnikasi narxlari — bir joyda",
+    "hint": "Doʻkonlar narxlari yagona standartga keltirilgan: bitta mahsulot — bitta kartochka, barcha takliflar yonma-yon.",
+    "searchPlaceholder": "Model, brend yoki mahsulot turi",
     "searchSubmit": "Topish",
     "sections": "Boʻlimlar",
     "allCatalog": "Butun katalog",
