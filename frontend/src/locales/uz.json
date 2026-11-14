@@ -3,6 +3,8 @@
     "tagline": "Oʻzbekiston doʻkonlarida kompyuter texnikasi narxlari"
   },
   "nav": {
+    "menuCollapse": "Menyuni yigʻish",
+    "menuExpand": "Menyuni yoyish",
     "login": "Kirish",
     "logout": "Chiqish",
     "seller": "Sotuvchi kabineti",

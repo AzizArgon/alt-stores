@@ -1,3 +1,5 @@
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation } from 'react-router-dom'
 import { UnreadBadge } from '../components/Header'
@@ -15,10 +17,33 @@ import { DemoBanner } from './StoreLayout'
 //               Phase 12.5: a section may have `pages` [{ to, key, badge, deep }] — one item of the menu (active on
 //               any of its pages, the pages are tabs at the top of the page); `side: false` — only in the phone bar.
 //   top       — a line above the page (the tabs of the open section)
+// Phase 17.1: the left menu folds to icons (names in the hints). The choice is remembered;
+// until the user chooses, screens narrower than 1440 px start with the menu folded
+export const MENU_KEY = 'alt_menu_folded'
+export const FOLD_BELOW = 1440
+export function initialFolded(saved, width) {
+  if (saved === '1') return true
+  if (saved === '0') return false
+  return width < FOLD_BELOW
+}
+function useFolded() {
+  const [folded, setFolded] = useState(() => {
+    let saved = null
+    try { saved = localStorage.getItem(MENU_KEY) } catch { /* private mode */ }
+    return initialFolded(saved, globalThis.innerWidth ?? FOLD_BELOW)
+  })
+  const toggle = () => setFolded((was) => {
+    try { localStorage.setItem(MENU_KEY, was ? '0' : '1') } catch { /* private mode */ }
+    return !was
+  })
+  return [folded, toggle]
+}
+
 export default function Workspace({ home, subtitle, actions, sections, navKey, tabKey, menuLabel, sideTitle, top, children }) {
   const { t } = useTranslation()
   const location = useLocation()
   const tabs = sections?.filter((s) => s.tab) || []
+  const [folded, toggleFolded] = useFolded()
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-30 border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
@@ -38,27 +63,37 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
       {sections ? (
         <div className="flex flex-1">
           {/* Phase 12.5: the menu is fixed under the top bar and scrolls apart from the page */}
-          <aside className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-60 shrink-0 self-start overflow-y-auto overscroll-contain border-r border-line bg-surface md:block">
-            <nav aria-label={menuLabel} className="p-3">
-              {sideTitle && <p className="mb-2 truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase" title={sideTitle}>{sideTitle}</p>}
+          <aside data-folded={folded ? '1' : '0'} className={`sticky top-16 hidden h-[calc(100dvh-4rem)] shrink-0 flex-col self-start border-r border-line bg-surface transition-[width] duration-150 md:flex ${folded ? 'w-16' : 'w-60'}`}>
+            <nav aria-label={menuLabel} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${folded ? 'p-2' : 'p-3'}`}>
+              {sideTitle && !folded && <p className="mb-2 truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase" title={sideTitle}>{sideTitle}</p>}
               <ul className="grid gap-0.5">
                 {sections.filter((s) => s.side !== false).map((s) => {
                   const { to, key, icon: Icon, end, badge } = s
                   return (
                     <li key={key}>
-                      <NavLink to={to} end={end} className={({ isActive }) => `flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-                        (s.pages ? sectionActive(s, location) : isActive) ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-surface-2 hover:text-ink'}`}>
-                        <Icon className="size-4 shrink-0" aria-hidden /><span className="flex-1">{t(`${navKey}.${key}`)}</span>
-                        <UnreadBadge count={badge} />
+                      <NavLink to={to} end={end} title={folded ? t(`${navKey}.${key}`) : undefined}
+                        className={({ isActive }) => `relative flex min-h-11 items-center gap-2.5 rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+                          folded ? 'justify-center px-0' : 'px-3'} ${
+                          (s.pages ? sectionActive(s, location) : isActive) ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-surface-2 hover:text-ink'}`}>
+                        <Icon className={`shrink-0 ${folded ? 'size-5' : 'size-4'}`} aria-hidden />
+                        <span className={folded ? 'sr-only' : 'flex-1'}>{t(`${navKey}.${key}`)}</span>
+                        <UnreadBadge count={badge} className={folded ? 'absolute top-0.5 right-0.5' : ''} />
                       </NavLink>
                     </li>
                   )
                 })}
               </ul>
             </nav>
+            <button type="button" onClick={toggleFolded} aria-expanded={!folded} title={t(folded ? 'nav.menuExpand' : 'nav.menuCollapse')}
+              className={`flex min-h-12 shrink-0 items-center gap-2.5 border-t border-line text-sm font-medium text-muted outline-none hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
+                folded ? 'justify-center' : 'px-6'}`}>
+              {folded ? <PanelLeftOpen className="size-5" aria-hidden /> : <PanelLeftClose className="size-4" aria-hidden />}
+              <span className={folded ? 'sr-only' : ''}>{t(folded ? 'nav.menuExpand' : 'nav.menuCollapse')}</span>
+            </button>
           </aside>
           {/* Bottom padding on a phone: the content does not hide under the tab bar */}
-          <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8">{top}{children}</main>
+          {/* Phase 17.1: no width limit — the work area takes all the width beside the menu */}
+          <main className="w-full min-w-0 flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8">{top}{children}</main>
           <nav aria-label={menuLabel} className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
             {/* Every name is read whole: a tab is never narrower than its name ("Добав…" was cut in an equal grid);
                 the spare width is shared, and only a very narrow screen would scroll the bar sideways */}

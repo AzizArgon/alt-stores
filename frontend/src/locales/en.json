@@ -3,6 +3,8 @@
     "tagline": "Computer hardware prices in the stores of Uzbekistan"
   },
   "nav": {
+    "menuCollapse": "Collapse menu",
+    "menuExpand": "Expand menu",
     "login": "Log in",
     "logout": "Log out",
     "seller": "Seller cabinet",
