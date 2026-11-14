@@ -20,13 +20,13 @@ const POPULAR_COUNT = 10
 const BUILDS_COUNT = 4
 const MARKET_CATEGORIES = ['ram', 'ssd', 'gpu', 'cpu']
 
-// Phase 16.2: every tile is the same — icon, name, "от ≈ … сум"
+// Phase 16.2: every tile is the same — icon, name, "от ≈ … сум". Phase 17.1: one fixed height, never stretched
 function SectionTile({ item, usdRate, className = '' }) {
   const { t } = useTranslation()
   const from = item.min_price_usd != null && usdRate ? formatPrice(roundSum(item.min_price_usd * usdRate), 'UZS') : null
   return (
     <Link to={`/catalog?category=${item.slug}`}
-      className={`group flex min-h-36 min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:p-4 ${className}`}>
+      className={`group flex h-40 min-w-0 flex-col rounded-xl border border-line bg-surface p-3 shadow-card transition-shadow outline-none hover:shadow-hover focus-visible:ring-2 focus-visible:ring-primary md:p-4 ${className}`}>
       <span className="flex size-12 items-center justify-center rounded-lg bg-primary-soft/60 text-primary">
         <CategoryIcon category={item.slug} className="size-7" />
       </span>
@@ -92,8 +92,8 @@ function SectionGroups({ groups, usdRate, builds, showAll }) {
         <div key={group.key} className={`grid grid-flow-dense grid-cols-subgrid content-start gap-y-3 md:gap-y-4 ${layout[gi].wrap} ${
           !showAll && starts[gi] >= PHONE_TILES ? 'max-md:hidden' : ''}`}>
           <h3 className="col-span-full -mb-0.5 text-h3">{t(`home.groups.${group.key}`)}</h3>
-          {group.items.map((item, i) => (
-            <SectionTile key={item.slug} item={item} usdRate={usdRate} className={i === group.items.length - 1 ? layout[gi].last : ''} />
+          {group.items.map((item) => (
+            <SectionTile key={item.slug} item={item} usdRate={usdRate} />
           ))}
           {gi === 0 && <BuildsTile builds={builds} className={sideTileClass(group.items.length)} />}
         </div>
@@ -186,6 +186,7 @@ export default function HomePage() {
 
   const cityEmpty = sections && sections.items.length === 0 && city !== 'all'
   const groups = sections ? groupSections(sections.items) : []
+  const tileCount = groups.reduce((n, g) => n + g.items.length, 0)
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 md:gap-10">
@@ -203,9 +204,9 @@ export default function HomePage() {
           </Card>
         )}
         {groups.length > 0 && <SectionGroups groups={groups} usdRate={sections.usd_rate} builds={builds} showAll={allSections} />}
-        {!allSections && sections?.items.length > PHONE_TILES && (
+        {!allSections && tileCount > PHONE_TILES && (
           <Button variant="secondary" className="mt-3 w-full md:hidden" onClick={() => setAllSections(true)}>
-            {t('home.allSections', { count: sections.items.length })}
+            {t('home.allSections', { count: tileCount })}
           </Button>
         )}
       </section>

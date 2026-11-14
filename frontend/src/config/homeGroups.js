@@ -1,20 +1,23 @@
 // Phase 16.2: the sections of the home page in groups with headings (names: home.groups.* in the locales).
-// A category that is not listed (a new one) goes to "Аксессуары и прочее"; "Прочее" is always the last tile
+// A category that is not listed (a new one) goes to "Аксессуары и прочее".
+// Phase 17.1: "Прочее" is not shown on the home page (in the catalog it stays the last one)
 export const HOME_GROUPS = [
   { key: 'components', slugs: ['cpu', 'gpu', 'motherboard', 'ram', 'ssd', 'hdd', 'psu', 'case', 'cooling'] },
   { key: 'peripherals', slugs: ['monitor', 'mouse', 'keyboard', 'headphones', 'speakers', 'webcams', 'microphones', 'chair'] },
   { key: 'devices', slugs: ['laptop', 'aio', 'desktop'] },
   { key: 'office', slugs: ['printer', 'consumables', 'projector', 'ups', 'scanners', 'screens', 'panels'] },
-  { key: 'other', slugs: ['accessories', 'flash', 'bags', 'other'] },
+  { key: 'other', slugs: ['accessories', 'flash', 'bags'] },
 ]
+
+export const HIDDEN_ON_HOME = 'other'
 
 // The categories that have goods → groups in the fixed order; empty groups are dropped
 export function groupSections(items) {
   const bySlug = new Map(items.map((item) => [item.slug, item]))
-  const known = new Set(HOME_GROUPS.flatMap((g) => g.slugs))
+  const known = new Set([...HOME_GROUPS.flatMap((g) => g.slugs), HIDDEN_ON_HOME])
   const groups = HOME_GROUPS.map((g) => {
     const list = g.slugs.map((s) => bySlug.get(s)).filter(Boolean)
-    if (g.key === 'other') list.splice(list.length - (bySlug.has('other') ? 1 : 0), 0, ...items.filter((i) => !known.has(i.slug)))
+    if (g.key === 'other') list.push(...items.filter((i) => !known.has(i.slug)))
     return { key: g.key, items: list }
   })
   return groups.filter((g) => g.items.length > 0)
@@ -24,40 +27,30 @@ export function groupSections(items) {
 // on laptops and wider (several rows high), on a phone and a tablet it is a strip under the group
 export const GRID_COLS = { base: 2, md: 4, lg: 5, xl: 6 }
 
-// No empty places in a row: the last tile takes what is left of its row.
-// `side` = one column is taken by the tall "Готовые ПК" tile (only lg and xl)
-export function lastTileSpan(count, cols, side = false) {
-  const free = side ? cols - 1 : cols
-  const rest = count % free
-  return rest === 0 ? 1 : free - rest + 1
-}
-
 // How many rows the tall tile spans: as many as the tiles beside it take (at least 2 when there are enough)
 export const sideRows = (count, cols) => Math.max(1, Math.ceil(count / (cols - 1)))
 
 // Small groups share a row (e.g. "Готовые устройства" 3 + "Офис" 3 on a wide screen). For one breakpoint:
-// every group gets its width in columns and the width of its last tile; a row left unfinished is closed
-// by stretching the group before the gap. The first group carries the tall tile (`side`) and takes whole rows
+// every group gets its width in columns; a group that does not fit the rest of the row starts a new one.
+// Phase 17.1: tiles are never stretched — every tile is one column, an empty place at the end of a row is fine.
+// The first group carries the tall tile (`side`) and takes whole rows
 export function packGroups(counts, cols, side = false) {
   const out = []
   let used = 0 // columns taken in the current row by small groups
   const closeRow = () => {
-    if (used > 0 && used < cols) {
-      const prev = out[out.length - 1]
-      prev.span += cols - used
-      prev.last += cols - used
-    }
+    // the group before the gap takes the rest of the row, so the next group starts on a new line; its tiles stay one column
+    if (used > 0 && used < cols) out[out.length - 1].span += cols - used
     used = 0
   }
   counts.forEach((n, i) => {
     const withSide = side && i === 0
     if (withSide || n >= cols) {
       closeRow()
-      out.push({ span: cols, last: lastTileSpan(n, cols, withSide) })
+      out.push({ span: cols })
       return
     }
     if (used + n > cols) closeRow()
-    out.push({ span: n, last: 1 })
+    out.push({ span: n })
     used += n
     if (used === cols) used = 0
   })
@@ -81,12 +74,11 @@ const AREA = {
 const BPS = ['base', 'md', 'lg', 'xl']
 const SIDE_BPS = ['lg', 'xl'] // the tall tile is beside the tiles only on laptops and wider
 
-// Classes for each group: `wrap` — its width in the page grid, `last` — its last tile
+// Classes for each group: `wrap` — its width in the page grid
 export function groupLayout(counts) {
   const packs = Object.fromEntries(BPS.map((bp) => [bp, packGroups(counts, GRID_COLS[bp], SIDE_BPS.includes(bp))]))
   return counts.map((_, i) => ({
     wrap: BPS.map((bp) => SPAN[bp][packs[bp][i].span]).join(' '),
-    last: BPS.map((bp) => SPAN[bp][Math.min(packs[bp][i].last, GRID_COLS[bp])]).join(' '),
   }))
 }
 

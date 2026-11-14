@@ -3,7 +3,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import i18n from '../i18n'
 import { detectCity, nearestCity } from '../config/cities'
-import { groupLayout, groupSections, lastTileSpan, packGroups, sideRows, sideTileClass } from '../config/homeGroups'
+import { groupLayout, groupSections, packGroups, sideRows, sideTileClass } from '../config/homeGroups'
+import HomePageCode from '../pages/HomePage.jsx?raw'
 import ForSellersPage from '../pages/ForSellersPage'
 import { CityProvider } from '../services/city.jsx'
 import Footer, { FOOTER_COLUMNS } from './Footer'
@@ -108,39 +109,28 @@ describe('"Определить" (phase 16.2)', () => {
 
 describe('home sections in groups (phase 16.2)', () => {
   const items = ['other', 'mouse', 'cpu', 'printer', 'laptop', 'gpu', 'brand_new', 'bags', 'consumables'].map((slug) => ({ slug }))
-  it('groups in the fixed order, a new category goes to "Аксессуары и прочее" before "Прочее"', () => {
+  it('groups in the fixed order, a new category goes to "Аксессуары и прочее"; "Прочее" is not on the home page', () => {
     const groups = groupSections(items)
     expect(groups.map((g) => g.key)).toEqual(['components', 'peripherals', 'devices', 'office', 'other'])
     expect(groups[0].items.map((i) => i.slug)).toEqual(['cpu', 'gpu'])
     expect(groups[3].items.map((i) => i.slug)).toEqual(['printer', 'consumables'])
-    expect(groups[4].items.map((i) => i.slug)).toEqual(['bags', 'brand_new', 'other'])
+    expect(groups[4].items.map((i) => i.slug)).toEqual(['bags', 'brand_new'])
+    expect(groupSections([{ slug: 'other' }])).toEqual([])
     expect(groupSections([{ slug: 'ssd' }]).map((g) => g.key)).toEqual(['components'])
     for (const g of ['components', 'peripherals', 'devices', 'office', 'other']) expect(i18n.exists(`home.groups.${g}`)).toBe(true)
   })
-  it('no empty places: the last tile takes the rest of its row', () => {
-    expect(lastTileSpan(9, 2)).toBe(2)
-    expect(lastTileSpan(9, 4)).toBe(4)
-    expect(lastTileSpan(8, 4)).toBe(1)
-    expect(lastTileSpan(9, 5, true)).toBe(4) // 4 columns beside "Готовые ПК": 4 + 4 + 1 → the last one takes 4
-    expect(lastTileSpan(9, 6, true)).toBe(2) // 5 beside: 5 + 4 → the last takes 2
+  it('tiles are never stretched (phase 17.1): one column each, one height, an empty place is fine', () => {
+    expect(HomePageCode).not.toMatch(/flex-grow|\bgrow\b|layout\[gi\]\.last/)
+    expect(HomePageCode).toContain('group flex h-40 min-w-0')
+    for (const g of groupLayout([9, 6, 3, 3, 2])) expect(Object.keys(g)).toEqual(['wrap'])
   })
-  it('small groups share a row; a row left unfinished is closed by the group before the gap', () => {
+  it('small groups share a row; a group that does not fit starts a new row', () => {
     // wide screen, 6 columns: components (9 + tall tile), peripherals 6, devices 3 + office 3, other 2
-    expect(packGroups([9, 6, 3, 3, 2], 6, true)).toEqual([
-      { span: 6, last: 2 }, { span: 6, last: 1 }, { span: 3, last: 1 }, { span: 3, last: 1 }, { span: 6, last: 5 },
-    ])
-    // laptop, 5 columns: peripherals 6 → 5 + 1 (last takes 5); devices 3 + other 2 would fit, office 3 does not
-    expect(packGroups([9, 6, 3, 3, 2], 5, true)).toEqual([
-      { span: 5, last: 4 }, { span: 5, last: 5 }, { span: 5, last: 3 }, { span: 3, last: 1 }, { span: 2, last: 1 },
-    ])
-    for (const cols of [2, 4, 5, 6]) {
-      // every row is full: the widths of small groups between full rows add up to whole rows
-      const packs = packGroups([9, 6, 3, 3, 2, 1], cols, cols >= 5)
-      expect(packs.reduce((n, p) => n + p.span, 0) % cols).toBe(0)
-    }
+    expect(packGroups([9, 6, 3, 3, 2], 6, true)).toEqual([{ span: 6 }, { span: 6 }, { span: 3 }, { span: 3 }, { span: 6 }])
+    // laptop, 5 columns: devices 3 + office 3 do not fit one row; office 3 + other 2 do
+    expect(packGroups([9, 6, 3, 3, 2], 5, true)).toEqual([{ span: 5 }, { span: 5 }, { span: 5 }, { span: 3 }, { span: 2 }])
     const layout = groupLayout([9, 6, 3, 3, 2])
     expect(layout[2].wrap).toBe('col-span-2 md:col-span-4 lg:col-span-5 xl:col-span-3')
-    expect(layout[4].last).toBe('col-span-1 md:col-span-3 lg:col-span-1 xl:col-span-5')
   })
   it('"Готовые ПК": the last column, as high as the tiles beside it; a strip on a phone', () => {
     expect(sideRows(9, 5)).toBe(3)
