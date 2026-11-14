@@ -1,4 +1,4 @@
-import { ArrowRight, Store } from 'lucide-react'
+import { ArrowRight, Layers, ShieldAlert, Store } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -130,6 +130,27 @@ export function Hero() {
   )
 }
 
+// Phase 17.1: "Почему ALT STORES" — a thin strip of three points at the bottom, above the footer
+export const WHY = [
+  { key: 'standard', icon: Layers },
+  { key: 'compare', icon: Store },
+  { key: 'fraud', icon: ShieldAlert },
+]
+export function WhyStrip() {
+  const { t } = useTranslation()
+  return (
+    <section aria-label={t('home.whyTitle')} className="border-t border-line pt-5">
+      <ul className="grid gap-3 sm:grid-cols-3 sm:gap-6">
+        {WHY.map(({ key, icon: Icon }) => (
+          <li key={key} className="flex items-center gap-2.5 text-sm text-muted">
+            <Icon className="size-5 shrink-0 text-primary" aria-hidden />{t(`home.why.${key}`)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 const MoreLink = ({ to, children }) => (
   <Link to={to} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary hover:underline">
     {children}<ArrowRight className="size-4" aria-hidden />
@@ -243,6 +264,8 @@ export default function HomePage() {
       <MarketBlock />
 
       <SellerBanner />
+
+      <WhyStrip />
     </div>
   )
 }

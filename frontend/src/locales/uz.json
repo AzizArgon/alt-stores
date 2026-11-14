@@ -80,12 +80,9 @@
     "marketLink": "Barcha indekslar va grafiklar",
     "whyTitle": "Nega ALT STORES",
     "why": {
-      "standard": "Yagona standart",
-      "standardText": "Istalgan doʻkon prayslari — Excel, PDF yoki Telegramdagi post — tekshirilgan xususiyatlarga ega bir xil kartochkalarga aylanadi.",
-      "compare": "Barcha doʻkonlar yonma-yon",
-      "compareText": "Bitta mahsulot — bitta kartochka: barcha doʻkonlar narxlari, bozor narxi va uning oʻzgarish tarixi.",
-      "fraud": "Shubhali takliflar haqida ogohlantirish",
-      "fraudText": "Narx juda past yoki tavsif gʻalati boʻlsa — sotuvchiga qoʻngʻiroq qilishingizdan oldin tizim yumshoq ogohlantiradi."
+      "standard": "Barcha doʻkonlar narxlari — yagona standartda",
+      "compare": "Bitta mahsulot — barcha doʻkonlar yonma-yon",
+      "fraud": "Shubhali narx haqida ogohlantiramiz"
     },
     "groups": {
       "components": "Butlovchi qismlar",
@@ -2473,8 +2470,16 @@
     "close": "Qidiruvni yopish"
   },
   "forSellers": {
+    "lead": "Kompyuter doʻkoni uchun bepul vitrina va hisob",
+    "perks": {
+      "find": "Xaridorlar mahsulotingizni topadi",
+      "price": "Narxlar roʻyxati istalgan koʻrinishda — Excel, PDF yoki Telegram posti",
+      "stock": "Excel oʻrniga filiallar boʻyicha qoldiqlar va ombor",
+      "scanner": "Shtrix-kod skaneri — USB yoki telefon",
+      "chat": "Bronlar va xaridorlar bilan chat",
+      "market": "Bozor va raqobatchilar narxlari — darhol koʻrinadi"
+    },
     "title": "Doʻkoningiz — Oʻzbekiston kompyuter texnikasining yagona bazasida",
-    "subtitle": "Narxlar roʻyxatini qanday boʻlsa shunday yuklang: tizim uni standartga keltiradi, narxlaringizni bozor narxi yonida xaridorlarga koʻrsatadi va mavjudlikni tartibda saqlashga yordam beradi.",
     "register": "Doʻkonni roʻyxatdan oʻtkazish",
     "login": "Kabinetingiz bormi? Kirish",
     "benefitsTitle": "Doʻkon nima oladi",

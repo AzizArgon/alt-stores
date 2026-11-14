@@ -80,12 +80,9 @@
     "marketLink": "All indices and charts",
     "whyTitle": "Why ALT STORES",
     "why": {
-      "standard": "One standard",
-      "standardText": "Price lists of any store — Excel, PDF or a Telegram post — become identical cards with checked specs.",
-      "compare": "All stores side by side",
-      "compareText": "One product — one card: prices of all stores, the market price and its history.",
-      "fraud": "Warnings about suspicious offers",
-      "fraudText": "A price that is too low or an odd description — the system gently warns you before you call the seller."
+      "standard": "Every store's prices in one standard",
+      "compare": "One product — all stores side by side",
+      "fraud": "We warn about a suspicious price"
     },
     "groups": {
       "components": "Components",
@@ -2473,8 +2470,16 @@
     "close": "Close search"
   },
   "forSellers": {
+    "lead": "A free storefront and stock keeping for a computer store",
+    "perks": {
+      "find": "Buyers will find your goods",
+      "price": "Price list in any form — Excel, PDF or a Telegram post",
+      "stock": "Stock by branch and a warehouse instead of Excel",
+      "scanner": "Barcode scanner — USB or phone",
+      "chat": "Reservations and chat with buyers",
+      "market": "Market and competitor prices at a glance"
+    },
     "title": "Your store in the single database of computer hardware in Uzbekistan",
-    "subtitle": "Upload your price list as it is: the system brings it to the standard, shows your prices to buyers next to the market and helps keep your stock up to date.",
     "register": "Register a store",
     "login": "Already have a cabinet? Sign in",
     "benefitsTitle": "What a store gets",

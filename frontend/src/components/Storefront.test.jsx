@@ -11,7 +11,7 @@ import Footer, { FOOTER_COLUMNS } from './Footer'
 import { MARKET_LINK, NAV_LINKS } from './Header'
 import Price from './Price'
 import SearchBar, { CityMenu, HERO_PATH, SEARCH_ROW_PATHS, catalogSearch } from './SearchBar'
-import { Hero } from '../pages/HomePage'
+import { Hero, WhyStrip } from '../pages/HomePage'
 import StoreLayoutCode from '../layouts/StoreLayout.jsx?raw'
 import { cityParam } from '../config/cities'
 
@@ -147,8 +147,20 @@ describe('/for-sellers and the footer (phase 16.2)', () => {
     const out = html(<ForSellersPage />, '/for-sellers')
     expect(out).toContain('href="/register?role=seller"')
     expect(out).toContain('href="/login"')
-    expect(out).toContain('Почему ALT STORES')
     expect(out).toContain('Зарегистрировать магазин')
+  })
+  it('first screen (phase 17.1): one short phrase and six perks with icons; no "Почему ALT STORES"', () => {
+    const out = html(<ForSellersPage />, '/for-sellers')
+    expect(out).toContain('Бесплатная витрина и учёт для компьютерного магазина')
+    for (const s of ['Покупатели найдут ваш товар', 'Excel, PDF или пост из Telegram', 'Остатки по филиалам и склад вместо Excel',
+      'Сканер штрихкодов — USB или телефон', 'Брони и чат с покупателями', 'Цены рынка и конкурентов — сразу видно']) expect(out).toContain(s)
+    expect(out).not.toContain('Почему ALT STORES')
+  })
+  it('"Почему ALT STORES" on the home page: a thin strip of three points', () => {
+    const out = html(<WhyStrip />)
+    expect(out.match(/<li/g)).toHaveLength(3)
+    expect(out).toContain('aria-label="Почему ALT STORES"')
+    expect(out).toContain('Один товар — все магазины рядом')
   })
   it('three columns; "Магазины" and "Для продавцов" are in the footer', () => {
     expect(FOOTER_COLUMNS.map((c) => c.title)).toEqual(['footer.buyers', 'footer.sellers', 'footer.project'])

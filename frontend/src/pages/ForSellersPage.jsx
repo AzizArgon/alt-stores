@@ -1,14 +1,18 @@
-import { ArrowRight, BarChart3, CalendarCheck, FileSpreadsheet, Layers, ScanBarcode, ShieldAlert, Store } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarCheck, FileSpreadsheet, MessagesSquare, ScanBarcode, Search, Warehouse } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button, Card } from '../components/ui'
 import { linkProps, sellerUrl } from '../config/sites'
 import { useAuth } from '../services/auth.jsx'
 
-// Phase 16.2: what used to be two blocks of the home page is a page of its own
-export const WHY = [
-  { key: 'standard', icon: Layers },
-  { key: 'compare', icon: Store },
-  { key: 'fraud', icon: ShieldAlert },
+// Phase 16.2: what used to be two blocks of the home page is a page of its own.
+// Phase 17.1: "Почему ALT STORES" went back to the home page (a thin strip); the first screen — one phrase + six perks
+export const PERKS = [
+  { key: 'find', icon: Search },
+  { key: 'price', icon: FileSpreadsheet },
+  { key: 'stock', icon: Warehouse },
+  { key: 'scanner', icon: ScanBarcode },
+  { key: 'chat', icon: MessagesSquare },
+  { key: 'market', icon: BarChart3 },
 ]
 export const BENEFITS = [
   { key: 'price', icon: FileSpreadsheet },
@@ -40,24 +44,21 @@ export default function ForSellersPage() {
   const { t } = useTranslation()
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 md:gap-10">
-      <section className="rounded-xl border border-line bg-surface p-5 shadow-card md:p-10">
-        <p className="text-sm font-semibold text-primary">{t('footer.forSellers')}</p>
-        <h1 className="mt-1 max-w-3xl text-h1 md:text-[2.25rem] md:leading-tight">{t('forSellers.title')}</h1>
-        <p className="mt-3 max-w-2xl text-muted md:text-lg">{t('forSellers.subtitle')}</p>
-        <Actions className="mt-6" />
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-h2">{t('home.whyTitle')}</h2>
-        <div className="grid gap-3 md:grid-cols-3 md:gap-4">
-          {WHY.map(({ key, icon: Icon }) => (
-            <Card key={key}>
-              <span className="flex size-11 items-center justify-center rounded-lg bg-accent-soft text-above"><Icon className="size-6" aria-hidden /></span>
-              <h3 className="mt-3 text-h3">{t(`home.why.${key}`)}</h3>
-              <p className="mt-1 text-sm text-muted">{t(`home.why.${key}Text`)}</p>
-            </Card>
-          ))}
+      <section className="grid gap-6 rounded-xl border border-line bg-surface p-5 shadow-card md:p-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-center lg:gap-10">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-primary">{t('footer.forSellers')}</p>
+          <h1 className="mt-1 max-w-3xl text-h1 md:text-[2.25rem] md:leading-tight">{t('forSellers.title')}</h1>
+          <p className="mt-3 text-muted md:text-lg">{t('forSellers.lead')}</p>
+          <Actions className="mt-6" />
         </div>
+        <ul className="grid gap-2.5" aria-label={t('forSellers.benefitsTitle')}>
+          {PERKS.map(({ key, icon: Icon }) => (
+            <li key={key} className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary"><Icon className="size-5" aria-hidden /></span>
+              <span className="min-w-0 text-sm font-medium md:text-base">{t(`forSellers.perks.${key}`)}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section>
