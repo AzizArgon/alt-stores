@@ -24,7 +24,8 @@ export function catalogSearch(text, currentSearch = '') {
 }
 
 // City choice: "Определить" first (asks the browser only on a click), then the list
-export function CityMenu({ className = '', initialOpen = false }) {
+// `align`: where the list opens from — 'left' when the city is the first part of the row, 'right' when it is near the end
+export function CityMenu({ className = '', initialOpen = false, align = 'left' }) {
   const { t } = useTranslation()
   const { city, setCity } = useCity()
   const [busy, setBusy] = useState(false)
@@ -34,7 +35,7 @@ export function CityMenu({ className = '', initialOpen = false }) {
     setBusy(false)
   }
   return (
-    <Dropdown align="left" initialOpen={initialOpen} panelClassName="max-h-96 w-60 overflow-y-auto" trigger={({ open, toggle }) => (
+    <Dropdown align={align} initialOpen={initialOpen} panelClassName="max-h-96 w-60 overflow-y-auto" trigger={({ open, toggle }) => (
       <button type="button" onClick={toggle} aria-expanded={open} aria-label={`${t('nav.city')}: ${t(`cities.${city}`)}`} title={t('nav.city')}
         className={`flex h-full items-center gap-1.5 text-sm font-medium outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${className}`}>
         {busy ? <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" aria-hidden /> : <MapPin className="size-4 shrink-0 text-primary" aria-hidden />}
@@ -104,7 +105,7 @@ export default function SearchBar({ autoFocus = false, className = '', variant =
   )
   const city = (
     <div className={`flex shrink-0 ${hero ? 'border-r' : 'border-l'} border-line`}>
-      <CityMenu className={hero ? 'min-h-12 max-w-56 rounded-l-[calc(var(--radius-lg)-1px)] px-3' : 'max-w-44 px-2.5 text-[13px]'} />
+      <CityMenu align={hero ? 'left' : 'right'} className={hero ? 'min-h-12 max-w-56 rounded-l-[calc(var(--radius-lg)-1px)] px-3' : 'max-w-52 px-2.5 text-[13px]'} />
     </div>
   )
   return (
