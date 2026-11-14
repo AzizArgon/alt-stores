@@ -75,6 +75,8 @@ def _cache_key(db: Session, today: date) -> tuple:
         db.scalar(select(func.max(PriceHistory.id))), db.scalar(select(func.count(PriceHistory.id))),
         db.scalar(select(func.max(Offer.updated_at))), db.scalar(select(func.count(Offer.id))),
         tuple(db.scalars(select(Store.id).where(Store.blocked_at.is_not(None)).order_by(Store.id))),  # phase 13
+        # Phase 16.1: cards moved to another category or merged — the category indices are built again
+        db.scalar(select(func.sum(Product.category_id))), db.scalar(select(func.sum(Product.merged_into))),
     )
 
 

@@ -9,13 +9,15 @@ import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 import { Modal, useToast } from './overlays'
 import { Badge, Button, Card, Checkbox, EmptyState, Skeleton, inputClass } from './ui'
 import { GoodsInput, stockError } from './Warehouse'
+import i18n from '../i18n'
+import { intlLocale } from '../services/lang'
 
 // Phase 12.4 "Ревизия": the seller scans every item on the shelf of one place. Each scan is saved on the server at
 // once, so a reload or a closed page loses nothing. "Завершить подсчёт" -> the differences (совпадает / недостача /
 // излишек / не найдено), the seller may leave a line out, "Применить" -> "Ревизия" lines of the journal.
 
 const TONE = { match: 'success', short: 'danger', over: 'warning', missing: 'danger' }
-const when = (iso) => new Intl.DateTimeFormat('ru', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+const when = (iso) => new Intl.DateTimeFormat(intlLocale(i18n.language), { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 
 export default function Stocktake({ place, places }) {
   const { t } = useTranslation()

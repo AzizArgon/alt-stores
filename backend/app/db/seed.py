@@ -33,6 +33,15 @@ CATEGORIES = [
     ("printer", "Принтеры и МФУ", "08443001001000000"),
     ("projector", "Проекторы", "08528003001000000"),
     ("chair", "Игровые кресла", "09401001003000000"),
+    # Phase 16.1: goods that were lost in "Принтеры" and "Прочее"
+    ("consumables", "Расходники", None),
+    ("accessories", "Аксессуары", None),
+    ("bags", "Сумки и рюкзаки", None),
+    ("webcams", "Веб-камеры", None),
+    ("microphones", "Микрофоны", None),
+    ("scanners", "Сканеры", None),
+    ("screens", "Проекционные экраны", None),
+    ("panels", "Интерактивные панели", None),
     ("other", "Прочее", None),
 ]
 

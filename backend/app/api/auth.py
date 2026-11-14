@@ -1,6 +1,8 @@
 import secrets
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -48,17 +50,39 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    ip = client_ip(request)
+    """One login for every role (phase 16.3). An admin account keeps the admin door's strict limit and journal."""
+    from app.api import admin as admin_api  # the admin router imports auth helpers: import here, no cycle
+
+    ip, email = client_ip(request), data.email.lower()
     check_login_allowed(ip)
-    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    user = db.scalar(select(User).where(User.email == email))
+    is_admin = user is not None and user.role == UserRole.admin
+    if is_admin:
+        admin_api.admin_door_check(ip, email)
     if user is None or not verify_password(data.password, user.password_hash):
         login_failures.hit(ip)
+        if is_admin:
+            admin_api.admin_door_failed(db, user, ip, email)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if user.blocked_at is not None:
         raise blocked_error(user)
+    if is_admin:
+        admin_api.admin_door_passed(db, user, ip)
     return _token_response(user)
 
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
+    return user
+
+
+class LangIn(BaseModel):
+    lang: Literal["ru", "uz", "en"]
+
+
+@router.put("/me/lang", response_model=UserOut)
+def set_lang(data: LangIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Phase 15: the language switch — kept in the profile, so another device opens in the same language."""
+    user.lang = data.lang
+    db.commit()
     return user

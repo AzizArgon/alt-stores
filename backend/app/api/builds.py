@@ -38,12 +38,14 @@ class BuildIn(BaseModel):
     purpose: Literal["gaming", "office", "work", "other"] = "other"
     is_in_stock: bool = True
     description: str | None = Field(None, max_length=3000)
-    text: str | None = Field(None, max_length=5000)  # the pasted post, kept as sent
+    text: str | None = Field(None, max_length=5000)  # the pasted post, kept without contacts (phase 17.2)
     components: list[ComponentIn] = Field(min_length=1, max_length=30)
 
 
 class BuildTextIn(BaseModel):
     text: str = Field(min_length=3, max_length=5000)
+    # Phase 17.2: false = rules and cache only (instant, the form shows "5 of 7" and asks again with the AI)
+    ai: bool = True
 
 
 class SaleIn(BaseModel):
@@ -132,11 +134,13 @@ def search_parts(q: str = Query("", max_length=200), slot: Slot | None = None,
 @router.post("/seller/builds/parse")
 async def parse_text(data: BuildTextIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     """"Paste as text": a build post -> a draft by slots for the preview. Nothing is saved until the seller
-    publishes the draft (POST /seller/builds)."""
+    publishes the draft (POST /seller/builds). ai=false: only code (cache and rules), free and instant; the AI step
+    counts as an import of the day."""
     store = _require_store(db, user)
-    spend_import(db, store.id)
-    db.commit()
-    draft = await svc.parse_build_text(db, data.text)
+    if data.ai:
+        spend_import(db, store.id)
+        db.commit()
+    draft = await svc.parse_build_text(db, data.text, ai=data.ai)
     if not draft["components"] and draft["price"] is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "build_no_parts"})
     return draft

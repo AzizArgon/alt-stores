@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # 800 rows overflowed the answer of flash-lite (split in halves), 400 fit
     parser_chunk_rows: int = 400
     parser_concurrency: int = 2
+    # Phase 17.2: a build post waits for the AI at most this long, then the draft shows what the rules read
+    build_ai_seconds: float = 20
     # Fallback provider: Groq free tier for gpt-oss-120b is 30 RPM, 1000 RPD, 8K tokens/min
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-120b"

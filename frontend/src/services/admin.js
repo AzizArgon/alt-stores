@@ -1,6 +1,8 @@
 // Phase 13: helpers of the admin panel (texts in ru.json admin.*)
 import { useCallback, useEffect, useState } from 'react'
 import api, { errorKey } from './api'
+import i18n from '../i18n'
+import { intlLocale } from './lang'
 
 // The admin API answers {detail: {code}}: its own texts admin.error.<code>, anything else — the common errors
 export function adminErrorKey(err) {
@@ -9,13 +11,13 @@ export function adminErrorKey(err) {
 }
 
 // The journal filter: an action "store_block" belongs to the group "store"
-export const LOG_GROUPS = ['store', 'report', 'flag', 'fix', 'barcode', 'channel', 'user', 'photo']
+export const LOG_GROUPS = ['store', 'report', 'flag', 'fix', 'barcode', 'channel', 'user', 'photo', 'login']
 export const actionGroup = (action) => action.split('_')[0]
 
 // "10.11.2026, 14:05"
 export function dateTime(iso) {
   if (!iso) return ''
-  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleString(intlLocale(i18n.language), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // Query params without empty values: {verified: ''} is "all"

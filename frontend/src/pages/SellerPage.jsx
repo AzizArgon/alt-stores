@@ -26,6 +26,9 @@ import { useAuth } from '../services/auth.jsx'
 import { useUnread } from '../services/chat'
 import { useNewReservations } from '../services/reservations'
 import { importTitle } from '../services/format'
+import LangSwitch from '../components/LangSwitch'
+import i18n from '../i18n'
+import { intlLocale } from '../services/lang'
 
 const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'hours', 'map_url', 'reservation_days']
 // Hints under the fields: where to go matters to the buyer (phase 12)
@@ -257,7 +260,7 @@ function ImportHistory({ items, onChanged }) {
                 : <Link to={`/seller/imports/${imp.id}`} className="font-medium hover:underline">{importTitle(imp)}</Link>}
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
-              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString('ru-RU')} · {imp.status === 'undone'
+              {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString(intlLocale(i18n.language))} · {imp.status === 'undone'
                 ? <Badge tone="warning">{t('import.status.undone')}</Badge> : t(`import.status.${imp.status}`)}
             </span>
             {imp.can_undo && <UndoUpload importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />}
@@ -376,7 +379,9 @@ function AccountMenu({ store }) {
       {store && <DropdownItem as={Link} to="/seller/profile" icon={Store}>{t('cabinet.nav.profile')}</DropdownItem>}
       {/* The storefront opens in a new tab: the cabinet stays where the seller left it */}
       <DropdownItem as="a" href={storeUrl('/')} target="_blank" rel="noreferrer" icon={ExternalLink}>{t('seller.openStore')}</DropdownItem>
-      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/seller/login') }}>{t('nav.logout')}</DropdownItem>
+      <DropdownItem icon={LogOut} onClick={() => { logout(); navigate('/login') }}>{t('nav.logout')}</DropdownItem>
+      {/* Phase 15: on a phone the language is chosen here, the top bar stays short */}
+      <div className="mt-1.5 border-t border-line p-2 sm:hidden"><LangSwitch wide /></div>
     </Dropdown>
   )
 }
@@ -390,17 +395,13 @@ function SellerFrame({ store, sections, top, place, children }) {
       menuLabel={t('cabinet.menu')} sideTitle={store?.name} top={top}
       actions={<>
         {place && <PlaceMenu {...place} />}
+        <LangSwitch className={user?.role === 'seller' ? 'hidden sm:flex' : ''} />
         {user?.role === 'seller' && store && <NotificationBell allPath="/seller/notifications" />}
         {user?.role === 'seller' && <AccountMenu store={store} />}
       </>}>
       {children}
     </Workspace>
   )
-}
-
-// Login and register of sellers: the cabinet frame without the menu
-export function SellerAuthLayout() {
-  return <SellerFrame><Outlet /></SellerFrame>
 }
 
 // A buyer (or anyone but a seller) opened /seller/...
@@ -415,7 +416,7 @@ export function NotSellerPage() {
         <h1 className="mt-4 text-h1">{t('seller.notSellerTitle')}</h1>
         <p className="mt-2 text-sm text-muted">{t('seller.notSellerText')}</p>
         <div className="mt-6 grid gap-2">
-          <Button size="lg" onClick={() => { logout(); navigate('/seller/login') }}>{t('seller.loginAsSeller')}</Button>
+          <Button size="lg" onClick={() => { logout(); navigate('/login', { state: { from: '/seller' } }) }}>{t('seller.loginAsSeller')}</Button>
           <Button size="lg" variant="secondary" {...linkProps(storeUrl('/'))}>{t('seller.backToStore')}</Button>
         </div>
       </Card>

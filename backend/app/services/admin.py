@@ -338,6 +338,11 @@ def _fix_target(db: Session, fix: ProductFix) -> tuple[Category, tuple, Product 
     from app.services.manual import card_fields
 
     after = fix.after or {}
+    if after.get("merge_into"):  # phase 16.1: a possible duplicate — the decision is "merge into this card"
+        other = db.get(Product, after["merge_into"])
+        if other is None or other.merged_into:
+            raise AdminError("not_found", 404)
+        return other.category, (other.brand, other.normalized_name, other.specs_json, other.match_key), other
     category = db.scalar(select(Category).where(Category.slug == after.get("category")))
     if category is None:
         raise AdminError("unknown_category")
@@ -368,6 +373,7 @@ def _fix_out(db: Session, fix: ProductFix, preview: bool = False) -> dict:
     out = {"id": fix.id, "status": fix.status, "before": fix.before, "after": fix.after,
            "created_at": _aware(fix.created_at), "resolved_at": _aware(fix.resolved_at),
            "reject_reason": fix.reject_reason, "merged_into": fix.merged_into, "is_demo": fix.is_demo,
+           "kind": fix.kind or "fix",
            "store": {"id": store.id, "name": store.name} if store else None,
            "product": {"id": product.id, "name": product.normalized_name} if product else None,
            "stores_selling": len(set(db.scalars(select(Offer.store_id).where(
@@ -461,6 +467,12 @@ def merge_products(db: Session, source: Product, target: Product) -> dict:
     db.flush()
     for code in codes:
         refresh_common(db, code)
+    # Phase 16.1: the old address leads to the kept card; the old key no longer catches new price rows
+    source.merged_into, source.match_key = target.id, f"merged:{source.id}"
+    if (source.specs_json or {}).get("pack") != (target.specs_json or {}).get("pack"):
+        # OEM and BOX of one CPU are one card: the packaging stays in each store's own row, not on the card
+        target.specs_json = {k: v for k, v in (target.specs_json or {}).items() if k != "pack"}
+    db.flush()
     return preview
 
 
@@ -489,7 +501,8 @@ def accept_fix(db: Session, admin: User, fix_id: int, comment: str | None = None
     log(db, admin, "fix_merge" if merged else "fix_accept", "fix", fix.id, name, comment,
         product_id=fix.product_id, **({"merged_into": other.id, **{k: v for k, v in merged.items() if k != "target"}}
                                      if merged else {}))
-    _tell(db, fix.store_id, "admin_fix", status="accepted", name=name)
+    if fix.kind != "duplicate":  # a possible duplicate came from the scan, not from this store
+        _tell(db, fix.store_id, "admin_fix", status="accepted", name=name)
     db.commit()
     return {"status": "merged" if merged else "applied", "product_id": product.id, "merge": merged}
 
@@ -502,7 +515,8 @@ def reject_fix(db: Session, admin: User, fix_id: int, reason: str | None) -> Non
         raise AdminError("reason_required")
     fix.status, fix.reject_reason, fix.resolved_at = "rejected", _text(reason, 300), utcnow()
     log(db, admin, "fix_reject", "fix", fix.id, (fix.before or {}).get("name"), reason)
-    _tell(db, fix.store_id, "admin_fix", status="rejected", name=(fix.before or {}).get("name") or "")
+    if fix.kind != "duplicate":
+        _tell(db, fix.store_id, "admin_fix", status="rejected", name=(fix.before or {}).get("name") or "")
     db.commit()
 
 
@@ -664,7 +678,8 @@ def seller_decisions(db: Session, store: Store) -> dict:
     flags = db.scalars(select(FraudFlag).where(FraudFlag.offer_id.in_(offers), or_(
         FraudFlag.status == FlagStatus.disputed, FraudFlag.resolution.is_not(None)))
         .order_by(FraudFlag.disputed_at.desc())).all()
-    fixes = db.scalars(select(ProductFix).where(ProductFix.store_id == store.id).order_by(ProductFix.id.desc()).limit(30)).all()
+    fixes = db.scalars(select(ProductFix).where(ProductFix.store_id == store.id, ProductFix.kind != "duplicate")
+                       .order_by(ProductFix.id.desc()).limit(30)).all()
     codes = db.execute(select(Barcode, Offer).join(Offer, Barcode.offer_id == Offer.id).where(
         Barcode.store_id == store.id, Barcode.admin_status == "disputed")).all()
     return {

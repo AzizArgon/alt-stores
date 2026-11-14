@@ -20,24 +20,36 @@ export function adminGate(user) {
   return user.role === 'admin' ? 'allow' : 'noAccess'
 }
 
-// After a login or a registration: a guest sent from a cabinet page (seller), from "Write to the seller" (buyer,
-// /messages/...), from "Reserve" (a page with ?reserve=..., the form opens again) or from "My reservations"
-// returns there; anyone else goes to his own interface
+// Phase 16.3: one login for everyone. After a login, a registration or when a logged-in user opens /login, each
+// role goes to its own section; a guest who was sent to the login from somewhere returns there if it is his part
+// of the site: a seller — a cabinet page, an admin — an admin page, a buyer — any storefront page (a product,
+// "Write to the seller", "Reserve" with ?reserve=..., "My reservations")
+const inArea = (path, area) => new RegExp(`^/${area}(/|\\?|$)`).test(path)
+const AUTH_PAGES = /^\/(login|register)(\/|\?|$)/
+
 export function returnTo(user, from) {
-  const buyerBack = (p) => p?.startsWith('/messages') || p?.startsWith('/reservations') || /[?&]reserve=/.test(p || '')
-  const back = user?.role === 'seller' ? from?.startsWith('/seller')
-    : user?.role === 'admin' ? from?.startsWith('/admin') : buyerBack(from)
-  return back ? from : homeFor(user)
+  if (typeof from !== 'string' || !from.startsWith('/') || from.startsWith('//')) return homeFor(user)
+  const area = inArea(from, 'seller') ? 'seller' : inArea(from, 'admin') ? 'admin' : 'store'
+  if (user?.role === 'seller' || user?.role === 'admin') return area === user.role ? from : homeFor(user)
+  return area === 'store' && !AUTH_PAGES.test(from) ? from : homeFor(user)
 }
 
-// The admin entrance (/admin/login) for anyone: an admin logs in there; a seller or a buyer (the server answers
-// "not_admin" — the password was right) is logged in the usual way and goes to his own section. The server still
-// gives the /admin data only to an admin.
-export async function loginAtAdminDoor(adminLogin, login, email, password) {
-  try {
-    return await adminLogin(email, password)
-  } catch (err) {
-    if (err.response?.data?.detail?.code !== 'not_admin') throw err
-    return login(email, password)
-  }
+// The old login and register addresses (before phase 16.3) lead to the one login: where to and where to return after
+export const OLD_AUTH = {
+  '/seller/login': { to: '/login', from: '/seller' },
+  '/seller/register': { to: '/register?role=seller', from: '/seller' },
+  '/admin/login': { to: '/login', from: '/admin' },
 }
+export function oldAuthTarget(pathname, state) {
+  const old = OLD_AUTH[pathname] || { to: '/login' }
+  return { to: old.to, state: { from: state?.from || old.from } }
+}
+
+// /register?role=seller (the "For sellers" button) opens the registration with "I am a store" chosen
+export const registerRole = (search) => {
+  const role = new URLSearchParams(search).get('role')
+  return role === 'seller' || role === 'buyer' ? role : ''
+}
+
+// The login link of a guest: remembers the page to come back to
+export const loginState = (location) => ({ from: location.pathname + location.search })

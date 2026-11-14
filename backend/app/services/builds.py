@@ -14,25 +14,30 @@ Checks: Anti-Fraud of exact parts (the same rules as offers), "the name says one
 maker is not said" (info); soft compatibility by known values of both exact and specs parts.
 """
 
+import asyncio
+import logging
 import re
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import settings
 from app.db.models import (
     Build, BuildComponent, BuildPriceHistory, BuildPurpose, BuildSlot, Category, Condition, Currency, Offer, Product,
-    Store, utcnow,
+    ParseCache, Store, utcnow,
 )
 from app.services.antifraud import LEVEL_ORDER, check_offer
+from app.services.build_post import CPU_MODEL, find_brand, slot_by_content, split_post, strip_contacts
 from app.services.catalog import search_filter
 from app.services.exchange import get_usd_rate, to_usd, to_uzs
 from app.services.manual import product_brief, seller_specs
-from app.services.price_cleaner import CleanRow
+from app.services.price_cleaner import CleanRow, cache_key
 from app.services.spec_dictionary import BOARD_SIZES, spec_map
-from app.services.spec_normalizer import GPU_CHIP, _chip, canonical_brand, written_specs
-from app.services.text_import import clean_lines, condition_of, find_price, has_model
+from app.services.spec_normalizer import GPU_CHIP, _chip, canonical_brand, normalize_specs, written_specs
+from app.services.text_import import has_model
 
+log = logging.getLogger(__name__)
 PAGE_SIZE = 24
 SLOTS = [s.value for s in BuildSlot]
 # Which cards fit a slot (the form searches only there); a card of these categories goes to that slot
@@ -44,91 +49,11 @@ SLOT_OF = {c: slot for slot, cats in SLOT_CATEGORIES.items() for c in cats}
 KEY_SLOTS = ("cpu", "gpu", "ram", "storage")  # parts shown on a build tile
 PRECISE = ("exact", "integrated")
 
-# "Процессор: Ryzen 5 5600": the key of a line says the slot (Russian and Uzbek)
-_SLOT_WORDS = [
-    ("cpu", r"процессор|проц\b|cpu|protsessor"),
-    ("motherboard", r"материнск|мат\.?\s*плат|мать|motherboard|\bmb\b|ona\s*plata|она\s*плата"),
-    ("ram", r"оперативн|\bозу\b|\bram\b|\bopera"),
-    ("gpu", r"видеокарт|видюх|\bgpu\b|videokarta|графика"),
-    ("storage", r"накопител|\bssd\b|\bhdd\b|диск|nvme|жестк|жёстк"),
-    ("psu", r"блок\s*питания|\bбп\b|\bpsu\b|питани|quvvat"),
-    ("case", r"корпус|\bcase\b|korpus"),
-    ("cooling", r"охлажден|кулер|cooler|\bсво\b|sovutish"),
-]
-_SLOT_KEY = re.compile(r"^(?P<key>[^\W\d_][^:\d]{0,28}):\s*(?P<value>\S.*)$")
-# One line of parts: "Ryzen 5 5600 / B550M / 16GB DDR4" (a slash between spaces, not inside "1TB/2TB")
-_SPLIT = re.compile(r"\s+[/|]\s+|\s*[|;]\s*|\s+\+\s*|\s*\+\s+")
-_QUANTITY = re.compile(r"^(?P<n>[1-8])\s*(?:x|х|×|шт\.?)\s+(?=\S)|\s+(?:x|х|×)\s*(?P<m>[1-8])$|\s*\((?P<k>[1-8])\s*шт\.?\)$", re.I)
-_PURPOSE_WORDS = [
-    ("gaming", r"игров|gaming|геймер|для игр|o'yin|ўйин"),
-    ("work", r"монтаж|рендер|дизайн|рабоч|для работы|стрим|3d|workstation|ish uchun"),
-    ("office", r"офис|office|для учеб|для дома|ofis"),
-]
 _INTEGRATED = re.compile(r"встро[её]н|встройк|интегрир|integrated|\bigpu\b|без\s+видеокарт|vega\s*\d|uhd\s*graphics"
                          r"|iris|radeon\s+graphics|o'rnatilgan", re.I)
-# A CPU named at least by its model: "Ryzen 5 5600", "i5-12400F", "Core Ultra 7 265K", "Xeon E5-2680"
-CPU_MODEL = re.compile(r"\b(?:core\s*)?(?:i[3579]|ryzen\s*(?:ai\s*)?[3579]|ultra\s*[579]|pentium|celeron|athlon|xeon"
-                       r"|threadripper)\b[\s-]*[\w-]*?\d{3,5}", re.I)
 _CPU_SERIES = re.compile(r"\b(?:core\s*)?(i[3579])[\s-]*\d{3,5}|\bryzen\s*([3579])\b|\bcore\s*(i[3579])\b", re.I)
 _INTEL = re.compile(r"\bintel\b|\bcore\s*i[3579]|\bi[3579][\s-]*\d{4,5}|\bpentium\b|\bceleron\b|\bxeon\b|\bcore\s*ultra", re.I)
 _AMD = re.compile(r"\bamd\b|\bryzen\b|\bathlon\b|\bthreadripper\b", re.I)
-
-
-def slot_of_key(key: str) -> str | None:
-    low = key.lower()
-    return next((slot for slot, pattern in _SLOT_WORDS if re.search(pattern, low)), None)
-
-
-def guess_purpose(text: str) -> str:
-    low = text.lower()
-    return next((p for p, pattern in _PURPOSE_WORDS if re.search(pattern, low)), "other")
-
-
-def _quantity(text: str) -> tuple[int, str]:
-    m = _QUANTITY.search(text)
-    if not m:
-        return 1, text
-    return int(m["n"] or m["m"] or m["k"]), (text[: m.start()] + text[m.end():]).strip()
-
-
-def split_post(text: str) -> dict:
-    """A build post -> name, price, currency, condition, description and part texts (with a slot from "Key:").
-
-    Code reads the price and the condition (as for posts of goods); the parts go to the parse pipeline later."""
-    price = currency = None
-    check = False
-    name, parts, notes = "", [], []
-    for line in (line for line in clean_lines(text) if line):
-        found, cur, chk, rest = find_price(line)
-        if found is not None:
-            if price is not None:
-                continue
-            price, currency, check = found, cur, chk
-            rest = rest.strip(" :—-–=")
-            if not re.search(r"[^\W\d_]", rest) or re.fullmatch(r"(?i)(цена|narxi|price|нархи|стоимость)\s*:?", rest):
-                continue
-            line = rest
-        kv = _SLOT_KEY.match(line)
-        slot = slot_of_key(kv["key"]) if kv else None
-        pieces = [p.strip(" -–—•,.") for p in _SPLIT.split(kv["value"] if slot else line)]
-        pieces = [p for p in pieces if p]
-        if slot:
-            parts += [{"text": p, "slot": slot} for p in pieces]
-        elif len(pieces) >= 2:
-            parts += [{"text": p, "slot": None} for p in pieces]
-        elif kv and not has_model(kv["value"]):
-            notes.append(line)  # "Состояние: новый", "Гарантия: 1 год"
-        elif not name and not parts:
-            name = line
-        elif has_model(line) or _INTEGRATED.search(line):
-            parts.append({"text": line, "slot": None})
-        else:
-            notes.append(line)
-    return {
-        "name": name, "price": price, "currency": currency, "currency_check": check,
-        "condition": condition_of(text), "purpose": guess_purpose(text),
-        "description": "\n".join(notes) or None, "parts": parts,
-    }
 
 
 def _search(db: Session, q: str, slot: str | None, limit: int) -> list[Product]:
@@ -163,45 +88,135 @@ def _part_specs(slot: str, category: str, row: dict, words: str) -> dict:
     return specs
 
 
-async def parse_build_text(db: Session, text: str) -> dict:
-    """"Paste as text": parts through the same pipeline as goods (cache -> rules -> AI -> normalizer).
+_SPEC_WORD = re.compile(r"\d+(?:[.,]\d+)?(?:gb|tb|w|mhz|ghz|hz|mm|mb|v|pin|bit)")
 
-    A part whose card key matches exactly is an "exact model"; one with only values read ("16GB DDR4 3200",
+
+def _by_model_code(db: Session, category: str, key: str, brand: str | None) -> Product | None:
+    """A part tied by its model code when the key differs only by words of the card name (phase 17.2).
+
+    A CPU by its model number: "AMD Ryzen 7 9800X3D" -> "AMD Ryzen 7 9800X3D, 4.7 GHz, 8C/16T, AM5, OEM". Other
+    parts only when the maker and a model code are named and every word of the part is in exactly one card:
+    "Thermaltake Toughpower GF3 1000W Gold" -> "... GF3 1000W 80 Plus Gold". Words of values alone ("Kingston
+    16GB DDR4") never tie a part to a card."""
+    words = set(key.partition(":")[2].split())
+    codes = {w for w in words if re.search(r"\d", w) and re.search(r"[a-z]", w) and not _SPEC_WORD.fullmatch(w)
+             and not re.fullmatch(r"ddr\d|i[3579]", w)}
+    if not codes or category != "cpu" and not brand:
+        return None
+    need = codes if category == "cpu" else words
+    code = max(codes, key=len)
+    cards = db.scalars(select(Product).join(Product.category).where(
+        Category.slug == category, Product.match_key.like(f"%{code}%"), Product.merged_into.is_(None))).all()
+    found = [p for p in cards if need <= set(p.match_key.partition(":")[2].split())]
+    return found[0] if len(found) == 1 else None
+
+
+_LATIN_WORD = re.compile(r"[a-z]{3,}", re.I)  # a model name; Russian words alone ("белый, красивый") are not
+
+
+def ai_ready() -> bool:
+    return bool(settings.gemini_api_key or settings.groq_api_key)
+
+
+def _part_category(slot: str, words: str) -> str | None:
+    if slot == "storage":
+        return "hdd" if re.search(r"\bhdd\b|ж[её]стк|\brpm\b|\d{4}\s*об", words, re.I) else "ssd"
+    return SLOT_CATEGORIES.get(slot, (None,))[0]
+
+
+def _rule_item(importer, slot: str | None, words: str) -> dict | None:
+    """Rules of code for one part, as a parsed row (category, maker, name, specs) or None (the AI is asked).
+
+    A neat price-list name goes to the rules of goods first; otherwise the slot (the label or what the text is)
+    gives the category, the maker comes from the known names, the values from the spec dictionary."""
+    general = importer.parse_by_rules(words)
+    if general and (slot is None or SLOT_OF.get(general["category"]) == slot):
+        return general
+    slot = slot or slot_by_content(words)
+    if slot is None or slot == "gpu" and _INTEGRATED.search(words):
+        return None
+    category = _part_category(slot, words)
+    brand = find_brand(words, slot)
+    read = normalize_specs(category, words, {}, brand)
+    if slot == "cpu" and not brand:
+        brand = read.get("brand")  # "Ryzen 5 5600" is AMD, "i5-12400F" is Intel: the maker of a CPU is its line
+    specs = written_specs(read)
+    if not brand and not specs:
+        return None
+    return {"category": category, "brand": brand, "model": None, "name": re.sub(r"\s+", " ", words).strip(),
+            "condition": None, "specs": specs}
+
+
+async def parse_build_text(db: Session, text: str, ai: bool = True) -> dict:
+    """"Paste as text" (phase 17.2): the post is split by code (`build_post`), each part goes cache -> rules -> AI.
+
+    Only parts that name a model and that neither the cache nor the rules understood go to the AI, all in one
+    request with a time limit (`build_ai_seconds`); without the AI (ai=False, no keys, quota, timeout) the draft has
+    what the rules read. A part whose card key matches is an "exact model"; one with only values read ("16GB DDR4",
     "650W") stays "only specs" and is never tied to a random card; the rest is "not specified" with its text."""
-    from app.services.importer import _Matcher, parse_clean_rows  # the importer imports half the app
+    from app.services import importer  # the importer imports half the app
 
     post = split_post(text)
-    rows = []
-    for i, part in enumerate(post["parts"], 1):
-        part["quantity"], part["words"] = _quantity(part["text"])
-        hint = SLOT_CATEGORIES.get(part["slot"], (None,))[0]
-        rows.append(CleanRow(row=i, sheet="", section="", cells=[part["words"]], name=part["words"],
-                             ai_text=part["words"], is_in_stock=True, category_hint=hint))
-    parsed = {r["row"]: r for r in await parse_clean_rows(db, rows, {})} if rows else {}
-    matcher = _Matcher(db)
+    rows = [CleanRow(row=i, sheet="", section="", cells=[p["text"]], name=p["text"], ai_text=p["text"],
+                     is_in_stock=True, category_hint=_part_category(p["slot"], p["text"]) if p["slot"] else None)
+            for i, p in enumerate(post["parts"], 1)]
+    keys = list({cache_key(r.ai_text) for r in rows})
+    cached = {c.key: c.data for c in db.scalars(select(ParseCache).where(ParseCache.key.in_(keys)))} if keys else {}
+    parsed, pending = {}, []
+    for r, part in zip(rows, post["parts"]):
+        hit = cached.get(cache_key(r.ai_text))
+        if hit and not hit.get("skip"):
+            parsed[r.row] = importer._preview_row(r, hit, "cache")
+        elif item := _rule_item(importer, part["slot"], part["text"]):
+            parsed[r.row] = importer._preview_row(r, item, "rule")
+        elif not hit and (has_model(part["text"]) or _LATIN_WORD.search(part["text"])):  # "Fractal North"
+            pending.append(r)
+    ai_state = "none" if not pending else "skipped" if not ai else "off" if not ai_ready() else "done"
+    if ai_state == "done":
+        stats: dict = {"attempts": 1}  # one try per provider: Gemini, then Groq; no pauses between retries
+        try:
+            answer = await asyncio.wait_for(importer.parse_rows(pending, stats), settings.build_ai_seconds)
+        except (RuntimeError, asyncio.TimeoutError) as e:
+            log.warning("Build parts by AI failed (%s rows): %s", len(pending), type(e).__name__)
+            ai_state = "failed"
+        else:
+            items = {it["row"]: it for it in answer}
+            for r in pending:
+                if r.row in items:
+                    parsed[r.row] = importer._preview_row(r, items[r.row], "ai")
+            importer.save_cache(db, {cache_key(r.ai_text): importer._cache_data(items[r.row]) if r.row in items
+                                     else {"skip": True} for r in pending
+                                     if r.row not in items or importer.cacheable(parsed[r.row])}, "ai")
+            db.commit()
+    matcher = importer._Matcher(db)
     components = []
-    for i, part in enumerate(post["parts"], 1):
-        row = parsed.get(i)
-        if row and row["source"] == "failed":
-            row = None
+    for r, part in zip(rows, post["parts"]):
+        row = parsed.get(r.row)
+        words = part["text"]
         category = row["category"] if row and row["category"] != "other" else None
-        slot = part["slot"] or SLOT_OF.get(category) or ("gpu" if _INTEGRATED.search(part["words"]) else "other")
+        slot = part["slot"] or SLOT_OF.get(category) or ("gpu" if _INTEGRATED.search(words) else "other")
         if category not in SLOT_CATEGORIES.get(slot, ()):
-            category = SLOT_CATEGORIES.get(slot, (None,))[0]  # "Видеокарта: ..." the seller named the slot
-        product = matcher.match({**row, "category": category})[3] if row and category else None
+            category = _part_category(slot, words)  # "Видеокарта: ..." the seller named the slot
+        product = None
+        if row and category:
+            _, _, key, product = matcher.match({**row, "category": category})
+            product = product or _by_model_code(db, category, key, row.get("brand"))
         if product is not None and SLOT_OF.get(product.category.slug if product.category else None) != slot:
             product = None
-        specs = {} if product else _part_specs(slot, category, row, part["words"]) if category or slot == "gpu" else {}
+        specs = {} if product else _part_specs(slot, category, row, words) if category or slot == "gpu" else {}
         components.append({
-            "slot": slot, "quantity": part["quantity"], "raw_text": part["text"],
+            "slot": slot, "quantity": part["quantity"], "raw_text": words,
             "product": product_brief(product) if product else None,
             "category": None if product else category, "specs": specs,
             "level": "exact" if product else level_of(None, specs),
+            "source": row["source"] if row else None,
         })
     order = {s: i for i, s in enumerate(SLOTS)}
     components.sort(key=lambda c: order[c["slot"]])
-    draft = {k: post[k] for k in ("name", "price", "currency", "currency_check", "condition", "purpose", "description")}
-    return {**draft, "components": components, "missing": missing_required(components)}
+    keys_out = ("name", "price", "currency", "currency_check", "condition", "condition_check", "purpose", "bargain",
+                "description")
+    return {**{k: post[k] for k in keys_out}, "components": components, "missing": missing_required(components),
+            "parts_total": len(rows), "ai_pending": len(pending), "ai": ai_state}
 
 
 # --- Precision and the required minimum ------------------------------------------------------------------------------
@@ -291,7 +306,7 @@ def save_build(db: Session, store: Store, data: dict, build: Build | None = None
     """Creates a build or changes it (the editor); a new price or currency goes to its price history."""
     created = build is None
     if created:
-        build = Build(store=store, text=data.get("text"))
+        build = Build(store=store, text=strip_contacts(data["text"]) if data.get("text") else None)
     price_changed = created or build.price != data["price"] or build.currency != Currency(data["currency"])
     if "components" in data:
         _set_components(db, build, data["components"])  # checked before anything is saved

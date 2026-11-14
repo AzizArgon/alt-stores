@@ -20,6 +20,7 @@ from app.db.models import (
     Store, utcnow,
 )
 from app.services.catalog import completion_index, make_match_key, unique_completion
+from app.services.categorize import refine_category
 from app.services.antifraud import check_offer, market_for, market_prices, save_offer_flags
 from app.services.ai_parser import QuotaExhausted, parse_rows, split_specs
 from app.services.exchange import get_usd_rate
@@ -120,6 +121,10 @@ def _preview_row(r: CleanRow, parsed: dict | None, source: str) -> dict:
     category = p.get("category") or "other"
     if category == "other" and r.category_hint:
         category = r.category_hint
+    # Phase 16.1: the rules over the AI — ink is not a printer, a mouse pad is not "Прочее"
+    category = refine_category(category, p.get("name") or r.name)
+    if category == "other":  # the store's own words only for what is still unknown (a row may list a whole set)
+        category = refine_category(category, r.raw_name)
     brand = canonical_brand(p["brand"]) if p.get("brand") else None  # "T-Force" -> TeamGroup, "SAPPHRIE" -> Sapphire
     name = strip_modifiers(category, p.get("name") or r.name)[0] or r.name  # "LHR" -> a characteristic
     if category == "gpu" and brand in CHIP_VENDORS and brand.lower() not in r.raw_name.lower():

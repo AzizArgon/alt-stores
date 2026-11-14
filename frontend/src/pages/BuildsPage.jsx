@@ -9,7 +9,6 @@ import { Breadcrumbs, Button, Card, Checkbox, EmptyState, Input, Pagination, Sel
 import { cityParam } from '../config/cities'
 import api, { errorKey } from '../services/api'
 import { useCity } from '../services/city.jsx'
-import { formatDayMonth, formatPrice } from '../services/format'
 import { useSpecDictionary } from '../services/specs'
 
 const SORTS = ['new', 'price_asc', 'price_desc']
@@ -128,7 +127,6 @@ export default function BuildsPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted">
                   {t('builds.found', { count: data.total })}
-                  {data.usd_rate && <span className="hidden sm:inline"> · {t('price.rateNote', { date: formatDayMonth(data.usd_rate_date), rate: formatPrice(data.usd_rate, 'UZS') })}</span>}
                 </p>
                 <Tabs className="hidden sm:inline-flex" label={t('builds.sortLabel')} value={sort} onChange={(v) => setParam('sort', v === 'new' ? '' : v, true)}
                   tabs={SORTS.map((s) => ({ value: s, label: t(`builds.sort.${s}`) }))} />

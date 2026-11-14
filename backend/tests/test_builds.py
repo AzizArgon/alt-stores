@@ -166,7 +166,7 @@ def test_text_build_exact_specs_and_none(db, parts, fake_ai):
     assert got["psu"]["specs"] == {"power": 650} and got["storage"]["specs"]["capacity"] == 1000
     # AI guesses (socket and memory of "B550M") do not become specs
     assert "socket" not in got["motherboard"]["specs"] and got["motherboard"]["product"] is None
-    assert draft["missing"] == [] and len(fake_ai) == 6  # the price never goes to the AI
+    assert draft["missing"] == [] and fake_ai == []  # phase 17.2: the rules read every part, the AI is not asked
     components = [{"slot": c["slot"], "product_id": c["product"]["id"] if c["product"] else None,
                    "raw_text": c["raw_text"], "quantity": c["quantity"], "category": c["category"], "specs": c["specs"]}
                   for c in draft["components"]]

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import '../i18n'
 import { scanTarget } from '../App'
-import { pageActive, sectionActive } from '../layouts/Workspace'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
+import { Home, Package } from 'lucide-react'
+import Workspace, { FOLD_BELOW, MENU_KEY, initialFolded, pageActive, sectionActive } from '../layouts/Workspace'
+import WorkspaceCode from '../layouts/Workspace.jsx?raw'
 import { placeFor, placeLabel, placesOf } from '../services/place'
 import { sellerSections } from './SellerPage'
 import { stockTabs } from './WarehousePage'
@@ -70,5 +74,34 @@ describe('places of the stock (phase 12.4)', () => {
     expect(placesOf(STORE).map((p) => p.id)).toEqual([1, 2])
     expect(placeFor(places, 2).id).toBe(2)
     expect(placeFor(STORE.branches, 9).id).toBe(1) // a mode that allows only branches
+  })
+})
+
+describe('the left menu folds (phase 17.1)', () => {
+  const sections = [{ to: '/seller', key: 'overview', icon: Home, end: true }, { to: '/seller/goods', key: 'goods', icon: Package }]
+  const draw = () => renderToStaticMarkup(<MemoryRouter initialEntries={['/seller']}><Workspace sections={sections} navKey="cabinet.menu" tabKey="cabinet.menu">x</Workspace></MemoryRouter>)
+  it('remembered choice first; without it — folded on screens narrower than 1440 px', () => {
+    expect(FOLD_BELOW).toBe(1440)
+    expect(initialFolded(null, 1366)).toBe(true)
+    expect(initialFolded(null, 1920)).toBe(false)
+    expect(initialFolded('0', 1024)).toBe(false)
+    expect(initialFolded('1', 1920)).toBe(true)
+  })
+  it('unfolded: icon + name; folded: icons with hints; the switch is at the bottom', () => {
+    const store = { [MENU_KEY]: '0' }
+    const before = globalThis.localStorage
+    globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v }, removeItem: () => {} }
+    let out = draw()
+    expect(out).toContain('data-folded="0"')
+    expect(out).toContain('Свернуть меню')
+    store[MENU_KEY] = '1'
+    out = draw()
+    expect(out).toContain('data-folded="1"')
+    expect(out).toContain('Развернуть меню')
+    expect(out).toMatch(/title="[^"]+" [^>]*href="\/seller\/goods"|href="\/seller\/goods"[^>]*title="[^"]+"/)
+    globalThis.localStorage = before
+  })
+  it('the work area has no width limit', () => {
+    expect(WorkspaceCode).not.toContain('max-w-6xl')
   })
 })

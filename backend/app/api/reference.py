@@ -13,7 +13,7 @@ router = APIRouter(tags=["reference"])
 
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(db: Session = Depends(get_db)):
-    return db.scalars(select(Category).order_by(Category.id)).all()
+    return db.scalars(select(Category).order_by(Category.slug == "other", Category.id)).all()  # "Прочее" last (16.1)
 
 
 @router.get("/rates/usd", response_model=RateOut)

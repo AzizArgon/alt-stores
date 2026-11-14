@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { Check, Download, FileSpreadsheet, Search, Trash2, Volume2, VolumeX } from 'lucide-react'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { ProductLine } from './AddFromCatalog'
@@ -179,7 +179,7 @@ export function CatalogPick({ query = '', product = null, onClose, onPicked }) {
   }
   return (
     <Modal open onClose={onClose} title={t('warehouse.catalogTitle')} fullOnPhone
-      footer={chosen && <Button onClick={add} disabled={!(Number(price) > 0)}>{t('warehouse.catalogAdd')}</Button>}>
+      primary={chosen && { label: t('warehouse.catalogAdd'), onClick: add, disabled: !(Number(price) > 0) }}>
       {!chosen ? (
         <div className="grid gap-2">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} className={`${inputClass} w-full`} aria-label={t('warehouse.search')} />
@@ -421,6 +421,24 @@ function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOn
   )
 }
 
+export const EXCEL_POINTS = ['point1', 'point2', 'point3']
+
+// A dashed zone: drop a file on it or click it to choose (keyboard: it is a label of a file input)
+export function DropZone({ label, overLabel, file, onFile, accept = '.xlsx' }) {
+  const [over, setOver] = useState(false)
+  return (
+    <label data-dropzone onDragOver={(e) => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); onFile(e.dataTransfer.files?.[0]) }}
+      className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-7 text-center transition-colors focus-within:ring-2 focus-within:ring-primary ${
+        over ? 'border-primary bg-primary-soft/50' : 'border-line-strong hover:border-primary hover:bg-surface-2'}`}>
+      <FileSpreadsheet className={`size-8 ${over ? 'text-primary' : 'text-muted'}`} aria-hidden />
+      <span className="font-medium">{over ? overLabel : label}</span>
+      {file && <span className="max-w-full truncate text-xs text-muted">{file.name}</span>}
+      <input type="file" accept={accept} className="sr-only" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }} />
+    </label>
+  )
+}
+
 // "Загрузить остатки из Excel": only quantities; the summary by branch first, then "Применить"
 export function StockImport({ onClose, onDone }) {
   const { t } = useTranslation()
@@ -447,19 +465,28 @@ export function StockImport({ onClose, onDone }) {
       setBusy(false)
     }
   }
+  const pick = (f) => {
+    if (!f) return
+    if (!/\.xlsx$/i.test(f.name)) { setError(t('warehouse.excel.onlyXlsx')); return }
+    setFile(f)
+    setPlan(null)
+    send(f, false)
+  }
+  const template = () => download('/seller/stock/offers.xlsx', {}, 'goods.xlsx').catch((err) => setError(t(errorKey(err))))
+  // Phase 17.1: three short points, a drop zone, "Скачать шаблон"; at the bottom "Отмена" + "Загрузить"
   return (
     <Modal open onClose={onClose} title={t('warehouse.excel.importTitle')} fullOnPhone
-      footer={plan?.total > 0 && <Button onClick={() => send(file, true)} disabled={busy}>{t('warehouse.excel.apply')}</Button>}>
-      <div className="grid gap-3 text-sm">
-        <p className="text-muted">{t('warehouse.excel.importHint')}</p>
-        <label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border border-line-strong px-4 py-2 font-semibold hover:bg-surface-2">
-          {t('warehouse.excel.choose')}
-          <input type="file" accept=".xlsx" className="sr-only" onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) { setFile(f); setPlan(null); send(f, false) }
-          }} />
-        </label>
-        {file && <p className="truncate text-xs text-muted">{file.name}</p>}
+      primary={{ label: t('warehouse.excel.upload'), onClick: () => send(file, true), disabled: busy || !(plan?.total > 0) }}>
+      <div className="grid gap-4 text-sm">
+        <ul className="grid gap-1.5">
+          {EXCEL_POINTS.map((k) => (
+            <li key={k} className="flex gap-2"><Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />{t(`warehouse.excel.${k}`)}</li>
+          ))}
+        </ul>
+        <DropZone label={t('warehouse.excel.drop')} overLabel={t('warehouse.excel.dropHere')} file={file} onFile={pick} />
+        <button type="button" onClick={template} className="inline-flex w-fit items-center gap-1.5 font-medium text-primary hover:underline">
+          <Download className="size-4" aria-hidden />{t('warehouse.excel.template')}
+        </button>
         {error && <p role="alert" className="text-danger">{error}</p>}
         {plan && (
           <div className="grid gap-2 rounded-lg bg-surface-2 p-3">

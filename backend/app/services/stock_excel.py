@@ -15,23 +15,16 @@ from openpyxl.styles import Font
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import CONDITIONS, EXPORT, KINDS, LANGS, REASONS, category_name
 from app.db.models import Offer, Store, User
 from app.services.branches import store_branches
 from app.services.stock import StockError, journal, move
 
 ID_HEADER = "Код ALT"
-BARCODE_HEADERS = ("штрихкод", "штрих-код", "штрихкоды", "barcode", "ean")
-CONDITIONS = {"new": "новый", "used": "б/у", "refurbished": "восстановленный", "new_openbox": "новый, вскрыт",
-              "unknown": "не указано"}
-KIND_TEXT = {
-    "initial": "Начальный остаток", "receipt": "Приход", "sale": "Продажа", "adjust": "Корректировка",
-    "reserve": "Резерв брони", "unreserve": "Снятие резерва", "res_sale": "Продажа по брони",
-    "import": "Импорт остатков", "undo": "Отмена загрузки", "manual": "Ручная правка",
-    "move_out": "Выкладка: со склада", "move_in": "Выкладка: в филиал", "return": "Возврат", "inventory": "Ревизия",
-}
-REASON_TEXT = {"inventory": "инвентаризация", "defect": "брак", "loss": "потеря", "other": "другое",
-               "wh_off": "склад выключен", "changed_mind": "передумал", "defect_out": "брак, не в наличие",
-               "oversold": "продано больше, чем по учёту"}
+# Phase 15: the file is in the reader's language (app/core/i18n.py); it loads back in any of them
+ID_HEADERS = tuple(EXPORT[lang]["id"].lower() for lang in LANGS)
+NAME_HEADERS = ("товар", "наименование", "название", "mahsulot", "nomi", "product", "name")
+BARCODE_HEADERS = ("штрихкод", "штрих-код", "штрихкоды", "barcode", "ean", "shtrix-kod", "shtrixkod")
 
 
 def _branch_title(b) -> str:
@@ -56,43 +49,46 @@ def _book(headers: list[str], rows: list[list], title: str) -> bytes:
     return buf.getvalue()
 
 
-def export_offers(db: Session, store: Store, offers: list[Offer], with_cost: bool) -> bytes:
+def export_offers(db: Session, store: Store, offers: list[Offer], with_cost: bool, lang: str = "ru") -> bytes:
     from app.services.cabinet import markup
 
+    w = EXPORT.get(lang, EXPORT["ru"])
     branches = store_branches(db, store.id)
-    headers = [ID_HEADER, "Товар", "Категория", "Бренд", "Модель", "Состояние", "Цена", "Валюта", "Штрихкод"]
-    headers += [_branch_title(b) for b in branches] + ["Резерв", "Наличие"]
+    headers = [w[k] for k in ("id", "name", "category", "brand", "model", "condition", "price", "currency", "barcode")]
+    headers += [_branch_title(b) for b in branches] + [w["reserved"], w["in_stock"]]
     if with_cost:
-        headers += ["Закупка", "Наценка, %"]
+        headers += [w["cost"], w["markup"]]
     rows = []
     for o in offers:
         p = o.product
         stocks = {s.branch_id: s for s in o.stocks}
-        row = [o.id, p.normalized_name, p.category.name if p.category else None, p.brand, p.model,
-               CONDITIONS.get(o.condition.value, o.condition.value), o.price, o.currency.value,
+        row = [o.id, p.normalized_name, category_name(p.category, lang), p.brand, p.model,
+               CONDITIONS.get(lang, CONDITIONS["ru"]).get(o.condition.value, o.condition.value), o.price, o.currency.value,
                ", ".join(b.code for b in o.barcodes) or None]
         for b in branches:
             s = stocks.get(b.id)
             row.append(None if s is None else (s.quantity if s.quantity is not None else ("+" if s.in_stock else 0)))
-        row += [sum(s.reserved or 0 for s in o.stocks), "да" if o.is_in_stock else "нет"]
+        row += [sum(s.reserved or 0 for s in o.stocks), w["yes"] if o.is_in_stock else w["no"]]
         if with_cost:
             row += [o.cost_avg, markup(o)]
         rows.append(row)
-    return _book(headers, rows, "Мои товары")
+    return _book(headers, rows, w["goods_sheet"])
 
 
-def export_journal(movements: list[dict]) -> bytes:
-    headers = ["Дата", "Тип", "Товар", "Филиал", "Было", "Изменение", "Стало", "Резерв после", "Закупка",
-               "Цена продажи", "Валюта", "Причина", "Комментарий", "Документ", "Бронь", "Загрузка"]
+def export_journal(movements: list[dict], lang: str = "ru") -> bytes:
+    w = EXPORT.get(lang, EXPORT["ru"])
+    kinds, reasons = KINDS.get(lang, KINDS["ru"]), REASONS.get(lang, REASONS["ru"])
+    headers = [w[k] for k in ("date", "kind", "name", "branch", "before", "change", "after", "reserved_after", "cost",
+                              "sale_price", "currency", "reason", "comment", "doc", "reservation", "upload")]
     rows = []
     for m in movements:
         at = m["at"].astimezone(timezone.utc).replace(tzinfo=None) if m["at"] else None
         change = m["delta"] if m["kind"] not in ("reserve", "unreserve") else m["reserved_delta"]
-        rows.append([at, KIND_TEXT.get(m["kind"], m["kind"]), m["name"], "Склад" if m["branch"] == "@warehouse" else m["branch"], m["before"], change,
+        rows.append([at, kinds.get(m["kind"], m["kind"]), m["name"], w["warehouse"] if m["branch"] == "@warehouse" else m["branch"], m["before"], change,
                      m["after"], m["reserved_after"], m["cost"], m["price"], m["currency"],
-                     REASON_TEXT.get(m["reason"]) if m["reason"] else None, m["comment"], m["doc"],
+                     reasons.get(m["reason"]) if m["reason"] else None, m["comment"], m["doc"],
                      m["reservation_id"], m["import_id"]])
-    return _book(headers, rows, "Журнал")
+    return _book(headers, rows, w["journal_sheet"])
 
 
 # --- stock back from Excel ------------------------------------------------------------------------------------------
@@ -126,12 +122,12 @@ def read_stock_file(db: Session, store: Store, content: bytes) -> dict:
             if h:
                 by_header.setdefault(_norm(h), b.id)
     head_i = next((i for i, r in enumerate(rows[:30])
-                   if any(_norm(c) in (_norm(ID_HEADER), "товар", "наименование", "название") for c in r)), None)
+                   if any(_norm(c) in ID_HEADERS + NAME_HEADERS for c in r)), None)
     if head_i is None:
         raise StockError("no_header")
     header = [_norm(c) for c in rows[head_i]]
-    id_col = header.index(_norm(ID_HEADER)) if _norm(ID_HEADER) in header else None
-    name_col = next((i for i, h in enumerate(header) if h in ("товар", "наименование", "название")), None)
+    id_col = next((i for i, h in enumerate(header) if h in ID_HEADERS), None)
+    name_col = next((i for i, h in enumerate(header) if h in NAME_HEADERS), None)
     code_col = next((i for i, h in enumerate(header) if h in BARCODE_HEADERS), None)  # phase 12.3
     cols = {i: by_header[h] for i, h in enumerate(header) if h in by_header}
     if not cols and code_col is None:

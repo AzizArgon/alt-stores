@@ -34,21 +34,39 @@ class LoginIn(BaseModel):
     password: str = Field(max_length=200)
 
 
-@public.post("/login", response_model=TokenResponse)
-def admin_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
-    ip, email = client_ip(request), data.email.lower()
+def admin_door_check(ip: str, email: str) -> None:
+    """The admin limit (phase 13), kept by the one login (phase 16.3): 5 failures per IP or email = locked 15 min."""
     window = ADMIN_WINDOW_MINUTES * 60
     if max(admin_failures.count(f"ip:{ip}", window), admin_failures.count(f"email:{email}", window)) >= ADMIN_MAX_FAILURES:
         raise too_many("too_many_logins", minutes=ADMIN_WINDOW_MINUTES)
+
+
+def admin_door_failed(db: Session, user: User | None, ip: str, email: str) -> None:
+    admin_failures.hit(f"ip:{ip}")
+    admin_failures.hit(f"email:{email}")
+    if user is not None and user.role == UserRole.admin:
+        svc.log(db, user, "login_failed", "user", user.id, user.email, ip=ip)
+        db.commit()
+
+
+def admin_door_passed(db: Session, user: User, ip: str) -> None:
+    svc.log(db, user, "login_admin", "user", user.id, user.email, ip=ip)
+    db.commit()
+
+
+@public.post("/login", response_model=TokenResponse)
+def admin_login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
+    ip, email = client_ip(request), data.email.lower()
+    admin_door_check(ip, email)
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not verify_password(data.password, user.password_hash):
-        admin_failures.hit(f"ip:{ip}")
-        admin_failures.hit(f"email:{email}")
+        admin_door_failed(db, user, ip, email)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
     if user.role != UserRole.admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, {"code": "not_admin"})
     if user.blocked_at is not None:
         raise blocked_error(user)
+    admin_door_passed(db, user, ip)
     return TokenResponse(access_token=create_access_token(user.id, user.role.value), user=UserOut.model_validate(user))
 
 

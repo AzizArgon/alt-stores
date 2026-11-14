@@ -13,6 +13,7 @@ import MarketPage from './pages/MarketPage'
 import ProductPage from './pages/ProductPage'
 import StorePage from './pages/StorePage'
 import StoresPage from './pages/StoresPage'
+import ForSellersPage from './pages/ForSellersPage'
 import UsedPage from './pages/UsedPage'
 import ProfilePage from './pages/ProfilePage'
 import ReservationsPage from './pages/ReservationsPage'
@@ -23,12 +24,13 @@ import CabinetOverview from './pages/CabinetOverview'
 import GoodsPage from './pages/GoodsPage'
 import WarehousePage, { ReportsPage } from './pages/WarehousePage'
 import SellerBuildsPage, { SellerBuildEditPage } from './pages/SellerBuildsPage'
-import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection, SellerAuthLayout } from './pages/SellerPage'
-import AdminLayout, { AdminAuthLayout, AdminLog, AdminLoginPage, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
+import SellerLayout, { AddSection, ImportsSection, NotSellerPage, ProfileSection } from './pages/SellerPage'
+import AdminLayout, { AdminLog, AdminOverview, AdminUsers, NoAccessPage } from './pages/AdminPage'
+import AuthLayout from './layouts/AuthLayout'
 import { AdminBarcodes, AdminChannels, AdminFixes, AdminFlags, AdminPhotos, AdminReports, AdminStoreCard, AdminStores } from './pages/AdminModeration'
 import { NotificationsPage } from './components/Notifications'
 import { useAuth } from './services/auth.jsx'
-import { adminGate, homeFor, returnTo, sellerGate } from './services/roles'
+import { adminGate, homeFor, loginState, oldAuthTarget, returnTo, sellerGate } from './services/roles'
 
 // Goes to an address of this site, or reloads to another one (the cabinet on its own subdomain later)
 function Redirect({ to }) {
@@ -52,24 +54,32 @@ function GuestOnly({ children }) {
   return user ? <Redirect to={returnTo(user, location.state?.from)} /> : children
 }
 
-// The seller cabinet: a guest goes to the seller login, a buyer sees "this section is for sellers"
+// Phase 16.3: the old login and register addresses (/seller/login, /seller/register, /admin/login) lead to the one
+// login, keeping the page to return to
+function OldAuthRedirect() {
+  const { pathname, state } = useLocation()
+  const target = oldAuthTarget(pathname, state)
+  return <Navigate to={target.to} replace state={target.state} />
+}
+
+// The seller cabinet: a guest goes to the login, a buyer sees "this section is for sellers"
 function SellerOnly({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return null
   const gate = sellerGate(user)
-  if (gate === 'login') return <Navigate to="/seller/login" replace state={{ from: location.pathname + location.search }} />
+  if (gate === 'login') return <Navigate to="/login" replace state={loginState(location)} />
   if (gate === 'notSeller') return <NotSellerPage />
   return children
 }
 
-// The admin panel (phase 13): a guest goes to the admin login, a seller or a buyer sees "no access"
+// The admin panel (phase 13): a guest goes to the login, a seller or a buyer sees "no access"
 function AdminOnly({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return null
   const gate = adminGate(user)
-  if (gate === 'login') return <Navigate to="/admin/login" replace state={{ from: location.pathname + location.search }} />
+  if (gate === 'login') return <Navigate to="/login" replace state={loginState(location)} />
   if (gate === 'noAccess') return <NoAccessPage />
   return children
 }
@@ -77,8 +87,9 @@ function AdminOnly({ children }) {
 // Any logged-in user; guests go to the login page
 function UserOnly({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return null
-  return user ? children : <Navigate to="/login" replace />
+  return user ? children : <Navigate to="/login" replace state={loginState(location)} />
 }
 
 // Buyer's messages: a guest logs in and comes back to the same address ("Write" -> login -> the conversation);
@@ -87,7 +98,7 @@ function BuyerOnly({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return null
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
+  if (!user) return <Navigate to="/login" replace state={loginState(location)} />
   if (user.role === 'seller' || user.role === 'admin') return <Redirect to={homeFor(user)} />
   return children
 }
@@ -115,9 +126,8 @@ export default function App() {
         <Route path="/builds" element={<BuildsPage />} />
         <Route path="/builds/:id" element={<BuildPage />} />
         <Route path="/stores" element={<StoresPage />} />
+        <Route path="/for-sellers" element={<ForSellersPage />} />
         <Route path="/store/:id" element={<StorePage />} />
-        <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
-        <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
         <Route path="/messages" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
         <Route path="/messages/new" element={<BuyerOnly><OpenConversation /></BuyerOnly>} />
         <Route path="/messages/:id" element={<BuyerOnly><ChatView base="/messages" side="buyer" /></BuyerOnly>} />
@@ -128,10 +138,14 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
 
-      <Route element={<SellerAuthLayout />}>
-        <Route path="/seller/login" element={<GuestOnly><LoginPage seller /></GuestOnly>} />
-        <Route path="/seller/register" element={<GuestOnly><RegisterPage seller /></GuestOnly>} />
+      {/* Phase 16.3: one login and one registration for every role, with a minimal top bar */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<GuestOnly><LoginPage /></GuestOnly>} />
+        <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
       </Route>
+      <Route path="/seller/login" element={<OldAuthRedirect />} />
+      <Route path="/seller/register" element={<OldAuthRedirect />} />
+      <Route path="/admin/login" element={<OldAuthRedirect />} />
       <Route path="/seller" element={<SellerOnly><SellerLayout /></SellerOnly>}>
         <Route index element={<CabinetOverview />} />
         <Route path="goods" element={<GoodsPage />} />
@@ -154,9 +168,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/seller" replace />} />
       </Route>
 
-      <Route element={<AdminAuthLayout />}>
-        <Route path="/admin/login" element={<GuestOnly><AdminLoginPage /></GuestOnly>} />
-      </Route>
       <Route path="/admin" element={<AdminOnly><AdminLayout /></AdminOnly>}>
         <Route index element={<AdminOverview />} />
         <Route path="stores" element={<AdminStores />} />

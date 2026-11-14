@@ -191,7 +191,8 @@ export default function BuildEditor({ initial, buildId, defaultCurrency, onSaved
             hint={initial?.currency_check ? t('sellerBuilds.currencyCheck') : undefined}>
             {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
-          <Select label={t('sellerBuilds.condition')} required value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })}>
+          <Select label={t('sellerBuilds.condition')} required value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })}
+            hint={initial?.condition_check && form.condition === 'used' ? t('sellerBuilds.conditionCheck') : undefined}>
             <option value="" disabled>{t('sellerBuilds.conditionChoose')}</option>
             {['new', 'used'].map((c) => <option key={c} value={c}>{t(`builds.condition.${c}`)}</option>)}
           </Select>

@@ -5,18 +5,17 @@ import {
 } from 'lucide-react'
 import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AuthCard, ErrorText, SubmitButton, emailErrorKey, fieldOfError } from '../components/AuthForm'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FieldBox, Input, PasswordInput, Select, Skeleton, inputClass } from '../components/ui'
-import { goTo, storeUrl } from '../config/sites'
+import { Badge, Button, Card, EmptyState, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
-import api, { errorKey } from '../services/api'
+import api from '../services/api'
 import { LOG_GROUPS, actionGroup, adminErrorKey, dateTime, useAdminData } from '../services/admin'
+import LangSwitch from '../components/LangSwitch'
 import { useAuth } from '../services/auth.jsx'
 import { formatDate } from '../services/format'
-import { loginAtAdminDoor, returnTo } from '../services/roles'
 
 // `tab`: in the phone bar (six fit 360 px); the rest open from the overview's list of sections
 export const ADMIN_SECTIONS = [
@@ -37,17 +36,17 @@ function AdminFrame({ sections, children }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   // One transition: the router navigates in a transition, so a plain logout would let the admin guard send to
-  // /admin/login first
+  // the one /login first
   return (
     <Workspace home="/admin" subtitle={t('admin.subtitle')} sections={sections} navKey="admin.nav" tabKey="admin.tab"
       menuLabel={t('admin.menu')} sideTitle={user?.role === 'admin' ? user.email : null}
-      actions={user?.role === 'admin' && (<>
+      actions={<><LangSwitch />{user?.role === 'admin' && (<>
         <NotificationBell allPath="/admin/notifications" />
         <Button variant="secondary" size="sm" onClick={() => startTransition(() => { logout(); navigate('/login') })}
           aria-label={t('admin.logout')} title={user.email} className="shrink-0 max-sm:!px-2.5">
           <LogOut className="size-4" aria-hidden /><span className="hidden sm:inline">{t('admin.logout')}</span>
         </Button>
-      </>)}>
+      </>)}</>}>
       {children}
     </Workspace>
   )
@@ -73,10 +72,6 @@ export default function AdminLayout() {
   return <AdminFrame sections={sections}><Outlet /></AdminFrame>
 }
 
-export function AdminAuthLayout() {
-  return <AdminFrame><Outlet /></AdminFrame>
-}
-
 // A seller or a buyer opened /admin/...
 export function NoAccessPage() {
   const { t } = useTranslation()
@@ -89,59 +84,11 @@ export function NoAccessPage() {
         <h1 className="mt-4 text-h1">{t('admin.noAccessTitle')}</h1>
         <p className="mt-2 text-sm text-muted">{t('admin.noAccessText')}</p>
         <div className="mt-6 grid gap-2">
-          <Button size="lg" onClick={() => { logout(); navigate('/admin/login') }}>{t('admin.loginAsAdmin')}</Button>
+          <Button size="lg" onClick={() => { logout(); navigate('/login', { state: { from: '/admin' } }) }}>{t('admin.loginAsAdmin')}</Button>
           <Button size="lg" variant="secondary" href={storeUrl('/')}>{t('admin.backToStore')}</Button>
         </div>
       </Card>
     </AdminFrame>
-  )
-}
-
-export function AdminLoginPage() {
-  const { t } = useTranslation()
-  const { adminLogin, login } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [errors, setErrors] = useState({})
-  const [busy, setBusy] = useState(false)
-
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    const found = {}
-    const emailError = emailErrorKey(email)
-    if (emailError) found.email = t(emailError)
-    if (!password) found.password = t('errors.required')
-    setErrors(found)
-    if (Object.keys(found).length) return
-    setBusy(true)
-    try {
-      const user = await loginAtAdminDoor(adminLogin, login, email, password)
-      goTo(navigate, returnTo(user, location.state?.from))
-    } catch (err) {
-      const key = errorKey(err)
-      const detail = err.response?.data?.detail
-      setErrors({ [fieldOfError(key)]: t(key, typeof detail === 'object' ? detail : {}) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <AuthCard title={t('admin.loginTitle')} hint={t('admin.loginHint')}>
-      <form onSubmit={onSubmit} noValidate className="grid gap-4">
-        <Input label={t('auth.email')} type="email" autoComplete="username" error={errors.email}
-          value={email} onChange={(e) => setEmail(e.target.value)} />
-        <PasswordInput label={t('auth.password')} autoComplete="current-password" error={errors.password}
-          value={password} onChange={(e) => setPassword(e.target.value)} />
-        <div className="mt-1">
-          <ErrorText>{errors.form}</ErrorText>
-          <SubmitButton busy={busy} busyText={t('auth.loading')}>{t('auth.submitLogin')}</SubmitButton>
-        </div>
-        <Link to="/login" className="text-center text-sm text-muted hover:text-primary">{t('admin.toSite')}</Link>
-      </form>
-    </AuthCard>
   )
 }
 

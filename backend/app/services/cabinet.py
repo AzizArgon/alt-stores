@@ -310,6 +310,7 @@ def offer_detail(db: Session, store: Store, offer: Offer) -> dict:
     history += [{"at": _aware(e.recorded_at), "field": e.field, "value": e.value, "source": e.source} for e in offer.events]
     history.sort(key=lambda h: h["at"], reverse=True)
     pending = db.scalar(select(ProductFix).where(ProductFix.product_id == product.id, ProductFix.store_id == store.id,
+                                                 ProductFix.kind != "duplicate",
                                                  ProductFix.status == "pending").order_by(ProductFix.id.desc()))
     return {
         **offer_row(offer, _market(market_data(db), offer)),

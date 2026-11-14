@@ -202,7 +202,10 @@ RULES: dict[str, dict[str, list]] = {
         "power_w": [(r"(\d{1,2}\s\d{3}|\d{3,5})\s*(?:w|вт|ватт)\b", lambda m: _number(m[1]))],
     },
     "printer": {
-        "type": [(r"мфу|\bmfp\b", "mfp"), (r"принтер|printer", "printer")],
+        # Phase 16.1: an MFP is "3 in 1" (print, scan, copy) or "4 in 1" (+ fax: "fax", "4 в 1", HP/Pantum "137fnw",
+        # "4303fdw", "BM5100FDN" — the f after the model number); the old value "mfp" reads as 3 in 1
+        "type": [(r"факс|\bfax\b|\b4\s*(?:в|in)\s*1\b|\d{3,4}f(?:dw|nw|dn|n|w)\b", "4in1"),
+                 (r"мфу|\bmfp\b|\b3\s*(?:в|in)\s*1\b|all-?in-?one|\baio\b", "3in1"), (r"принтер|printer", "printer")],
         "technology": [(r"лаз|laser", "laser"), (r"струйн|inkjet|ink\s*tank", "inkjet")],
         "color_print": [(r"цв\.|цветн", True)],
         "paper": [(r"\ba3\b", "A3"), (r"\ba4\b", "A4")],
@@ -326,6 +329,8 @@ def _from_value(category: str, spec: Spec, value):
         result = canonical_brand(str(value))
     elif spec.key == "color":
         result = _color(str(value))
+    elif spec.values and str(value).strip() in spec.values:
+        result = str(value).strip()  # chosen from the list of the form ("Bronze"), the rules expect "80+ Bronze"
     else:
         # Open lists (chip, chipset) accept only what their rules recognize: "Intel UHD Graphics" is not a GPU chip
         rules = RULES.get(category, {}).get(spec.key)

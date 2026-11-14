@@ -4,13 +4,14 @@ Excel export of "My goods" and of the journal, stock back from Excel. Only the s
 from datetime import date
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.seller import MAX_FILE_SIZE, _require_store, seller_only
+from app.core.i18n import user_lang
 from app.db.database import get_db
 from app.db.models import Offer, Product, User
 from app.schemas.seller import OfferFilter
@@ -235,22 +236,22 @@ def _xlsx(content: bytes, name: str) -> Response:
 
 
 @router.get("/journal.xlsx")
-def journal_xlsx(offer_id: int | None = None, branch_id: int | None = None,
+def journal_xlsx(request: Request, offer_id: int | None = None, branch_id: int | None = None,
                  kind: str | None = Query(None, max_length=100), date_from: date | None = None,
                  date_to: date | None = None, user: User = Depends(seller_only), db: Session = Depends(get_db)):
     f = {"offer_id": offer_id, "branch_id": branch_id, "kind": kind, "date_from": date_from, "date_to": date_to}
     rows = stock.all_movements(db, _require_store(db, user), f)
-    return _xlsx(stock_excel.export_journal(rows), f"journal_{stock_excel.stamp()}.xlsx")
+    return _xlsx(stock_excel.export_journal(rows, user_lang(user, request)), f"journal_{stock_excel.stamp()}.xlsx")
 
 
 @router.get("/offers.xlsx")
-def offers_xlsx(f: OfferFilter = Depends(), cost: bool = False, user: User = Depends(seller_only),
+def offers_xlsx(request: Request, f: OfferFilter = Depends(), cost: bool = False, user: User = Depends(seller_only),
                 db: Session = Depends(get_db)):
     """"Скачать в Excel" of "My goods" with the current filters; the same columns load back as stock."""
     store = _require_store(db, user)
     offers = [o for o, _ in cabinet.filtered_offers(db, store, f.model_dump())]
     offers.sort(key=lambda o: o.product.normalized_name.lower())
-    return _xlsx(stock_excel.export_offers(db, store, offers, cost), f"goods_{stock_excel.stamp()}.xlsx")
+    return _xlsx(stock_excel.export_offers(db, store, offers, cost, user_lang(user, request)), f"goods_{stock_excel.stamp()}.xlsx")
 
 
 @router.post("/import")

@@ -73,11 +73,16 @@
 html {
   /* Reserve the scrollbar so pages do not jump, and never scroll the page sideways */
   scrollbar-gutter: stable;
+  /* Phase 16.2: the rubber-band scroll of a phone above the header / below the footer shows white, like them */
+  background-color: var(--color-surface);
 }
 
 body {
   @apply bg-bg text-ink antialiased;
   overflow-x: clip;
+  /* viewport-fit=cover (index.html): the page goes under the notch; the header pads the top, this the sides */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* A tap on a phone must not zoom into a small field (iOS zooms below 16 px) */

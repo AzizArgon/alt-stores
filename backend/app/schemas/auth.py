@@ -24,6 +24,7 @@ class UserOut(BaseModel):
     email: EmailStr
     role: str
     created_at: datetime
+    lang: str | None = None
 
 
 class TokenResponse(BaseModel):

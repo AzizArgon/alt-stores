@@ -3,11 +3,15 @@ import { Check, Info, TriangleAlert, X } from 'lucide-react'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { Button } from './ui'
+
+// Esc closes the top window or menu
+export const escCloses = (e, onClose) => { if (e.key === 'Escape') onClose() }
 
 function useEsc(active, onClose) {
   useEffect(() => {
     if (!active) return
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e) => escCloses(e, onClose)
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [active, onClose])
@@ -33,27 +37,44 @@ function CloseButton({ onClose }) {
   )
 }
 
-// `fullOnPhone`: the whole screen on a phone (a long form), a centred window from 640 px
-export function Modal({ open, onClose, title, children, footer, fullOnPhone = false }) {
+// Phase 17.1: one window for the whole cabinet and the admin.
+// Width by the content, 560–640 px (`wide`: up to 896 px — a camera, a list); 24 px inside;
+// title + cross over a line, the body, the buttons at the bottom right: "Отмена" + the main one.
+// The main button: `primary` = { label, onClick, disabled, variant, type, form }; or a whole `footer` of your own.
+// Closes on Esc and on a click on the dimmed page. A phone: the whole width, from the bottom
+// (`fullOnPhone`: the whole screen — a long form)
+export function Modal({ open, onClose, title, children, footer, primary, cancelLabel, fullOnPhone = false, wide = false }) {
+  const { t } = useTranslation()
   useEsc(open, onClose)
   useLockScroll(open)
   if (!open) return null
-  return createPortal(
-    <div className={`fixed inset-0 z-50 flex items-center justify-center ${fullOnPhone ? 'sm:p-4' : 'p-4'}`}>
-      <div className="absolute inset-0 animate-[fade-in_150ms] bg-ink/50" onClick={onClose} />
+  const buttons = footer ?? (primary && (
+    <>
+      <Button variant="secondary" onClick={onClose}>{cancelLabel || t('common.cancel')}</Button>
+      <Button variant={primary.variant || 'primary'} type={primary.type || 'button'} form={primary.form}
+        disabled={primary.disabled} onClick={primary.onClick}>{primary.label}</Button>
+    </>
+  ))
+  const win = (
+    <div className={`fixed inset-0 z-50 flex justify-center ${fullOnPhone ? 'items-stretch sm:items-center sm:p-4' : 'items-end sm:items-center sm:p-4'}`}>
+      <div data-backdrop className="absolute inset-0 animate-[fade-in_150ms] bg-ink/65 backdrop-blur-[2px]" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-label={title}
-        className={`relative flex max-h-full w-full animate-[pop-in_150ms] flex-col bg-surface shadow-pop ${
-          fullOnPhone ? 'h-full sm:h-auto sm:max-w-lg sm:rounded-xl' : 'max-w-lg rounded-xl'}`}>
-        <div className="flex items-center justify-between gap-3 px-5 pt-4">
-          <h2 className="text-h2">{title}</h2>
+        className={`relative flex w-full animate-[pop-in_150ms] flex-col bg-surface shadow-pop sm:w-fit sm:min-w-[560px] sm:rounded-xl ${
+          wide ? 'sm:max-w-4xl' : 'sm:max-w-[640px]'} ${
+          fullOnPhone ? 'h-full sm:h-auto sm:max-h-[calc(100dvh-2rem)]' : 'max-h-[92dvh] rounded-t-xl sm:max-h-[calc(100dvh-2rem)]'}`}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line py-3 pr-3 pl-6">
+          <h2 className="min-w-0 text-h3">{title}</h2>
           <CloseButton onClose={onClose} />
         </div>
-        <div className="overflow-y-auto px-5 py-3">{children}</div>
-        {footer && <div className="flex justify-end gap-2 px-5 pt-1 pb-5">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {buttons && (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{buttons}</div>
+        )}
       </div>
-    </div>,
-    document.body,
+    </div>
   )
+  // No document (the static tests): drawn in place
+  return typeof document === 'undefined' ? win : createPortal(win, document.body)
 }
 
 const SHEET_SIDE = {
@@ -90,8 +111,9 @@ const DropdownContext = createContext(null)
 // Dropdown menu: closes on a click outside, on Esc and after choosing an item.
 // `trigger` gets { open, toggle } and draws the button
 // `up`: the panel opens above the trigger (a button at the bottom of a card, above the phone tab bar)
-export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', children }) {
-  const [open, setOpen] = useState(false)
+// `initialOpen`: for the static tests
+export function Dropdown({ trigger, align = 'right', up = false, panelClassName = 'w-64', initialOpen = false, children }) {
+  const [open, setOpen] = useState(initialOpen)
   const box = useRef(null)
   const close = useCallback(() => setOpen(false), [])
   useEsc(open, close)

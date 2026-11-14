@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import i18n from '../i18n'
 import api, { TOKEN_KEY } from './api'
+import { LANGS, profileLang } from './lang'
 
 const AuthContext = createContext(null)
 
@@ -16,20 +18,32 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false))
   }, [])
 
+  // Phase 15: the profile keeps the language — it wins on login (another device); a profile without one gets this one
+  useEffect(() => {
+    if (!user) return
+    const step = profileLang(user.lang, i18n.language)
+    if (step.change) i18n.changeLanguage(step.change)
+    if (step.save) api.put('/auth/me/lang', { lang: step.save }).catch(() => {})
+  }, [user])
+
   const saveSession = (data) => {
     localStorage.setItem(TOKEN_KEY, data.access_token)
     setUser(data.user)
     return data.user
   }
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password })
-    return saveSession(res.data)
+  // The language switch: the browser remembers it (i18n.js), the profile too when logged in
+  const setLang = (lng) => {
+    if (!LANGS.includes(lng)) return
+    i18n.changeLanguage(lng)
+    if (user) {
+      setUser((u) => ({ ...u, lang: lng }))
+      api.put('/auth/me/lang', { lang: lng }).catch(() => {})
+    }
   }
 
-  // Phase 13: the admin entrance (/admin/login) — its own endpoint, only the admin role, its own attempt limit
-  const adminLogin = async (email, password) => {
-    const res = await api.post('/admin/login', { email, password })
+  const login = async (email, password) => {
+    const res = await api.post('/auth/login', { email, password })
     return saveSession(res.data)
   }
 
@@ -44,7 +58,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, adminLogin, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, setLang }}>
       {children}
     </AuthContext.Provider>
   )
