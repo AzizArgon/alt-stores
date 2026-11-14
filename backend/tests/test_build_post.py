@@ -168,3 +168,28 @@ def test_contacts_are_cut_out_prices_stay():
     text = build_post.strip_contacts("Цена 8 500 000 сум\nЗвоните: +998 (90) 123-45-67\nпишите @shop_uz\n"
                                      "Канал t.me/shop_uz https://instagram.com/x\nRTX 3060 12GB")
     assert text == "Цена 8 500 000 сум\nКанал\nRTX 3060 12GB"
+
+
+def test_model_code_ties_a_part_to_the_only_card(db, ai):
+    x3d = _card(db, "cpu", "AMD Ryzen 7 9800X3D, 4.7 GHz, 8C/16T, AM5, OEM", {}, "AMD")
+    psu = _card(db, "psu", "Блок питания Thermaltake Toughpower GF3 1000W 80 Plus Gold", {"power": 1000}, "Thermaltake")
+    _card(db, "psu", "Блок питания Thermaltake Toughpower GF3 1350W 80 Plus Gold", {"power": 1350}, "Thermaltake")
+    _card(db, "ram", "Kingston Fury Beast 16GB DDR4 3200", {"type": "DDR4", "capacity": 16}, "Kingston")
+    draft = _parse(db, "ПК\nПроцессор: AMD Ryzen 7 9800X3D\nБлок питания: Thermaltake Toughpower GF3 1000W Gold\n"
+                       "ОЗУ: Kingston 16GB DDR4\nGPU: RTX 4070\n1500$")
+    got = {c["slot"]: c for c in draft["components"]}
+    assert got["cpu"]["product"]["id"] == x3d.id and got["psu"]["product"]["id"] == psu.id
+    assert got["ram"]["product"] is None and got["ram"]["level"] == "specs"  # values alone never tie a part
+    # "GF3" alone fits two cards: not tied
+    assert _parse(db, "ПК\nCPU: Ryzen 7 9800X3D\nБП: Thermaltake GF3\n900$")["components"][1]["product"] is None
+
+
+def test_a_value_chosen_from_the_list_is_kept(db):
+    # "Bronze" from the form's list was dropped: the rule of the text expects "80+ Bronze"
+    build = builds.save_build(db, _store(db, "s@example.com"), {
+        "name": "ПК", "price": 500, "currency": "USD", "condition": "used", "purpose": "gaming", "components": [
+            {"slot": "cpu", "raw_text": "i5-12400F", "quantity": 1, "category": "cpu", "specs": {"model": "i5-12400F"}},
+            {"slot": "gpu", "raw_text": "RTX 3060", "quantity": 1, "category": "gpu", "specs": {"chip": "RTX 3060"}},
+            {"slot": "psu", "raw_text": "DeepCool 750W 80+ Bronze", "quantity": 1, "category": "psu",
+             "specs": {"power": 750, "certification": "Bronze", "brand": "Deepcool"}}]})
+    assert build.components[2].specs == {"power": 750, "certification": "Bronze", "brand": "Deepcool"}

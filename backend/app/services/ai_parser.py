@@ -284,7 +284,8 @@ async def _gemini(rows: list[CleanRow], stats: dict) -> list[dict]:
     text = format_chunk(rows)
     last_error: Exception | None = None
     attempt = 0
-    while attempt < MAX_RETRIES:
+    limit = stats.get("attempts", MAX_RETRIES)  # phase 17.2: a build post asks once, it does not wait for retries
+    while attempt < limit:
         models = _available_models()
         if not models:
             raise QuotaExhausted("Daily quota exhausted for all Gemini models")
@@ -313,10 +314,11 @@ async def _gemini(rows: list[CleanRow], stats: dict) -> list[dict]:
                 stats["requests"] -= 1  # rejected before any work, not counted
                 continue
             last_error = e
-            await asyncio.sleep(_retry_delay(e, attempt))
+            if attempt + 1 < limit:
+                await asyncio.sleep(_retry_delay(e, attempt))
         attempt += 1
         log.warning("Gemini %s attempt %s failed: %s", model, attempt, str(last_error)[:300])
-    raise RuntimeError(f"Gemini failed after {MAX_RETRIES} attempts: {last_error}")
+    raise RuntimeError(f"Gemini failed after {limit} attempts: {last_error}")
 
 
 async def _call_groq(text: str) -> tuple[str, bool]:
@@ -341,7 +343,8 @@ async def _call_groq(text: str) -> tuple[str, bool]:
 async def _groq(rows: list[CleanRow], stats: dict) -> list[dict]:
     text = format_chunk(rows)
     last_error: Exception | None = None
-    for attempt in range(MAX_RETRIES):
+    limit = stats.get("attempts", MAX_RETRIES)
+    for attempt in range(limit):
         if not spend_ai_request():
             raise QuotaExhausted("Daily AI limit of the server reached")
         await _groq_limiter.acquire(_estimate_tokens(text, len(rows)))
@@ -358,9 +361,10 @@ async def _groq(rows: list[CleanRow], stats: dict) -> list[dict]:
             last_error = e
         except Exception as e:
             last_error = e
-            await asyncio.sleep(_retry_delay(e, attempt))
+            if attempt + 1 < limit:
+                await asyncio.sleep(_retry_delay(e, attempt))
         log.warning("Groq attempt %s failed: %s", attempt + 1, str(last_error)[:300])
-    raise RuntimeError(f"Groq failed after {MAX_RETRIES} attempts: {last_error}")
+    raise RuntimeError(f"Groq failed after {limit} attempts: {last_error}")
 
 
 async def _split_on_truncation(call, rows: list[CleanRow], stats: dict) -> list[dict]:

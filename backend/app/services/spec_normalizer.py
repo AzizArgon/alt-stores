@@ -329,6 +329,8 @@ def _from_value(category: str, spec: Spec, value):
         result = canonical_brand(str(value))
     elif spec.key == "color":
         result = _color(str(value))
+    elif spec.values and str(value).strip() in spec.values:
+        result = str(value).strip()  # chosen from the list of the form ("Bronze"), the rules expect "80+ Bronze"
     else:
         # Open lists (chip, chipset) accept only what their rules recognize: "Intel UHD Graphics" is not a GPU chip
         rules = RULES.get(category, {}).get(spec.key)

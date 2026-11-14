@@ -88,6 +88,29 @@ def _part_specs(slot: str, category: str, row: dict, words: str) -> dict:
     return specs
 
 
+_SPEC_WORD = re.compile(r"\d+(?:[.,]\d+)?(?:gb|tb|w|mhz|ghz|hz|mm|mb|v|pin|bit)")
+
+
+def _by_model_code(db: Session, category: str, key: str, brand: str | None) -> Product | None:
+    """A part tied by its model code when the key differs only by words of the card name (phase 17.2).
+
+    A CPU by its model number: "AMD Ryzen 7 9800X3D" -> "AMD Ryzen 7 9800X3D, 4.7 GHz, 8C/16T, AM5, OEM". Other
+    parts only when the maker and a model code are named and every word of the part is in exactly one card:
+    "Thermaltake Toughpower GF3 1000W Gold" -> "... GF3 1000W 80 Plus Gold". Words of values alone ("Kingston
+    16GB DDR4") never tie a part to a card."""
+    words = set(key.partition(":")[2].split())
+    codes = {w for w in words if re.search(r"\d", w) and re.search(r"[a-z]", w) and not _SPEC_WORD.fullmatch(w)
+             and not re.fullmatch(r"ddr\d|i[3579]", w)}
+    if not codes or category != "cpu" and not brand:
+        return None
+    need = codes if category == "cpu" else words
+    code = max(codes, key=len)
+    cards = db.scalars(select(Product).join(Product.category).where(
+        Category.slug == category, Product.match_key.like(f"%{code}%"), Product.merged_into.is_(None))).all()
+    found = [p for p in cards if need <= set(p.match_key.partition(":")[2].split())]
+    return found[0] if len(found) == 1 else None
+
+
 _LATIN_WORD = re.compile(r"[a-z]{3,}", re.I)  # a model name; Russian words alone ("белый, красивый") are not
 
 
@@ -150,7 +173,7 @@ async def parse_build_text(db: Session, text: str, ai: bool = True) -> dict:
             pending.append(r)
     ai_state = "none" if not pending else "skipped" if not ai else "off" if not ai_ready() else "done"
     if ai_state == "done":
-        stats: dict = {}
+        stats: dict = {"attempts": 1}  # one try per provider: Gemini, then Groq; no pauses between retries
         try:
             answer = await asyncio.wait_for(importer.parse_rows(pending, stats), settings.build_ai_seconds)
         except (RuntimeError, asyncio.TimeoutError) as e:
@@ -174,7 +197,10 @@ async def parse_build_text(db: Session, text: str, ai: bool = True) -> dict:
         slot = part["slot"] or SLOT_OF.get(category) or ("gpu" if _INTEGRATED.search(words) else "other")
         if category not in SLOT_CATEGORIES.get(slot, ()):
             category = _part_category(slot, words)  # "Видеокарта: ..." the seller named the slot
-        product = matcher.match({**row, "category": category})[3] if row and category else None
+        product = None
+        if row and category:
+            _, _, key, product = matcher.match({**row, "category": category})
+            product = product or _by_model_code(db, category, key, row.get("brand"))
         if product is not None and SLOT_OF.get(product.category.slug if product.category else None) != slot:
             product = None
         specs = {} if product else _part_specs(slot, category, row, words) if category or slot == "gpu" else {}
