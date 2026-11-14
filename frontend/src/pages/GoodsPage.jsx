@@ -78,7 +78,7 @@ function PriceInput({ offer, onSave, className = '' }) {
             e.currentTarget.blur()
           }
         }}
-        className="h-9 w-full min-w-0 rounded-md border border-line-strong bg-surface px-2 text-sm tabular-nums outline-none hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft" />
+        className="h-9 w-full min-w-0 rounded-md border border-line-strong bg-surface px-2 text-right text-sm tabular-nums outline-none hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft" />
       <span className="shrink-0 text-xs text-muted">{offer.currency === 'USD' ? '$' : t('currency.UZS')}</span>
     </span>
   )
@@ -88,8 +88,8 @@ function SortHeader({ k, sort, desc, onSort, className = '', children }) {
   const active = sort === k
   const Arrow = desc ? ArrowDown : ArrowUp
   return (
-    <th className={`px-2 py-2 font-medium ${className}`} aria-sort={active ? (desc ? 'descending' : 'ascending') : undefined}>
-      <button type="button" onClick={() => onSort(k)} className={`inline-flex items-center gap-1 rounded hover:text-ink ${active ? 'text-ink' : ''}`}>
+    <th className={`px-2 py-2 font-medium whitespace-nowrap ${className}`} aria-sort={active ? (desc ? 'descending' : 'ascending') : undefined}>
+      <button type="button" onClick={() => onSort(k)} className={`inline-flex items-center gap-1 rounded whitespace-nowrap hover:text-ink ${active ? 'text-ink' : ''}`}>
         {children}{active && <Arrow className="size-3.5" aria-hidden />}
       </button>
     </th>
@@ -330,6 +330,7 @@ export default function GoodsPage() {
   const chosen = branches.find((b) => String(b.id) === params.get('branch'))
   const { places, columns, folded } = stockColumns(branches, chosen)
   const stockCols = columns.length > 0 || folded
+  const showMarket = data ? hasMarket(data.items) : false
   const stockMode = store?.stock_mode === 'stock'
   // The general switch of an item kept by branch: in "Учёт остатков" only operations change it
   const lockStock = (o) => stockMode && Object.keys(o.stocks || {}).length > 0
@@ -372,22 +373,23 @@ export default function GoodsPage() {
             {/* Many columns (the stock, the purchase and the markup): the table scrolls sideways inside its block, the
                 tick and the name stay on the left; the name is never narrower than 240 px */}
             <div className="hidden overflow-x-auto overscroll-x-contain lg:block" data-testid="goods-table">
-            <table className="w-full text-sm">
+            {/* Phase 17.1: fixed widths (table-fixed), headers on one line, numbers on the right */}
+            <table className="w-full table-fixed text-sm">
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
                   <th className={`${STICKY_TICK} w-10 bg-surface-2 px-3`}><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
                   <SortHeader k="name" sort={sort} desc={desc} onSort={onSort} className={`${STICKY_NAME} ${NAME_COL} bg-surface-2`}>{t('cabinet.col.name')}</SortHeader>
-                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={stockCols ? 'w-32 min-w-32' : 'w-40 min-w-40'}>{t('cabinet.col.price')}</SortHeader>
-                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden w-32 ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
-                  <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className="w-24">{t('cabinet.col.stock')}</SortHeader>
+                  <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={`${COL.price} text-right`}>{t('cabinet.col.price')}</SortHeader>
+                  <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden ${COL.condition} ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
+                  <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className={COL.stock}>{t('cabinet.col.stock')}</SortHeader>
                   {columns.map((b) => (
-                    <th key={b.id} className="w-[4.5rem] min-w-[4.5rem] px-1 py-2 font-medium" title={b.address}><span className="block max-w-[5rem] truncate">{branchLabel(b)}</span></th>
+                    <th key={b.id} style={{ width: branchColWidth(branchLabel(b)) }} className="px-2 py-2 text-right font-medium" title={b.address}><span className="block truncate">{branchLabel(b)}</span></th>
                   ))}
-                  {folded && <th className="w-24 min-w-24 px-2 py-2 font-medium">{t('cabinet.col.stockTotal')}</th>}
-                  {showCost && <th className="w-24 min-w-24 px-2 py-2 font-medium">{t('warehouse.cost.column')}</th>}
-                  {showCost && <th className="w-20 min-w-20 px-2 py-2 font-medium">{t('warehouse.cost.markup')}</th>}
-                  <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`w-36 ${stockCols ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>
-                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className={`hidden w-28 ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.updated')}</SortHeader>
+                  {folded && <th className={`${COL.total} px-2 py-2 text-right font-medium whitespace-nowrap`}>{t('cabinet.col.stockTotal')}</th>}
+                  {showCost && <th className={`${COL.cost} px-2 py-2 text-right font-medium whitespace-nowrap`}>{t('warehouse.cost.column')}</th>}
+                  {showCost && <th className={`${COL.markup} px-2 py-2 text-right font-medium whitespace-nowrap`}>{t('warehouse.cost.markup')}</th>}
+                  {showMarket && <SortHeader k="market" sort={sort} desc={desc} onSort={onSort} className={`${COL.market} ${stockCols ? 'hidden xl:table-cell' : ''}`}>{t('cabinet.col.market')}</SortHeader>}
+                  <SortHeader k="updated" sort={sort} desc={desc} onSort={onSort} className={`hidden ${COL.updated} ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.updated')}</SortHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -398,7 +400,7 @@ export default function GoodsPage() {
                     </td>
                     <td className={`${STICKY_NAME} ${NAME_COL} ${stickyBg(selected.has(o.id) || allByFilter)} px-2 py-2 align-top`}>
                       {/* 240 px (352 px from 1280): a long name takes two lines instead of pushing the other columns out */}
-                      <button type="button" onClick={() => setEditing(o.id)} className="flex w-60 min-w-0 gap-2 text-left xl:w-[22rem]">
+                      <button type="button" onClick={() => setEditing(o.id)} className="flex w-full min-w-0 gap-2 text-left">
                         {o.photo
                           ? <img src={o.photo} alt="" loading="lazy" className="size-9 shrink-0 rounded-sm border border-line bg-white object-contain" />
                           : <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />}
@@ -411,27 +413,27 @@ export default function GoodsPage() {
                         </span>
                       </button>
                       <div className="mt-1 flex flex-wrap gap-1 pl-7">
-                        {stockCols && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
+                        {stockCols && showMarket && <span className="xl:hidden"><MarketLabel info={o.market} /></span>}
                         <FlagBadges flags={o.flags} />
                         {/* Phase 14: photos straight from the row, without the editor */}
                         <PhotoButton o={o} onClick={() => setPhotosFor(o)} />
                       </div>
                     </td>
-                    <td className="px-2 py-2 align-top">
+                    <td className="px-2 py-2 text-right align-top">
                       <PriceInput offer={o} onSave={patch} />
-                      <Converted price={o.price} currency={o.currency} rate={rate} className="mt-0.5 px-1 text-xs text-muted" />
+                      <Converted price={o.price} currency={o.currency} rate={rate} className="mt-0.5 px-1 text-xs whitespace-nowrap text-muted" />
                     </td>
                     <td className={`hidden px-2 py-3 align-top ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
                     <td className="px-2 py-2.5 align-top">
                       <Switch checked={o.is_in_stock} disabled={lockStock(o)} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
                     {columns.map((b) => (
-                      <td key={b.id} className="px-1 py-2 align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} /></td>
+                      <td key={b.id} className="px-2 py-2 text-right align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} className="justify-end text-right" /></td>
                     ))}
-                    {folded && <td className="px-2 py-2 align-top"><StockTotal offer={o} places={places} onSaved={replaceRow} readOnly={stockMode} /></td>}
-                    {showCost && <td className="px-2 py-3 align-top tabular-nums">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
-                    {showCost && <td className="px-2 py-3 align-top tabular-nums">{o.markup != null ? `${o.markup}%` : '—'}</td>}
-                    <td className={`px-2 py-2.5 align-top ${stockCols ? 'hidden xl:table-cell' : ''}`}><MarketLabel info={o.market} /></td>
+                    {folded && <td className="px-2 py-2 text-right align-top"><StockTotal offer={o} places={places} onSaved={replaceRow} readOnly={stockMode} /></td>}
+                    {showCost && <td className="px-2 py-3 text-right align-top whitespace-nowrap tabular-nums">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
+                    {showCost && <td className="px-2 py-3 text-right align-top whitespace-nowrap tabular-nums">{o.markup != null ? `${o.markup}%` : '—'}</td>}
+                    {showMarket && <td className={`px-2 py-2.5 align-top ${stockCols ? 'hidden xl:table-cell' : ''}`}>{o.market ? <MarketLabel info={o.market} /> : <span className="text-faint">—</span>}</td>}
                     <td className={`hidden px-2 py-3 align-top text-muted ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
                   </tr>
                 ))}
@@ -497,7 +499,15 @@ export default function GoodsPage() {
 // The tick and the name stay on the left while the table scrolls sideways (opaque: the cells pass under them)
 const STICKY_TICK = 'sticky left-0 z-10'
 const STICKY_NAME = 'sticky left-10 z-10 border-r border-line'
-export const NAME_COL = 'min-w-60'
+export const NAME_COL = 'w-60 min-w-60 xl:w-[22rem]'
+// Phase 17.1: fixed widths of the other columns (the table is table-fixed; too wide → it scrolls inside its block)
+export const COL = {
+  price: 'w-40', condition: 'w-32', stock: 'w-28', total: 'w-32', cost: 'w-32', market: 'w-36', updated: 'w-28', markup: 'w-24',
+}
+// A branch column is as wide as its name (80–176 px); a longer name is cut with the whole of it in the hint
+export const branchColWidth = (label = '') => Math.min(176, Math.max(80, Math.round(label.length * 7.5) + 24))
+// "Рынок": shown when at least one row of the page has a market label; then an empty cell is "—"
+export const hasMarket = (items) => items.some((o) => o.market)
 const stickyBg = (picked) => (picked ? 'bg-primary-soft' : 'bg-surface group-hover:bg-surface-2')
 
 // 1–2 places — a column each; 3 and more — one column "Остатки" with the total (phase 12.5 fix)

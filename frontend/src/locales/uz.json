@@ -1622,7 +1622,7 @@
     "newQty": "Yangi miqdor",
     "cost": {
       "column": "Xarid narxi",
-      "markup": "Ustama, %",
+      "markup": "Ustama",
       "show": "Xarid narxi va ustamani koʻrsatish",
       "avg": "oʻrtacha {{value}}",
       "last": "oxirgi {{value}}"

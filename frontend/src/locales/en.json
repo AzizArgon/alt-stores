@@ -1622,7 +1622,7 @@
     "newQty": "New quantity",
     "cost": {
       "column": "Cost",
-      "markup": "Markup, %",
+      "markup": "Markup",
       "show": "Show cost and markup",
       "avg": "average {{value}}",
       "last": "last {{value}}"
