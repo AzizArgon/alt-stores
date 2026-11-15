@@ -1,13 +1,13 @@
 // Phase 13: the admin panel — the third interface on the Workspace frame (after the storefront and the cabinet).
 // Its own top bar "ALT STORES · администрирование", the sections on the left, tabs on a phone, its own login.
 import {
-  Barcode, BookOpenText, Flag, Image, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
+  Barcode, BookOpenText, Flag, History, Image, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
 } from 'lucide-react'
 import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
@@ -229,12 +229,12 @@ export function AdminOverview() {
                       </li>
                     ))}
                   </ul>
-                ) : <p className="text-sm text-muted">{t('admin.overview.noChannels')}</p>}
+                ) : <EmptyState compact icon={Send} title={t('admin.overview.noChannels')} />}
               </Card>
               <Card>
                 <h2 className="mb-1 text-h3"><Link to="/admin/log" className="hover:underline">{t('admin.overview.lastActions')}</Link></h2>
                 {data.last_actions.length ? <ul>{data.last_actions.map((a) => <LogLine key={a.id} a={a} />)}</ul>
-                  : <p className="text-sm text-muted">{t('admin.log.empty')}</p>}
+                  : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
               </Card>
             </div>
             {/* Every section, also those without a phone tab */}
@@ -266,7 +266,7 @@ export function AdminLog() {
   return (
     <>
       <PageTitle title={t('admin.log.title')} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className={`mb-4 grid gap-3 sm:grid-cols-3 ${FILTERS_WIDTH}`}>
         <Select label={t('admin.log.type')} value={f.action} onChange={set('action')}>
           <option value="">{t('admin.all')}</option>
           {LOG_GROUPS.map((g) => <option key={g} value={g}>{t(`admin.log.groups.${g}`)}</option>)}
@@ -298,7 +298,7 @@ export function AdminUsers() {
   return (
     <>
       <PageTitle title={t('admin.users.title')} hint={t('admin.users.noAdminHere')} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className={`mb-4 grid gap-3 sm:grid-cols-3 ${FILTERS_WIDTH}`}>
         <Input label={t('admin.users.search')} value={f.q} onChange={set('q')} type="search" />
         <Select label={t('admin.users.role')} value={f.role} onChange={set('role')}>
           <option value="">{t('admin.all')}</option>

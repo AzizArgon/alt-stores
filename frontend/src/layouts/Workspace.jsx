@@ -1,5 +1,5 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation } from 'react-router-dom'
 import { UnreadBadge } from '../components/Header'
@@ -26,6 +26,24 @@ export function initialFolded(saved, width) {
   if (saved === '0') return false
   return width < FOLD_BELOW
 }
+// Phase 17.3: the height of the top block (the bar, the demo line, the iPhone notch) in px, kept up to date
+// (a ref function: the block may be made anew while the cabinet loads, the newest one is watched)
+function useHeight() {
+  const [h, setH] = useState(0)
+  const observer = useRef(null)
+  const ref = useCallback((el) => {
+    observer.current?.disconnect()
+    observer.current = null
+    if (!el) return
+    const read = () => setH(el.offsetHeight)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    observer.current = new ResizeObserver(read)
+    observer.current.observe(el)
+  }, [])
+  return [ref, h]
+}
+
 function useFolded() {
   const [folded, setFolded] = useState(() => {
     let saved = null
@@ -44,9 +62,12 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
   const location = useLocation()
   const tabs = sections?.filter((s) => s.tab) || []
   const [folded, toggleFolded] = useFolded()
+  const [headRef, headH] = useHeight()
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
+    <div className="flex min-h-screen flex-col" style={headH ? { '--ws-head': `${headH}px` } : undefined}>
+      {/* Phase 17.3: the top bar and the demo line are one block fixed at the top; its height places the menu */}
+      <div ref={headRef} className="sticky top-0 z-30">
+      <header className="border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
         <div className="flex h-14 items-center gap-2 px-4 md:h-16 md:gap-3 md:px-6">
           {/* On a phone the subtitle goes under the name: side by side they don't fit */}
           {/* Phase 15: it may shrink — a long subtitle ("администрирование") is cut, the logo never */}
@@ -59,11 +80,13 @@ export default function Workspace({ home, subtitle, actions, sections, navKey, t
         </div>
       </header>
       <DemoBanner />
+      </div>
 
       {sections ? (
         <div className="flex flex-1">
           {/* Phase 12.5: the menu is fixed under the top bar and scrolls apart from the page */}
-          <aside data-folded={folded ? '1' : '0'} className={`sticky top-16 hidden h-[calc(100dvh-4rem)] shrink-0 flex-col self-start border-r border-line bg-surface transition-[width] duration-150 md:flex ${folded ? 'w-16' : 'w-60'}`}>
+          {/* Phase 17.3: its height is the screen minus the top block (.ws-side) — the fold button is always seen */}
+          <aside data-folded={folded ? '1' : '0'} data-testid="ws-side" className={`ws-side sticky hidden shrink-0 flex-col self-start border-r border-line bg-surface transition-[width] duration-150 md:flex ${folded ? 'w-16' : 'w-60'}`}>
             <nav aria-label={menuLabel} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${folded ? 'p-2' : 'p-3'}`}>
               {sideTitle && !folded && <p className="mb-2 truncate px-3 text-xs font-semibold tracking-wide text-faint uppercase" title={sideTitle}>{sideTitle}</p>}
               <ul className="grid gap-0.5">

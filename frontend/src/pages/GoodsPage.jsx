@@ -9,7 +9,7 @@ import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
 import OfferPhotosModal from '../components/OfferPhotos'
 import { Dropdown, DropdownItem, Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, Checkbox, EmptyState, Pagination, Skeleton, Switch, inputClass } from '../components/ui'
+import { Badge, Button, Card, Checkbox, EmptyState, FILTERS_WIDTH, Pagination, SEARCH_WIDTH, Skeleton, Switch, inputClass } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum, roundUsd } from '../services/format'
 
@@ -47,7 +47,7 @@ export function FlagBadges({ flags }) {
 }
 
 // The price right in the row: Enter or leaving the field saves, Esc brings the old value back
-function PriceInput({ offer, onSave, className = '' }) {
+function PriceInput({ offer, onSave, className = '', inputWidth = 'w-full' }) {
   const { t } = useTranslation()
   const [value, setValue] = useState(offer.price ?? '')
   const cancelled = useRef(false)
@@ -78,7 +78,7 @@ function PriceInput({ offer, onSave, className = '' }) {
             e.currentTarget.blur()
           }
         }}
-        className="h-9 w-full min-w-0 rounded-md border border-line-strong bg-surface px-2 text-right text-sm tabular-nums outline-none hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft" />
+        className={`h-9 ${inputWidth} min-w-0 rounded-md border border-line-strong bg-surface px-2 text-right text-sm tabular-nums outline-none hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft`} />
       <span className="shrink-0 text-xs text-muted">{offer.currency === 'USD' ? '$' : t('currency.UZS')}</span>
     </span>
   )
@@ -113,9 +113,11 @@ export function Filters({ params, setParam, categories, branches }) {
     </select>
   )
   return (
+    // Phase 17.3: the search is compact (≤ 384 px), the filters stay a grid but in a block of at most 1024 px —
+    // four fields of ~250 px instead of four of 400 px on a wide screen; the table under them takes the whole width
     <div className="grid gap-2 border-b border-line p-3 md:p-4">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('cabinet.searchPlaceholder')} className={inputClass} type="search" />
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('cabinet.searchPlaceholder')} className={`${inputClass} ${SEARCH_WIDTH}`} type="search" />
+      <div className={`grid grid-cols-2 gap-2 xl:grid-cols-4 ${FILTERS_WIDTH}`}>
         {select('category', categories, 'categories')}
         {select('stock', ['in', 'out'], 'cabinet.stock')}
         {select('condition', CONDITIONS, 'condition')}
@@ -144,7 +146,7 @@ function BulkBar({ count, total, allByFilter, onAll, onClear, onAction, branches
   const [percent, setPercent] = useState('5')
   const [branch, setBranch] = useState(() => String(branches[0]?.id || ''))
   return (
-    <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
+    <div className="ws-sticky sticky z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
       <span className="font-medium">{t('cabinet.bulk.selected', { count: allByFilter ? total : count })}</span>
       {!allByFilter && total > count && (
         <button type="button" onClick={onAll} className="text-primary underline">{t('cabinet.bulk.selectAll', { count: total })}</button>
@@ -362,9 +364,8 @@ export default function GoodsPage() {
         {!data && <div className="grid gap-2 p-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
         {data?.items.length === 0 && (
           <EmptyState icon={PackageSearch} title={t(hasFilters ? 'cabinet.emptyFiltered' : 'cabinet.empty')}
-            hint={t(hasFilters ? 'cabinet.emptyFilteredHint' : 'cabinet.emptyHint')}>
-            {!hasFilters && <Button to="/seller/add">{t('cabinet.overview.upload')}</Button>}
-          </EmptyState>
+            hint={t(hasFilters ? 'cabinet.emptyFilteredHint' : 'cabinet.emptyHint')}
+            action={hasFilters ? null : { label: t('cabinet.overview.upload'), to: '/seller/add' }} />
         )}
 
         {data?.items.length > 0 && (
@@ -373,8 +374,9 @@ export default function GoodsPage() {
             {/* Many columns (the stock, the purchase and the markup): the table scrolls sideways inside its block, the
                 tick and the name stay on the left; the name is never narrower than 240 px */}
             <div className="hidden overflow-x-auto overscroll-x-contain lg:block" data-testid="goods-table">
-            {/* Phase 17.1: fixed widths (table-fixed), headers on one line, numbers on the right */}
-            <table className="w-full table-fixed text-sm">
+            {/* Phase 17.1: headers on one line, numbers on the right.
+                Phase 17.3: the spare width goes to "Товар" only (w-full), the other columns are as narrow as their content */}
+            <table className="w-full text-sm">
               <thead className="bg-surface-2 text-left text-muted">
                 <tr>
                   <th className={`${STICKY_TICK} w-10 bg-surface-2 px-3`}><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
@@ -400,11 +402,12 @@ export default function GoodsPage() {
                     </td>
                     <td className={`${STICKY_NAME} ${NAME_COL} ${stickyBg(selected.has(o.id) || allByFilter)} px-2 py-2 align-top`}>
                       {/* 240 px (352 px from 1280): a long name takes two lines instead of pushing the other columns out */}
-                      <button type="button" onClick={() => setEditing(o.id)} className="flex w-full min-w-0 gap-2 text-left">
+                      <button type="button" onClick={() => setEditing(o.id)} className={`flex w-full gap-2 text-left ${NAME_MIN}`}>
                         {o.photo
                           ? <img src={o.photo} alt="" loading="lazy" className="size-9 shrink-0 rounded-sm border border-line bg-white object-contain" />
                           : <CategoryIcon category={o.category} className="mt-0.5 size-5 shrink-0 text-muted" />}
-                        <span className="min-w-0">
+                        {/* Phase 17.3: the long one-line texts (cut with "…") do not widen the column ([contain:inline-size]) */}
+                        <span className="min-w-0 flex-1 [contain:inline-size]">
                           {/* Two lines at most, by words; the whole name in the hint */}
                           <span className="line-clamp-2 font-medium break-words hover:text-primary" title={o.name}>{o.name}</span>
                           <span className="block truncate text-xs text-faint" title={o.raw_name}>{o.raw_name}</span>
@@ -420,21 +423,21 @@ export default function GoodsPage() {
                       </div>
                     </td>
                     <td className="px-2 py-2 text-right align-top">
-                      <PriceInput offer={o} onSave={patch} />
+                      <PriceInput offer={o} onSave={patch} inputWidth={PRICE_INPUT} className="justify-end" />
                       <Converted price={o.price} currency={o.currency} rate={rate} className="mt-0.5 px-1 text-xs whitespace-nowrap text-muted" />
                     </td>
-                    <td className={`hidden px-2 py-3 align-top ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
+                    <td className={`hidden px-2 py-3 align-top whitespace-nowrap ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t(`condition.${o.condition}`)}</td>
                     <td className="px-2 py-2.5 align-top">
                       <Switch checked={o.is_in_stock} disabled={lockStock(o)} onChange={(v) => patch(o.id, { is_in_stock: v })} label={<span className="sr-only">{t('cabinet.col.stock')}</span>} />
                     </td>
                     {columns.map((b) => (
                       <td key={b.id} className="px-2 py-2 text-right align-top"><QtyInput offer={o} branch={b} onSaved={replaceRow} readOnly={stockMode} className="justify-end text-right" /></td>
                     ))}
-                    {folded && <td className="px-2 py-2 text-right align-top"><StockTotal offer={o} places={places} onSaved={replaceRow} readOnly={stockMode} /></td>}
+                    {folded && <td className="px-2 py-2 text-right align-top whitespace-nowrap"><StockTotal offer={o} places={places} onSaved={replaceRow} readOnly={stockMode} /></td>}
                     {showCost && <td className="px-2 py-3 text-right align-top whitespace-nowrap tabular-nums">{o.cost_avg != null ? formatPrice(o.cost_avg, o.currency) : '—'}</td>}
                     {showCost && <td className="px-2 py-3 text-right align-top whitespace-nowrap tabular-nums">{o.markup != null ? `${o.markup}%` : '—'}</td>}
-                    {showMarket && <td className={`px-2 py-2.5 align-top ${stockCols ? 'hidden xl:table-cell' : ''}`}>{o.market ? <MarketLabel info={o.market} /> : <span className="text-faint">—</span>}</td>}
-                    <td className={`hidden px-2 py-3 align-top text-muted ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
+                    {showMarket && <td className={`px-2 py-2.5 align-top whitespace-nowrap ${stockCols ? 'hidden xl:table-cell' : ''}`}>{o.market ? <MarketLabel info={o.market} /> : <span className="text-faint">—</span>}</td>}
+                    <td className={`hidden px-2 py-3 align-top whitespace-nowrap text-muted ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{formatDate(o.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -499,11 +502,17 @@ export default function GoodsPage() {
 // The tick and the name stay on the left while the table scrolls sideways (opaque: the cells pass under them)
 const STICKY_TICK = 'sticky left-0 z-10'
 const STICKY_NAME = 'sticky left-10 z-10 border-r border-line'
-export const NAME_COL = 'w-60 min-w-60 xl:w-[22rem]'
-// Phase 17.1: fixed widths of the other columns (the table is table-fixed; too wide → it scrolls inside its block)
+// Phase 17.3: "Товар" takes all the spare width (the table is not table-fixed any more: before, the spare width was
+// shared by every column — a 215 px price field and gaps between the narrow columns); never narrower than 240 px
+export const NAME_COL = 'w-full'
+export const NAME_MIN = 'min-w-60'
+// The other columns are as narrow as their content (w-px + one line); too wide all together → the block scrolls
+const FIT = 'w-px whitespace-nowrap'
 export const COL = {
-  price: 'w-40', condition: 'w-32', stock: 'w-28', total: 'w-32', cost: 'w-32', market: 'w-36', updated: 'w-28', markup: 'w-24',
+  price: FIT, condition: FIT, stock: FIT, total: FIT, cost: FIT, market: FIT, updated: FIT, markup: FIT,
 }
+// The price field: about 8 digits, the currency right beside it, "≈ … сум" under it, all to the right
+export const PRICE_INPUT = 'w-28'
 // A branch column is as wide as its name (80–176 px); a longer name is cut with the whole of it in the hint
 export const branchColWidth = (label = '') => Math.min(176, Math.max(80, Math.round(label.length * 7.5) + 24))
 // "Рынок": shown when at least one row of the page has a market label; then an empty cell is "—"

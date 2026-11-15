@@ -1246,9 +1246,9 @@
     "filters": "Suhbatlar filtri",
     "filter": {
       "all": "Hammasi",
-      "unread": "Oʻqilmaganlar",
-      "offer": "Mahsulotlar boʻyicha",
-      "build": "Yigʻmalar boʻyicha"
+      "unread": "Yangi",
+      "offer": "Mahsulotlar",
+      "build": "Yigʻmalar"
     },
     "placeholder": "Xabar…",
     "send": "Yuborish",
@@ -1613,6 +1613,8 @@
     "modeOff": "Hozir doʻkon «Faqat prays» rejimida: mavjudlik prayslar va qoʻlda tahrirlardan olinadi. Kirim, sotish va tuzatishlarni oʻtkazish uchun doʻkon profilida «Qoldiqlar hisobi» ni yoqing.",
     "toProfile": "Profilni ochish",
     "noBranches": "Avval doʻkon profilida filial qoʻshing — qoldiqlar filiallar boʻyicha yuritiladi.",
+    "noBranchesTitle": "Filiallar yoʻq",
+    "noBranchesHint": "Qoldiqlar filiallar boʻyicha yuritiladi — birinchisini qoʻshing.",
     "search": "Mahsulot: nomi, kodi yoki shtrix-kodi",
     "searchHint": "Yozishni boshlang va Enter ni bosing — qator qoʻshiladi. Shtrix-kodni USB-skaner (kursor maydonda boʻlmasa ham) yoki kamera bilan skanerlash mumkin.",
     "notFoundMine": "«Mahsulotlarim»da bunday yoʻq",
@@ -2499,5 +2501,8 @@
     },
     "ctaTitle": "Bitta narxlar roʻyxatidan boshlang",
     "ctaText": "Roʻyxatdan oʻtish bepul: faylni yuklang — bir necha daqiqada mahsulotlaringiz katalogda."
+  },
+  "ui": {
+    "more": "Yana"
   }
 }

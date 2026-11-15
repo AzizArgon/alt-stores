@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MapPin, Pencil, Phone, Plus, Star, Trash2 } from 'lucide-react'
 import { STORE_CITIES } from '../config/cities'
@@ -66,6 +66,9 @@ export default function BranchesBlock({ store, onChanged }) {
   const [editing, setEditing] = useState(null) // null | 'new' | branch
   const [error, setError] = useState('')
   const branches = store.branches || []
+  const scrollHere = useCallback((el) => {
+    if (el && globalThis.location?.hash === '#branches') el.scrollIntoView({ block: 'start' })
+  }, [])
 
   const act = async (fn, done) => {
     setError('')
@@ -84,7 +87,8 @@ export default function BranchesBlock({ store, onChanged }) {
   }
 
   return (
-    <Card>
+    // Phase 17.3: "Добавить филиал" of an empty "Склад" leads here (/seller/profile#branches)
+    <Card id="branches" ref={scrollHere} className="scroll-mt-24">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-h2">{t('branches.title')}</h2>

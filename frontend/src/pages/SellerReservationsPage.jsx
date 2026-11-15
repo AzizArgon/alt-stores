@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Modal, useToast } from '../components/overlays'
 import Price from '../components/Price'
-import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, Tabs, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, SEARCH_WIDTH, Select, Skeleton, Tabs, inputClass } from '../components/ui'
 import api from '../services/api'
 import { notifyChanged } from '../services/chat'
 import { formatDate, formatDayMonth, telegramUrl } from '../services/format'
@@ -201,16 +201,17 @@ export default function SellerReservationsPage() {
   useEffect(() => { api.get('/rates/usd').then((res) => setRate(res.data?.rate ?? null)).catch(() => {}) }, [])
 
   return (
-    <section className="grid gap-4">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <h1 className="text-h1">{t('cabinet.nav.reservations')}</h1>
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('reservation.search')}
-          aria-label={t('reservation.search')} className={`${inputClass} pl-9`} />
-      </div>
-      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-        <Tabs label={t('reservation.filters')} value={status} onChange={setStatus} className="w-max"
+      {/* Phase 17.3: the statuses and a compact search in one row on a computer (the search is never 1600 px wide) */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Tabs label={t('reservation.filters')} value={status} onChange={setStatus} className="lg:flex-1"
           tabs={STORE_FILTERS.map((f) => ({ value: f, label: t(`reservation.filter.${f}`) }))} />
+        <div className={`relative ${SEARCH_WIDTH}`}>
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" aria-hidden />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('reservation.search')}
+            aria-label={t('reservation.search')} className={`${inputClass} pl-9`} />
+        </div>
       </div>
       {items === null ? (
         <div className="grid gap-3">{[0, 1].map((i) => <Skeleton key={i} className="h-48" />)}</div>
