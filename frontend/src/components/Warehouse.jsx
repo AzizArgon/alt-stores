@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Download, FileSpreadsheet, Search, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { Check, Download, FileSpreadsheet, ScanBarcode, Search, Trash2, Volume2, VolumeX } from 'lucide-react'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { ProductLine } from './AddFromCatalog'
 import { branchLabel, stockOf } from './BranchStock'
 import { Modal, useToast } from './overlays'
-import { Badge, Button, Checkbox, Input, Select, inputClass } from './ui'
+import { Badge, Button, Checkbox, EmptyState, Input, Select, inputClass } from './ui'
 import { checkBarcode, feedback, looksLikeBarcode, scannerReady, setSound, soundOn, useScanner } from '../services/barcode'
 import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 
@@ -308,7 +308,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
       {binding && <BindBarcode code={binding.code} suggestion={binding.suggestion} onClose={() => setBinding(null)}
         onBound={(offer) => { setBinding(null); add(offer) }} />}
       {lines.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">{t('warehouse.empty')}</p>
+        <div className="rounded-lg border border-dashed border-line"><EmptyState compact icon={ScanBarcode} title={t('warehouse.empty')} /></div>
       ) : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {lines.map((l, i) => <Line key={l.key} n={i + 1} kind={kind} line={l} branches={branches} onChange={(p) => set(l.key, p)}

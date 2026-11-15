@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
-import { Download, FileBarChart, MapPin, X } from 'lucide-react'
+import { Download, FileBarChart, MapPin, Plus, Store, X } from 'lucide-react'
 import { PLACE_OPEN } from '../services/place'
 import Stocktake from '../components/Stocktake'
 import { ModeSwitch } from '../components/StockMode'
@@ -86,7 +86,7 @@ export default function WarehousePage() {
         <h1 className="text-h1">{t('warehouse.title')}</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">{t('warehouse.hint')}</p>
       </div>
-      {!branches.length ? <Card><p className="text-sm">{t('warehouse.noBranches')}</p></Card> : tab === 'journal' ? (
+      {!branches.length ? <NoBranches /> : tab === 'journal' ? (
         <Journal branches={places} doc={params.get('doc')} />
       ) : !tab ? null : (
         <>
@@ -104,6 +104,17 @@ export default function WarehousePage() {
         </>
       )}
     </div>
+  )
+}
+
+// Phase 17.3: stock is kept by branch — without one every mode shows this, the button leads to the branches
+export function NoBranches() {
+  const { t } = useTranslation()
+  return (
+    <Card padded={false}>
+      <EmptyState icon={Store} title={t('warehouse.noBranchesTitle')} hint={t('warehouse.noBranchesHint')}
+        action={{ label: t('branches.add'), to: '/seller/profile#branches', icon: Plus }} />
+    </Card>
   )
 }
 

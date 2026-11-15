@@ -1613,6 +1613,8 @@
     "modeOff": "The store is now in the \"Price list only\" mode: stock comes from price lists and hand edits. To record receipts, sales and adjustments, turn on \"Stock keeping\" in the store profile.",
     "toProfile": "Open profile",
     "noBranches": "First add a branch in the store profile — stock is kept by branch.",
+    "noBranchesTitle": "No branches",
+    "noBranchesHint": "Stock is kept by branch — add the first one.",
     "search": "Product: name, code or barcode",
     "searchHint": "Start typing and press Enter — a row is added. A barcode can be scanned with a USB scanner (even without the cursor in the field) or the camera.",
     "notFoundMine": "Not in \"My products\"",

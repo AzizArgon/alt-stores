@@ -1,7 +1,7 @@
 // Phase 13: the admin panel — the third interface on the Workspace frame (after the storefront and the cabinet).
 // Its own top bar "ALT STORES · администрирование", the sections on the left, tabs on a phone, its own login.
 import {
-  Barcode, BookOpenText, Flag, Image, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
+  Barcode, BookOpenText, Flag, History, Image, LayoutDashboard, LogOut, MessageSquareWarning, PencilLine, Send, ShieldAlert, Store, Users,
 } from 'lucide-react'
 import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -229,12 +229,12 @@ export function AdminOverview() {
                       </li>
                     ))}
                   </ul>
-                ) : <p className="text-sm text-muted">{t('admin.overview.noChannels')}</p>}
+                ) : <EmptyState compact icon={Send} title={t('admin.overview.noChannels')} />}
               </Card>
               <Card>
                 <h2 className="mb-1 text-h3"><Link to="/admin/log" className="hover:underline">{t('admin.overview.lastActions')}</Link></h2>
                 {data.last_actions.length ? <ul>{data.last_actions.map((a) => <LogLine key={a.id} a={a} />)}</ul>
-                  : <p className="text-sm text-muted">{t('admin.log.empty')}</p>}
+                  : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
               </Card>
             </div>
             {/* Every section, also those without a phone tab */}

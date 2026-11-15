@@ -353,7 +353,7 @@ export default function ChatView({ base, side }) {
         </div>
         <div className={`flex min-h-[32rem] min-w-0 flex-col rounded-xl border border-line bg-surface shadow-card md:h-[calc(100vh-12rem)] ${id ? '' : 'max-md:hidden'}`}>
           {id ? <Thread key={id} id={id} base={base} side={side} onChanged={load} />
-            : <div className="m-auto p-6 text-center text-sm text-muted">{t('chat.pick')}</div>}
+            : <div className="m-auto w-full"><EmptyState compact icon={MessageSquare} title={t('chat.pick')} /></div>}
         </div>
       </div>
     </section>

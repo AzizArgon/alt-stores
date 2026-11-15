@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
-import { Boxes, ChartLine, Check, ChevronDown, ExternalLink, House, LogOut, MapPin, Package, Store, Users } from 'lucide-react'
+import { Boxes, ChartLine, Check, ChevronDown, ExternalLink, FileSpreadsheet, House, LogOut, MapPin, Package, Store, Users } from 'lucide-react'
 import AddFromCatalog from '../components/AddFromCatalog'
 import BranchesBlock from '../components/Branches'
 import StockModeBlock, { WarehouseBlock } from '../components/StockMode'
@@ -14,7 +14,7 @@ import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
@@ -249,7 +249,7 @@ function ImportHistory({ items, onChanged }) {
   return (
     <Card>
       <h2 className="text-h2">{t('upload.history')}</h2>
-      {items.length === 0 && <p className="mt-2 text-sm text-muted">{t('upload.empty')}</p>}
+      {items.length === 0 && <EmptyState compact icon={FileSpreadsheet} title={t('upload.empty')} />}
       <ul className="mt-2 divide-y divide-line">
         {items.map((imp) => (
           <li key={imp.id} className="flex flex-col justify-between gap-x-3 gap-y-0.5 py-2 text-sm md:flex-row md:items-center">

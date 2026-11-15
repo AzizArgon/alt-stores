@@ -362,9 +362,8 @@ export default function GoodsPage() {
         {!data && <div className="grid gap-2 p-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
         {data?.items.length === 0 && (
           <EmptyState icon={PackageSearch} title={t(hasFilters ? 'cabinet.emptyFiltered' : 'cabinet.empty')}
-            hint={t(hasFilters ? 'cabinet.emptyFilteredHint' : 'cabinet.emptyHint')}>
-            {!hasFilters && <Button to="/seller/add">{t('cabinet.overview.upload')}</Button>}
-          </EmptyState>
+            hint={t(hasFilters ? 'cabinet.emptyFilteredHint' : 'cabinet.emptyHint')}
+            action={hasFilters ? null : { label: t('cabinet.overview.upload'), to: '/seller/add' }} />
         )}
 
         {data?.items.length > 0 && (

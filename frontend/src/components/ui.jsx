@@ -169,12 +169,21 @@ export function SkeletonCards({ count = 6, className = 'grid grid-cols-2 gap-3 m
   )
 }
 
-export function EmptyState({ icon: Icon = SearchX, title, hint, children }) {
+// Phase 17.3: one empty state for the storefront, the cabinet and the admin — an icon in a grey circle, a title, a
+// line of explanation, in the middle of a block at most 544 px wide (never stretched over a wide work area);
+// `action` = { label, to | onClick, icon } — the blue button of the next step (or any buttons as children)
+export function EmptyState({ icon: Icon = SearchX, title, hint, action, compact = false, className = '', children }) {
+  const ActionIcon = action?.icon
   return (
-    <div className="flex flex-col items-center px-4 py-12 text-center">
+    <div data-testid="empty-state" className={`mx-auto flex w-full max-w-[34rem] flex-col items-center px-4 text-center ${compact ? 'py-6' : 'py-12'} ${className}`}>
       <span className="flex size-14 items-center justify-center rounded-full bg-surface-2 text-muted"><Icon className="size-7" aria-hidden /></span>
       <p className="mt-4 text-h3">{title}</p>
-      {hint && <p className="mt-1 max-w-md text-sm text-muted">{hint}</p>}
+      {hint && <p className="mt-1 text-sm text-muted">{hint}</p>}
+      {action && (
+        <Button className="mt-4" to={action.to} onClick={action.onClick}>
+          {ActionIcon && <ActionIcon className="size-4" aria-hidden />}{action.label}
+        </Button>
+      )}
       {children && <div className="mt-4">{children}</div>}
     </div>
   )

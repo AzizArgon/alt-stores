@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { ClipboardCheck } from 'lucide-react'
+import { ClipboardCheck, ScanBarcode } from 'lucide-react'
 import api from '../services/api'
 import { useScanner } from '../services/barcode'
 import { placeLabel } from '../services/place'
@@ -58,7 +58,6 @@ export default function Stocktake({ place, places }) {
         )}
       </Card>
       <p className="text-xs text-muted">{t('warehouse.stocktake.adjustLink')} <Link to="/seller/stock?tab=adjust" className="text-primary hover:underline">{t('warehouse.tabs.adjust')}</Link></p>
-      {places.length === 0 && <p className="text-sm">{t('warehouse.noBranches')}</p>}
     </div>
   )
 }
@@ -153,7 +152,7 @@ function Counting({ st, onChange, onDone }) {
       {binding && <BindBarcode code={binding.code} suggestion={binding.suggestion} onClose={() => setBinding(null)}
         onBound={(o) => { setBinding(null); send(o.id, { delta: 1 }) }} />}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      {st.counts.length === 0 ? <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-muted">{t('warehouse.stocktake.empty')}</p> : (
+      {st.counts.length === 0 ? <div className="rounded-lg border border-dashed border-line"><EmptyState compact icon={ScanBarcode} title={t('warehouse.stocktake.empty')} /></div> : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
           {st.counts.map((c) => (
             <li key={c.offer_id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2.5 ${fresh === c.offer_id ? 'border-primary bg-primary-soft ring-2 ring-primary' : 'border-line'}`}>

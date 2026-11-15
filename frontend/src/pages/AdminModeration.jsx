@@ -1,12 +1,12 @@
 // Phase 13: the admin's moderation sections — stores, chat reports, disputed flags, card fixes, barcode conflicts and
 // Telegram channels. Every action asks for a comment (a reason where someone is blocked or refused) and is journaled.
-import { ArrowRight, Ellipsis, ExternalLink, ShieldOff } from 'lucide-react'
+import { ArrowRight, Ellipsis, ExternalLink, Flag, History, ShieldOff } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Flags from '../components/Flags'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, Input, Select, Tabs } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Select, Tabs } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { storeUrl } from '../config/sites'
 import api from '../services/api'
@@ -153,11 +153,11 @@ export function AdminStoreCard() {
             <h2 className="mb-2 text-h3">{t('admin.stores.reports')}</h2>
             {s.reports.length ? <ul className="grid gap-1 text-sm">{s.reports.map((r) => (
               <li key={r.id}><Link to={`/admin/reports?id=${r.id}`} className="text-primary hover:underline">#{r.id} · {t(`chat.reason.${r.reason}`, r.reason)}</Link> — {t(`admin.reports.status.${r.status}`)}</li>
-            ))}</ul> : <p className="text-sm text-muted">{t('admin.empty')}</p>}
+            ))}</ul> : <EmptyState compact icon={Flag} title={t('admin.empty')} />}
           </Card>
           <Card>
             <h2 className="mb-1 text-h3">{t('admin.stores.history')}</h2>
-            {s.history.length ? <ul>{s.history.map((a) => <LogLine key={a.id} a={a} />)}</ul> : <p className="text-sm text-muted">{t('admin.log.empty')}</p>}
+            {s.history.length ? <ul>{s.history.map((a) => <LogLine key={a.id} a={a} />)}</ul> : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
           </Card>
           <ActionModal action={action} onClose={() => setAction(null)} />
         </div>
