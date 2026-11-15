@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import i18n from '../i18n'
 import { ToastProvider } from '../components/overlays'
-import { COL, NAME_COL, StockTotal, branchColWidth, hasMarket, stockColumns, stockTotal } from './GoodsPage'
+import { COL, NAME_COL, NAME_MIN, PRICE_INPUT, StockTotal, branchColWidth, hasMarket, stockColumns, stockTotal } from './GoodsPage'
 import GoodsCode from './GoodsPage.jsx?raw'
 
 const B = [{ id: 1, name: 'Чиланзар' }, { id: 2, name: 'Юнусабад' }, { id: 3, name: 'Сергели' }]
@@ -10,7 +10,7 @@ const offer = { id: 7, stocks: { 1: { quantity: 4 }, 2: { quantity: 0 }, 3: { qu
 
 describe('"Мои товары": the table (fix of 11.11.2026)', () => {
   it('the name column is never narrower than 240 px', () => {
-    expect(NAME_COL).toContain('min-w-60') // 15rem = 240 px
+    expect(NAME_MIN).toBe('min-w-60') // 15rem = 240 px
   })
 
   it('1–2 places — a column each; 3 and more — one "Остатки"', () => {
@@ -31,10 +31,9 @@ describe('"Мои товары": the table (fix of 11.11.2026)', () => {
 })
 
 describe('"Мои товары": tidy table (phase 17.1)', () => {
-  it('fixed widths, headers on one line, the tick and the name stay on the left', () => {
-    expect(GoodsCode).toContain('table-fixed')
-    expect(NAME_COL.split(' ')).toContain('w-60')
-    for (const w of Object.values(COL)) expect(w).toMatch(/^w-\d+$/)
+  it('headers on one line, the tick and the name stay on the left (phase 17.3: the widths — in Polish173.test)', () => {
+    expect(NAME_COL).toBe('w-full')
+    expect(PRICE_INPUT).toBe('w-28')
     expect(GoodsCode).toContain("px-2 py-2 font-medium whitespace-nowrap")
     expect(GoodsCode).toMatch(/STICKY_NAME = 'sticky left-10/)
   })

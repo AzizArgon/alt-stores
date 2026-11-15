@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { Home, Package } from 'lucide-react'
 import Workspace from './layouts/Workspace'
+import { COL, NAME_COL, NAME_MIN, PRICE_INPUT } from './pages/GoodsPage'
+import GoodsCode from './pages/GoodsPage.jsx?raw'
 import { readFileSync } from 'node:fs'
 
 const css = readFileSync(new URL('./index.css', import.meta.url), 'utf8')
@@ -40,5 +42,21 @@ describe('the cabinet menu (phase 17.3)', () => {
 
   it('the top bar and the demo line are one sticky block (the menu is placed under both)', () => {
     expect(html).toMatch(/<div class="sticky top-0 z-30"><header/)
+  })
+})
+
+describe('«Мои товары»: the spare width goes to "Товар" only (phase 17.3)', () => {
+  it('not table-fixed: "Товар" is w-full, every other column is as narrow as its content and on one line', () => {
+    expect(GoodsCode).toContain('<table className="w-full text-sm">')
+    expect(NAME_COL).toBe('w-full')
+    expect(NAME_MIN).toBe('min-w-60')
+    for (const w of Object.values(COL)) expect(w).toBe('w-px whitespace-nowrap')
+  })
+  it('the price field is compact (112 px), the currency beside it, to the right', () => {
+    expect(PRICE_INPUT).toBe('w-28')
+    expect(GoodsCode).toContain('inputWidth={PRICE_INPUT} className="justify-end"')
+  })
+  it('the long one-line texts of a name do not widen its column', () => {
+    expect(GoodsCode).toContain('[contain:inline-size]')
   })
 })
