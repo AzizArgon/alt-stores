@@ -144,7 +144,7 @@ function BulkBar({ count, total, allByFilter, onAll, onClear, onAction, branches
   const [percent, setPercent] = useState('5')
   const [branch, setBranch] = useState(() => String(branches[0]?.id || ''))
   return (
-    <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
+    <div className="ws-sticky sticky z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
       <span className="font-medium">{t('cabinet.bulk.selected', { count: allByFilter ? total : count })}</span>
       {!allByFilter && total > count && (
         <button type="button" onClick={onAll} className="text-primary underline">{t('cabinet.bulk.selectAll', { count: total })}</button>

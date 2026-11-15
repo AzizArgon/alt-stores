@@ -121,3 +121,17 @@ body {
     text-align: left;
   }
 }
+
+/* Phase 17.3: the cabinet menu sits under the top bar (with the demo line) and ends at the bottom of the screen;
+   --ws-head is the measured height of that top block (Workspace.jsx) */
+.ws-side {
+  top: var(--ws-head, 4rem);
+  height: calc(100vh - var(--ws-head, 4rem));
+  height: calc(100dvh - var(--ws-head, 4rem));
+}
+.ws-sticky { top: var(--ws-head, 4rem); }
+
+/* Phase 17.3: a row of tabs scrolls by a finger without a visible scrollbar, the edge fades */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.fade-edge-r { mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent); }
