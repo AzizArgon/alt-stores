@@ -1247,8 +1247,8 @@
     "filter": {
       "all": "All",
       "unread": "Unread",
-      "offer": "About products",
-      "build": "About builds"
+      "offer": "Products",
+      "build": "Builds"
     },
     "placeholder": "Message…",
     "send": "Send",
@@ -2501,5 +2501,8 @@
     },
     "ctaTitle": "Start with one price list",
     "ctaText": "Registration is free: upload a file and your products are in the catalog in a few minutes."
+  },
+  "ui": {
+    "more": "More"
   }
 }

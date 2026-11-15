@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Flags from '../components/Flags'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Select, Tabs } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Select, Tabs } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { storeUrl } from '../config/sites'
 import api from '../services/api'
@@ -59,7 +59,7 @@ export function AdminStores() {
   return (
     <>
       <PageTitle title={t('admin.stores.title')} />
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 grid max-w-7xl grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Input label={t('admin.stores.search')} type="search" value={f.q} onChange={set('q')} className="col-span-2 md:col-span-1" />
         <Select label={t('admin.stores.city')} value={f.city} onChange={set('city')}>
           <option value="">{t('admin.all')}</option>
@@ -510,7 +510,7 @@ export function AdminBarcodes() {
   return (
     <>
       <PageTitle title={t('admin.barcodes.title')} hint={t('admin.barcodes.hint')} />
-      <form onSubmit={lookup} className="mb-5 flex flex-wrap items-end gap-2">
+      <form onSubmit={lookup} className="mb-5 flex max-w-2xl flex-wrap items-end gap-2">
         <Input label={t('admin.barcodes.lookup')} placeholder={t('admin.barcodes.lookupPlaceholder')} value={code}
           onChange={(e) => setCode(e.target.value)} error={error} className="min-w-0 flex-1 basis-56" inputMode="numeric" />
         <Button type="submit" disabled={!code.trim()}>{t('admin.barcodes.find')}</Button>
@@ -553,7 +553,7 @@ function AddChannel({ onAdded }) {
     <Card as="form" onSubmit={submit} className="mb-5 grid gap-3">
       <h2 className="text-h3">{t('admin.channels.add')}</h2>
       <p className="-mt-2 text-sm text-muted">{t('admin.channels.addHint')}</p>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className={`grid gap-3 md:grid-cols-3 ${FILTERS_WIDTH}`}>
         <Input label={t('admin.channels.username')} value={f.username} onChange={set('username')} placeholder="@channel" error={error} />
         <Input label={t('admin.channels.titleField')} value={f.title} onChange={set('title')} />
         <Select label={t('admin.channels.city')} value={f.city} onChange={set('city')}>

@@ -14,7 +14,7 @@ import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass, useEdgeFade } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
@@ -298,9 +298,12 @@ export function SectionTabs({ sections }) {
   const { t } = useTranslation()
   const location = useLocation()
   const group = sections.find((s) => s.pages && sectionActive(s, location))
+  const row = useRef(null)
+  const fade = useEdgeFade(row, Boolean(group))
   if (!group || group.pages.length < 2) return null
   return (
-    <nav aria-label={t('cabinet.sectionTabs')} className="mb-4 flex max-w-full gap-0.5 overflow-x-auto overscroll-x-contain rounded-md bg-surface-2 p-1 [scrollbar-width:none] sm:inline-flex">
+    // Phase 17.3: no scrollbar (as Tabs), the right edge fades while there is more to the right
+    <nav ref={row} aria-label={t('cabinet.sectionTabs')} className={`no-scrollbar mb-4 flex max-w-full gap-0.5 overflow-x-auto overscroll-x-contain rounded-md bg-surface-2 p-1 sm:inline-flex ${fade ? 'fade-edge-r' : ''}`}>
       {group.pages.map((c) => {
         const active = pageActive(c, location)
         return (

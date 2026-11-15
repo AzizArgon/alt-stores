@@ -7,7 +7,7 @@ import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
 import { storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
@@ -266,7 +266,7 @@ export function AdminLog() {
   return (
     <>
       <PageTitle title={t('admin.log.title')} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className={`mb-4 grid gap-3 sm:grid-cols-3 ${FILTERS_WIDTH}`}>
         <Select label={t('admin.log.type')} value={f.action} onChange={set('action')}>
           <option value="">{t('admin.all')}</option>
           {LOG_GROUPS.map((g) => <option key={g} value={g}>{t(`admin.log.groups.${g}`)}</option>)}
@@ -298,7 +298,7 @@ export function AdminUsers() {
   return (
     <>
       <PageTitle title={t('admin.users.title')} hint={t('admin.users.noAdminHere')} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className={`mb-4 grid gap-3 sm:grid-cols-3 ${FILTERS_WIDTH}`}>
         <Input label={t('admin.users.search')} value={f.q} onChange={set('q')} type="search" />
         <Select label={t('admin.users.role')} value={f.role} onChange={set('role')}>
           <option value="">{t('admin.all')}</option>

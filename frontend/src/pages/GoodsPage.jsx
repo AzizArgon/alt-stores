@@ -9,7 +9,7 @@ import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
 import OfferPhotosModal from '../components/OfferPhotos'
 import { Dropdown, DropdownItem, Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, Checkbox, EmptyState, Pagination, Skeleton, Switch, inputClass } from '../components/ui'
+import { Badge, Button, Card, Checkbox, EmptyState, FILTERS_WIDTH, Pagination, SEARCH_WIDTH, Skeleton, Switch, inputClass } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum, roundUsd } from '../services/format'
 
@@ -113,9 +113,11 @@ export function Filters({ params, setParam, categories, branches }) {
     </select>
   )
   return (
+    // Phase 17.3: the search is compact (≤ 384 px), the filters stay a grid but in a block of at most 1024 px —
+    // four fields of ~250 px instead of four of 400 px on a wide screen; the table under them takes the whole width
     <div className="grid gap-2 border-b border-line p-3 md:p-4">
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('cabinet.searchPlaceholder')} className={inputClass} type="search" />
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('cabinet.searchPlaceholder')} className={`${inputClass} ${SEARCH_WIDTH}`} type="search" />
+      <div className={`grid grid-cols-2 gap-2 xl:grid-cols-4 ${FILTERS_WIDTH}`}>
         {select('category', categories, 'categories')}
         {select('stock', ['in', 'out'], 'cabinet.stock')}
         {select('condition', CONDITIONS, 'condition')}

@@ -1,6 +1,6 @@
 // Basic building blocks of every page. All of them are shown on the /ui page (development only)
 import { ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, SearchX } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -28,6 +28,11 @@ export function Button({ variant = 'primary', size = 'md', to, href, className =
 export function SiteLink({ url, ...props }) {
   return /^https?:\/\//.test(url) ? <a href={url} {...props} /> : <Link to={url} {...props} />
 }
+
+// Phase 17.3: in the cabinet and the admin only tables and lists take the whole width; a search field is 320–384 px
+export const SEARCH_WIDTH = 'w-full sm:max-w-sm lg:w-96 lg:shrink-0'
+// …and a row of filters (selects) is as wide as about four of them
+export const FILTERS_WIDTH = 'max-w-5xl'
 
 export const inputClass = 'w-full min-h-11 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-faint hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft disabled:bg-surface-2 disabled:text-faint'
 const invalidClass = 'border-danger focus:border-danger focus:ring-danger-soft'
@@ -132,21 +137,132 @@ export function Badge({ tone = 'neutral', className = '', children, ...props }) 
 }
 
 // Segmented switch: tabs = [{ value, label }]
+// Phase 17.3: a row of tabs never shows a scrollbar. A computer (768 px and wider): every tab in one row; the ones that
+// do not fit go into "Ещё ˅" (the chosen one hidden there gives its name to that button). A phone: the row moves by a
+// finger, the scrollbar hidden, the right edge fades while there is more to the right.
+export const TABS_WIDE = '(min-width: 768px)'
 export function Tabs({ tabs, value, onChange, label, className = '' }) {
+  const { t } = useTranslation()
+  const wide = useMedia(TABS_WIDE)
+  const box = useRef(null)
+  const ruler = useRef(null)
+  const row = useRef(null)
+  const [fit, setFit] = useState(tabs.length)
+  const [open, setOpen] = useState(false)
+  const fade = useEdgeFade(row, !wide)
+  const names = tabs.map((x) => x.label).join('|')
+
+  useLayoutEffect(() => {
+    if (!wide) { setFit(tabs.length); return undefined }
+    const measure = () => {
+      const el = box.current
+      const r = ruler.current
+      if (!el || !r) return
+      setFit(tabsThatFit([...r.children].map((c) => c.offsetWidth), el.clientWidth, tabs.findIndex((x) => x.value === value)))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(measure)
+    ro.observe(box.current)
+    return () => ro.disconnect()
+  }, [wide, names, value]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (e) => { if (e.type === 'keydown' ? e.key === 'Escape' : !box.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close) }
+  }, [open])
+
+  const shown = wide ? tabs.slice(0, fit) : tabs
+  const rest = wide ? tabs.slice(fit) : []
+  const hiddenActive = rest.find((x) => x.value === value)
+  const tabClass = (on) => `min-h-9 shrink-0 rounded-sm px-2.5 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+    on ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`
   // className goes on a wrapper: "hidden sm:block" must not fight the tablist's own inline-flex
   return (
-    <div className={className}>
-      <div role="tablist" aria-label={label} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-surface-2 p-1">
-        {tabs.map((tab) => (
-          <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)}
-            className={`min-h-9 shrink-0 rounded-sm px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-              value === tab.value ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink'}`}>
-            {tab.label}
-          </button>
-        ))}
+    <div ref={box} className={`relative min-w-0 ${className}`}>
+      {/* The widths of every tab (and of "Ещё"), unseen: what fits is counted from them */}
+      {wide && (
+        <div ref={ruler} aria-hidden className="pointer-events-none invisible absolute top-0 left-0 flex h-0 gap-0.5 overflow-hidden whitespace-nowrap">
+          {tabs.map((x) => <span key={x.value} className={tabClass(false)}>{x.label}</span>)}
+          <span className={`${tabClass(false)} inline-flex items-center gap-1`}>{t('ui.more')}<ChevronDown className="size-4" /></span>
+        </div>
+      )}
+      <div className="relative inline-flex max-w-full">
+        <div ref={row} role="tablist" aria-label={label} data-testid="tabs-row"
+          className={`no-scrollbar inline-flex max-w-full gap-0.5 overflow-x-auto overscroll-x-contain rounded-md bg-surface-2 p-1 ${fade ? 'fade-edge-r' : ''}`}>
+          {shown.map((tab) => (
+            <button key={tab.value} type="button" role="tab" aria-selected={value === tab.value} onClick={() => onChange(tab.value)} className={tabClass(value === tab.value)}>
+              {tab.label}
+            </button>
+          ))}
+          {rest.length > 0 && (
+            <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="tabs-more"
+              className={`${tabClass(Boolean(hiddenActive))} inline-flex items-center gap-1`}>
+              {hiddenActive ? hiddenActive.label : t('ui.more')}<ChevronDown className="size-4" aria-hidden />
+            </button>
+          )}
+        </div>
+        {open && rest.length > 0 && (
+          <div role="menu" className="absolute top-full right-0 z-20 mt-1 grid min-w-44 rounded-lg border border-line bg-surface p-1 shadow-pop">
+            {rest.map((tab) => (
+              <button key={tab.value} type="button" role="menuitemradio" aria-checked={value === tab.value}
+                onClick={() => { onChange(tab.value); setOpen(false) }}
+                className={`min-h-10 rounded-md px-3 text-left text-sm whitespace-nowrap outline-none hover:bg-surface-2 focus-visible:bg-surface-2 ${value === tab.value ? 'font-semibold text-primary' : ''}`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+// How many tabs fit into `room` px: the widths of the tabs and of "Ещё ˅" last; 8 px of the row's padding, 2 px gaps.
+// When the chosen tab is among the hidden ones, the "Ещё" button carries its name — then it is as wide as that tab + ˅
+export const MORE_ARROW = 20
+export function tabsThatFit(widths, room, active = -1) {
+  const tabs = widths.slice(0, -1)
+  const sum = (n) => tabs.slice(0, n).reduce((a, w) => a + w, 0) + Math.max(0, n - 1) * 2 + 8
+  if (sum(tabs.length) <= room) return tabs.length
+  const moreFor = (n) => (active >= n ? tabs[active] + MORE_ARROW : widths[widths.length - 1])
+  let n = tabs.length - 1
+  while (n > 1 && sum(n) + 2 + moreFor(n) > room) n -= 1
+  return n
+}
+
+// A media query as a value (false where there is no window: the tests, the server)
+export function useMedia(query) {
+  const get = () => Boolean(globalThis.matchMedia?.(query).matches)
+  const [on, setOn] = useState(get)
+  useEffect(() => {
+    const m = globalThis.matchMedia?.(query)
+    if (!m) return undefined
+    const change = () => setOn(m.matches)
+    change()
+    m.addEventListener('change', change)
+    return () => m.removeEventListener('change', change)
+  }, [query])
+  return on
+}
+
+// True while a row that scrolls sideways has more to the right (its right edge then fades)
+export function useEdgeFade(ref, enabled = true) {
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !enabled) { setMore(false); return undefined }
+    const check = () => setMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 4)
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check)
+    ro?.observe(el)
+    return () => { el.removeEventListener('scroll', check); ro?.disconnect() }
+  }, [ref, enabled])
+  return more
 }
 
 export function Skeleton({ className = '' }) {

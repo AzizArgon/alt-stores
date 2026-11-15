@@ -299,7 +299,7 @@ export function OperationForm({ kind, branches, onPosted, initialOffer, branchId
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-      <div className="flex flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
+      <div className="flex max-w-3xl flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
         <GoodsInput onPick={add} onCode={onCode} allowCatalog={kind === 'receipt'} big={big} hint={!big} scanner
           adornment={<CameraButton icon onCode={onCode} />} />
         {/* A phone: the camera is the main way — a large button; a computer: the icon inside the field */}

@@ -7,7 +7,7 @@ import Stocktake from '../components/Stocktake'
 import { ModeSwitch } from '../components/StockMode'
 import { GoodsInput, OperationForm, download } from '../components/Warehouse'
 import { useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Pagination, Select, Skeleton } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Pagination, Select, Skeleton } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { placeFor, placeLabel } from '../services/place'
@@ -94,7 +94,7 @@ export default function WarehousePage() {
           {tab === 'stocktake' ? <Stocktake key={here?.id} place={here} places={places} /> : (
             <Card>
               {tab === 'adjust' && <h2 className="mb-1 text-h3">{t('warehouse.tabs.adjust')}</h2>}
-              <p className="mb-3 text-sm text-muted">{t(`warehouse.modeHints.${tab}`)}</p>
+              <p className="mb-3 max-w-3xl text-sm text-muted">{t(`warehouse.modeHints.${tab}`)}</p>
               <OperationForm key={`${tab}-${here?.id}-${version}`} kind={tab} branches={allowed} branchId={here?.id} big
                 warehouseId={tab === 'move' ? store.warehouse?.id : undefined} draftKey={`${tab}_${here?.id}`}
                 initialOffer={['receipt', 'sale'].includes(tab) ? start : null}
@@ -153,7 +153,7 @@ export function Journal({ branches, doc = null }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
       <Card className="grid gap-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto_auto]">
+        <div className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_auto_auto] ${FILTERS_WIDTH}`}>
           {f.offer ? (
             <div className="flex min-h-11 items-center gap-2 self-end rounded-md border border-line px-3 text-sm">
               <span className="min-w-0 flex-1 truncate">{f.offer.name}</span>

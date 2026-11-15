@@ -1246,9 +1246,9 @@
     "filters": "Suhbatlar filtri",
     "filter": {
       "all": "Hammasi",
-      "unread": "Oʻqilmaganlar",
-      "offer": "Mahsulotlar boʻyicha",
-      "build": "Yigʻmalar boʻyicha"
+      "unread": "Yangi",
+      "offer": "Mahsulotlar",
+      "build": "Yigʻmalar"
     },
     "placeholder": "Xabar…",
     "send": "Yuborish",
@@ -2501,5 +2501,8 @@
     },
     "ctaTitle": "Bitta narxlar roʻyxatidan boshlang",
     "ctaText": "Roʻyxatdan oʻtish bepul: faylni yuklang — bir necha daqiqada mahsulotlaringiz katalogda."
+  },
+  "ui": {
+    "more": "Yana"
   }
 }

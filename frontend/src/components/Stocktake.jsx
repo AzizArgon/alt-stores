@@ -145,7 +145,7 @@ function Counting({ st, onChange, onDone }) {
         </div>
         <p className="mt-1 text-xs text-muted">{t('warehouse.stocktake.units', { count: st.counted_units })}</p>
       </div>
-      <div className="flex flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
+      <div className="flex max-w-3xl flex-wrap gap-2 [&>:first-child]:min-w-0 [&>:first-child]:flex-1 [&>:first-child]:basis-64">
         <GoodsInput onPick={(o) => send(o.id, { delta: 1 })} onCode={onCode} big hint={false} />
         <CameraButton onCode={onCode} size="lg" className="min-h-14 w-full sm:w-auto" />
       </div>
