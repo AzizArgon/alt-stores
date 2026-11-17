@@ -89,10 +89,12 @@ def ensure_main_branch(db: Session, store: Store) -> Branch | None:
     main = main_branch(db, store.id)
     if main is not None:
         return main
-    if db.scalar(select(Branch.id).where(Branch.store_id == store.id).limit(1)):
-        first = store_branches(db, store.id)[0]
-        first.is_main = True
-        return first
+    # Phase 17.5 fix: only the shop's own branches count — a store may have just its warehouse (12.4) and no branch
+    # yet (Age on 17.11: "Склад" on, no branch); before, the startup failed on it with IndexError
+    shops = store_branches(db, store.id)
+    if shops:
+        shops[0].is_main = True
+        return shops[0]
     if not (store.address or "").strip():
         return None
     main = Branch(store_id=store.id, city=store.city or "tashkent", address=store.address, landmark=store.district,

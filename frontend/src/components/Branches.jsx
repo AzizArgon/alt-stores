@@ -6,7 +6,7 @@ import { isYandexMapsUrl } from '../config/maps'
 import api from '../services/api'
 import { Modal, useToast } from './overlays'
 import StoreWhere from './StoreWhere'
-import { Badge, Button, Card, Input, Select } from './ui'
+import { Badge, Button, Card, EmptyState, Input, Select } from './ui'
 import { ErrorText } from './AuthForm'
 
 const FIELDS = ['name', 'city', 'address', 'landmark', 'hours', 'phone', 'map_url']
@@ -94,10 +94,16 @@ export default function BranchesBlock({ store, onChanged }) {
           <h2 className="text-h2">{t('branches.title')}</h2>
           <p className="mt-1 text-sm text-muted">{t('branches.hint')}</p>
         </div>
-        <Button size="sm" onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden />{t('branches.add')}</Button>
+        {branches.length > 0 && <Button size="sm" onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden />{t('branches.add')}</Button>}
       </div>
       <ErrorText>{error}</ErrorText>
-      {!branches.length && <p className="mt-4 text-sm text-muted">{t('branches.none')}</p>}
+      {/* Phase 17.5: the address lives only here — without a branch the buyer sees no address and no map */}
+      {!branches.length && (
+        <div className="mt-4 rounded-lg border border-dashed border-primary/40 bg-primary-soft/30" data-testid="branches-empty">
+          <EmptyState compact icon={MapPin} title={t('branches.emptyTitle')} hint={t('branches.emptyHint')}
+            action={{ label: t('branches.add'), onClick: () => setEditing('new'), icon: Plus }} />
+        </div>
+      )}
       <ul className="mt-4 grid gap-3 md:grid-cols-2">
         {branches.map((b) => (
           <li key={b.id} className="min-w-0 rounded-lg border border-line p-3" data-testid="branch-card">

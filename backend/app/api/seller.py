@@ -62,25 +62,30 @@ def get_my_store(user: User = Depends(seller_only), db: Session = Depends(get_db
 
 @router.put("/stores/me", response_model=StoreOut)
 def save_my_store(data: StoreIn, user: User = Depends(seller_only), db: Session = Depends(get_db)):
-    """Create the store (its address becomes the main branch) or change its own fields. Once the store has
-    branches, the address, hours and map are edited in the branches (phase 12.1): those fields are ignored here."""
+    """Create the store or change its general fields: name, INN, phone, Telegram, reservation days.
+    Phase 17.5: where to go (city, district, address, hours, map) lives only in the branches — the profile form no
+    longer sends it, and missing fields never wipe the old values of the store row. An address sent for a store
+    without branches (an older client) still becomes its first branch, as before."""
     store = _my_store(db, user)
     has_branches = store is not None and bool(branches.store_branches(db, store.id))
-    if not has_branches and (not data.address or not data.city):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": "address"})
-    try:
-        map_url, lat, lon = parse_map_url(data.map_url)
-    except MapLinkError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
-    store = store or Store(user_id=user.id)
     location = {"address", "district", "city", "hours", "map_url"}
+    with_place = not has_branches and bool((data.address or "").strip())
+    map_url = lat = lon = None
+    if with_place:
+        try:
+            map_url, lat, lon = parse_map_url(data.map_url)
+        except MapLinkError as e:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"code": str(e)})
+    store = store or Store(user_id=user.id)
     for field, value in data.model_dump().items():
-        if has_branches and field in location or field == "low_stock" and value is None:
+        if field in location and not with_place or field == "low_stock" and value is None:
             continue
+        if field == "city" and value is None:
+            continue  # the column has a default ("tashkent")
         if isinstance(value, str):
             value = value.strip() or None
         setattr(store, field, value)
-    if not has_branches:
+    if with_place:
         store.map_url, store.map_lat, store.map_lon = map_url, lat, lon
     db.add(store)
     db.flush()

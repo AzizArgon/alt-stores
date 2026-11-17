@@ -89,10 +89,10 @@ def test_profile_saves_address_hours_and_map_link(db, client):
     h = {"Authorization": f"Bearer {create_access_token(a.owner.id, 'seller')}"}
     body = {"name": "Alt", "city": "tashkent", "address": "ул. Навои, 12, ориентир — ЦУМ", "hours": "Пн–Сб 10–19",
             "map_url": "https://yandex.uz/maps/?ll=69.28%2C41.31&z=16"}
-    saved = client.put("/api/stores/me", json=body, headers=h).json()
-    assert saved["map_lat"] == 41.31 and saved["map_lon"] == 69.28 and saved["hours"] == "Пн–Сб 10–19"
     bad = client.put("/api/stores/me", json={**body, "map_url": "https://google.com/maps"}, headers=h)
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "map_url"
+    saved = client.put("/api/stores/me", json=body, headers=h).json()
+    assert saved["map_lat"] == 41.31 and saved["map_lon"] == 69.28 and saved["hours"] == "Пн–Сб 10–19"
     # Phase 12.1: the address now lives in the main branch; without a link the coordinates are cleared
     main = saved["branches"][0]
     assert main["is_main"] and main["map_lat"] == 41.31
@@ -100,3 +100,89 @@ def test_profile_saves_address_hours_and_map_link(db, client):
     assert client.put(f"/api/stores/me/branches/{main['id']}", json={**edit, "address": ""}, headers=h).status_code == 422
     assert client.put(f"/api/stores/me/branches/{main['id']}", json=edit, headers=h).json()["map_lat"] is None
     assert db.scalar(select(Store).where(Store.id == a.id)).address.startswith("ул. Навои")
+
+
+# --- Phase 17.5: the profile has only the general fields; where to go lives in the branches --------------------------
+
+def _seller(db, client, email):
+    from app.core.security import create_access_token
+    from app.db.models import UserRole
+
+    a = _shop(db, email)
+    a.owner.role = UserRole.seller
+    db.commit()
+    return a, {"Authorization": f"Bearer {create_access_token(a.owner.id, 'seller')}"}
+
+
+def test_profile_without_address_saves_general_fields_and_has_no_branches(db, client):
+    a, h = _seller(db, client, "noaddr@example.com")
+    a.address, a.district, a.hours = None, "Чиланзар", "Пн–Сб 10–19"  # old fields of the top block, no address
+    db.commit()
+    r = client.put("/api/stores/me", json={"name": "Без адреса", "phone": "+998 90 000 00 00", "reservation_days": 3}, headers=h)
+    assert r.status_code == 200
+    out = r.json()
+    assert out["name"] == "Без адреса" and out["reservation_days"] == 3 and out["branches"] == []
+    db.refresh(a)
+    assert a.district == "Чиланзар" and a.hours == "Пн–Сб 10–19"  # the old values are kept in the base
+
+
+def test_profile_ignores_location_once_there_are_branches(db, client):
+    a, h = _seller(db, client, "withbr@example.com")
+    first = client.post("/api/stores/me/branches", headers=h, json={"city": "samarkand", "address": "ул. Регистан, 5",
+                                                                    "landmark": "у площади", "hours": "9–18"}).json()
+    assert len(first["branches"]) == 1 and first["city"] == "samarkand" and first["address"] == "ул. Регистан, 5"
+    out = client.put("/api/stores/me", json={"name": "Новое имя", "city": "tashkent", "address": "другой адрес"},
+                     headers=h).json()
+    assert out["name"] == "Новое имя" and out["city"] == "samarkand" and out["address"] == "ул. Регистан, 5"
+    assert len(out["branches"]) == 1
+
+
+def test_old_top_address_becomes_the_first_branch(db):
+    from app.services.branches import migrate_branches, store_branches
+
+    old = _shop(db, "old@example.com")
+    old.city, old.district, old.address, old.hours = "bukhara", "Старый город", "ул. Накшбанди, 41", "Пн–Пт 9–18"
+    old.map_url = "https://yandex.uz/maps/-/CDabc"
+    empty = _shop(db, "empty@example.com")  # no address: nothing to move, stays without branches
+    empty.address = None
+    db.commit()
+    assert migrate_branches(db) >= 1
+    (b,) = store_branches(db, old.id)
+    assert (b.city, b.landmark, b.address, b.hours, b.map_url, b.is_main) == (
+        "bukhara", "Старый город", "ул. Накшбанди, 41", "Пн–Пт 9–18", "https://yandex.uz/maps/-/CDabc", True)
+    assert store_branches(db, empty.id) == []
+    assert migrate_branches(db) == 0  # once: a second start makes nothing new
+
+
+def test_storefront_shows_the_address_of_the_branches(db, client):
+    from app.services.catalog import store_brief
+
+    a, h = _seller(db, client, "front@example.com")
+    client.post("/api/stores/me/branches", headers=h, json={"city": "fergana", "address": "ул. Мустакиллик, 25",
+                                                            "landmark": "у базара"})
+    client.post("/api/stores/me/branches", headers=h, json={"city": "tashkent", "address": "ул. Навои, 7",
+                                                            "landmark": "ЦУМ"})
+    db.expire_all()
+    store = db.get(Store, a.id)
+    brief = store_brief(store)
+    assert (brief["city"], brief["address"], brief["district"]) == ("fergana", "ул. Мустакиллик, 25", "у базара")
+    page = client.get(f"/api/catalog/stores/{a.id}").json()
+    assert "branches" in page, page
+    assert {b["address"] for b in page["branches"]} == {"ул. Мустакиллик, 25", "ул. Навои, 7"}
+
+
+def test_startup_with_only_a_warehouse_and_no_branch(db):
+    """Age on the server, 17.11: stock mode, "Склад" on, no branch and no address — the startup must not fail."""
+    from app.db.models import Branch
+    from app.services.branches import ensure_main_branch, migrate_branches, store_branches, warehouse_of
+
+    a = _shop(db, "wh@example.com")
+    a.address = None
+    db.add(Branch(store_id=a.id, city="tashkent", address="", is_warehouse=True))
+    b = _shop(db, "wh2@example.com")  # an address and only a warehouse: the address still becomes the first branch
+    db.add(Branch(store_id=b.id, city="tashkent", address="", is_warehouse=True))
+    db.commit()
+    migrate_branches(db)
+    assert ensure_main_branch(db, a) is None and store_branches(db, a.id) == [] and warehouse_of(db, a.id) is not None
+    (main,) = store_branches(db, b.id)
+    assert main.is_main and main.address == "ул. Навои, 12" and not warehouse_of(db, b.id).is_main

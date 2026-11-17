@@ -404,7 +404,8 @@
     "mapError": "Bu Yandex Xaritalar havolasi emas. Yandex Xaritalarda nuqtangizni oching, «Ulashish» → «Havolani nusxalash» ni bosing va shu yerga qoʻying (yandex.uz/maps/… koʻrinishida)",
     "openMap": "Yandex Xaritalarda ochish",
     "route": "Yoʻnalish",
-    "verifiedShort": "Tekshirilgan"
+    "verifiedShort": "Tekshirilgan",
+    "placesHint": "Manzillar, ish vaqti va xarita — quyidagi «Filiallar» blokida"
   },
   "upload": {
     "title": "Prays yuklash",
@@ -1531,7 +1532,9 @@
       "map_url": "Bu Yandex Xaritalar havolasi emas",
       "delete_main": "Asosiy filialni oʻchirib boʻlmaydi: avval boshqasini asosiy qiling",
       "delete_last": "Doʻkonda kamida bitta filial qolishi kerak"
-    }
+    },
+    "emptyTitle": "Kamida bitta nuqta qoʻshing — xaridorlar manzil va xaritani koʻradi",
+    "emptyHint": "Shahar, manzil, moʻljal, ish vaqti va Yandex Xaritalar havolasi har bir filial uchun koʻrsatiladi"
   },
   "stock": {
     "title": "Filiallar boʻyicha qoldiqlar",

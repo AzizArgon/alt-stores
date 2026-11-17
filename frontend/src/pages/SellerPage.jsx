@@ -14,9 +14,7 @@ import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass, useEdgeFade, zebra } from '../components/ui'
-import { STORE_CITIES } from '../config/cities'
-import { isYandexMapsUrl } from '../config/maps'
+import { Badge, Button, Card, EmptyState, Input, Skeleton, inputClass, useEdgeFade, zebra } from '../components/ui'
 import { linkProps, storeUrl } from '../config/sites'
 import Workspace, { pageActive, sectionActive } from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
@@ -30,31 +28,24 @@ import LangSwitch from '../components/LangSwitch'
 import i18n from '../i18n'
 import { intlLocale } from '../services/lang'
 
-const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'city', 'district', 'address', 'hours', 'map_url', 'reservation_days']
-// Hints under the fields: where to go matters to the buyer (phase 12)
-const FIELD_HINTS = { address: 'addressHint', hours: 'hoursHint', map_url: 'mapHint' }
+// Phase 17.5: "Мой магазин" has only the general fields; where to go (city, district, address, hours, Yandex Maps)
+// lives only in "Филиалы" right under it (the old values of the store row are kept in the base, not shown)
+export const STORE_FIELDS = ['name', 'inn_stir', 'phone', 'telegram', 'reservation_days']
 const FIELD_LABELS = { inn_stir: 'innStir' }
-// Once the store has branches, where to go is edited per branch (phase 12.1)
-const LOCATION_FIELDS = ['city', 'district', 'address', 'hours', 'map_url']
 const CURRENCIES = ['USD', 'UZS']
 const ACCEPT = '.xlsx,.xls,.csv,.pdf'
 
 function StoreForm({ store, onSaved }) {
   const { t } = useTranslation()
-  const fields = store?.branches?.length ? STORE_FIELDS.filter((f) => !LOCATION_FIELDS.includes(f)) : STORE_FIELDS
+  const fields = STORE_FIELDS
   const [form, setForm] = useState(() =>
     Object.fromEntries(fields.map((f) => [f, String(store?.[f] ?? (f === 'reservation_days' ? 2 : ''))])))
   const [error, setError] = useState('')
-  const [mapError, setMapError] = useState(false)
   const toast = useToast()
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (form.map_url != null && !isYandexMapsUrl(form.map_url)) {
-      setMapError(true)
-      return
-    }
     // Empty optional fields are sent as null
     const payload = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim() || null]))
     payload.reservation_days = Number(payload.reservation_days) || 2
@@ -63,8 +54,7 @@ function StoreForm({ store, onSaved }) {
       toast(t('store.saved'))
       onSaved(res.data)
     } catch (err) {
-      if (err.response?.data?.detail?.code === 'map_url') setMapError(true)
-      else setError(t(errorKey(err)))
+      setError(t(errorKey(err)))
     }
   }
 
@@ -77,24 +67,16 @@ function StoreForm({ store, onSaved }) {
           {t(store.is_verified ? 'store.verified' : 'store.notVerified')}
         </p>
       )}
+      <p className="mt-1 text-sm text-muted">{t('store.placesHint')}</p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {fields.map((f) => (f === 'city' ? (
-          <Select key={f} label={t('store.city')} value={form.city} required hint={t('store.cityHint')}
-            onChange={(e) => setForm({ ...form, city: e.target.value })}>
-            <option value="" disabled>{t('store.cityChoose')}</option>
-            {STORE_CITIES.map((c) => <option key={c} value={c}>{t(`cities.${c}`)}</option>)}
-          </Select>
-        ) : f === 'reservation_days' ? (
+        {fields.map((f) => (f === 'reservation_days' ? (
           <Input key={f} type="number" min={1} max={7} label={t('store.reservation_days')} hint={t('store.reservationDaysHint')}
             value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
         ) : (
-          <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)} hint={FIELD_HINTS[f] && t(`store.${FIELD_HINTS[f]}`)}
-            value={form[f]} required={f === 'name' || f === 'address'} minLength={f === 'name' ? 2 : f === 'address' ? 3 : undefined}
-            className={f === 'address' || f === 'map_url' ? 'md:col-span-2' : ''}
-            inputMode={f === 'map_url' ? 'url' : undefined}
-            placeholder={f === 'map_url' ? 'https://yandex.uz/maps/-/…' : f === 'hours' ? t('store.hoursPlaceholder') : undefined}
-            error={f === 'map_url' && mapError ? t('store.mapError') : undefined}
-            onChange={(e) => { setForm({ ...form, [f]: e.target.value }); if (f === 'map_url') setMapError(false) }} />
+          <Input key={f} label={t(`store.${FIELD_LABELS[f] || f}`)}
+            value={form[f]} required={f === 'name'} minLength={f === 'name' ? 2 : undefined}
+            inputMode={f === 'phone' ? 'tel' : undefined}
+            onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
         )))}
       </div>
       <div className="mt-4"><ErrorText>{error}</ErrorText></div>
@@ -485,7 +467,7 @@ export function ProfileSection() {
   const { store, setStore } = useOutletContext()
   return (
     <div className="grid gap-6">
-      <StoreForm key={store.branches?.length ? 'b' : 's'} store={store} onSaved={setStore} />
+      <StoreForm store={store} onSaved={setStore} />
       <BranchesBlock store={store} onChanged={setStore} />
       <StockModeBlock store={store} onChanged={setStore} />
       <WarehouseBlock store={store} onChanged={setStore} />
