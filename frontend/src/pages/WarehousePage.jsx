@@ -7,7 +7,7 @@ import Stocktake from '../components/Stocktake'
 import { ModeSwitch } from '../components/StockMode'
 import { GoodsInput, OperationForm, download } from '../components/Warehouse'
 import { useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Pagination, Select, Skeleton } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Pagination, Select, Skeleton, zebra } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatPrice } from '../services/format'
 import { placeFor, placeLabel } from '../services/place'
@@ -184,7 +184,7 @@ export function Journal({ branches, doc = null }) {
       ) : (
         <>
           <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
-            {data.items.map((m) => <MovementRow key={m.id} m={m} />)}
+            {data.items.map((m, i) => <MovementRow key={m.id} m={m} i={i} />)}
           </ul>
           <Pagination page={data.page} pages={data.pages} onChange={setPage} />
         </>
@@ -195,13 +195,13 @@ export function Journal({ branches, doc = null }) {
 
 const TONE = { receipt: 'success', initial: 'neutral', sale: 'primary', res_sale: 'primary', adjust: 'warning', reserve: 'info', unreserve: 'info', import: 'neutral', undo: 'danger', manual: 'neutral', move_out: 'info', move_in: 'success', return: 'success', inventory: 'warning' }
 
-export function MovementRow({ m, compact = false }) {
+export function MovementRow({ m, i, compact = false }) {
   const { t } = useTranslation()
   const reserve = m.kind === 'reserve' || m.kind === 'unreserve'
   const change = reserve ? m.reserved_delta : m.delta
   const qty = (v) => (v == null ? t('warehouse.journal.unknown') : v)
   return (
-    <li className="rounded-lg border border-line bg-surface p-3 text-sm">
+    <li className={`rounded-lg border border-line p-3 text-sm ${i == null ? 'bg-surface' : zebra(i)}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Badge tone={TONE[m.kind]}>{t(`warehouse.kinds.${m.kind}`)}</Badge>
         <span className="min-w-0 flex-1 truncate font-medium" title={m.name}>{m.name}</span>

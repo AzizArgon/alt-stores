@@ -6,7 +6,7 @@ import { formatPrice } from '../services/format'
 import { ProductLine } from './AddFromCatalog'
 import { branchLabel, stockOf } from './BranchStock'
 import { Modal, useToast } from './overlays'
-import { Badge, Button, Checkbox, EmptyState, Input, Select, inputClass } from './ui'
+import { Badge, Button, Checkbox, EmptyState, Input, Select, inputClass, zebra } from './ui'
 import { checkBarcode, feedback, looksLikeBarcode, scannerReady, setSound, soundOn, useScanner } from '../services/barcode'
 import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 
@@ -347,7 +347,7 @@ function Line({ n, kind, line, branches, onChange, onRemove, fresh, big, priceOn
   useEffect(() => { if (fresh) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }) }, [fresh, line.qty])
   const qty = Number(line.qty) || 0
   return (
-    <li ref={ref} className={`rounded-lg border p-3 transition-colors ${fresh ? 'border-primary bg-primary-soft ring-2 ring-primary' : 'border-line bg-surface'}`}>
+    <li ref={ref} className={`rounded-lg border p-3 transition-colors ${fresh ? `border-primary ring-2 ring-primary ${zebra(n - 1, true)}` : `border-line ${zebra(n - 1)}`}`}>
       <div className="flex items-start gap-2">
         <span className="mt-0.5 text-xs text-faint">{n}.</span>
         <div className="min-w-0 flex-1">

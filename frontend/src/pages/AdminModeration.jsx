@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import Flags from '../components/Flags'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Select, Tabs } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, Input, Select, Tabs, zebra } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { storeUrl } from '../config/sites'
 import api from '../services/api'
@@ -76,9 +76,9 @@ export function AdminStores() {
       </div>
       <Loading data={data}>
         <ul className="grid gap-2">
-          {data?.map((s) => (
+          {data?.map((s, i) => (
             <li key={s.id}>
-              <Link to={`/admin/stores/${s.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface p-4 shadow-card outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-primary">
+              <Link to={`/admin/stores/${s.id}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line ${zebra(i)} p-4 shadow-card outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-primary`}>
                 <span className="min-w-0">
                   <span className="block font-semibold break-words">{s.name}</span>
                   <span className="block text-xs text-muted">{s.cities.map((c) => t(`cities.${c}`)).join(', ')} · {t('admin.stores.goods', { count: s.goods })}</span>
@@ -157,7 +157,7 @@ export function AdminStoreCard() {
           </Card>
           <Card>
             <h2 className="mb-1 text-h3">{t('admin.stores.history')}</h2>
-            {s.history.length ? <ul>{s.history.map((a) => <LogLine key={a.id} a={a} />)}</ul> : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
+            {s.history.length ? <ul>{s.history.map((a, i) => <LogLine key={a.id} a={a} i={i} />)}</ul> : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
           </Card>
           <ActionModal action={action} onClose={() => setAction(null)} />
         </div>
@@ -293,10 +293,10 @@ export function AdminReports() {
       <Loading data={data}>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <ul className="grid content-start gap-2">
-            {data?.map((r) => (
+            {data?.map((r, i) => (
               <li key={r.id}>
                 <button type="button" onClick={() => setParams({ id: r.id })}
-                  className={`w-full rounded-xl border bg-surface p-3 text-left shadow-card outline-none focus-visible:ring-2 focus-visible:ring-primary ${String(r.id) === open ? 'border-primary' : 'border-line hover:border-faint'}`}>
+                  className={`w-full rounded-xl border ${zebra(i, String(r.id) === open)} p-3 text-left shadow-card outline-none focus-visible:ring-2 focus-visible:ring-primary ${String(r.id) === open ? 'border-primary' : 'border-line hover:border-faint'}`}>
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-medium">#{r.id} · {t(`chat.reason.${r.reason}`, r.reason)}</span>
                     <Badge tone={r.status === 'new' ? 'warning' : 'neutral'}>{t(`admin.reports.status.${r.status}`)}</Badge>
@@ -334,9 +334,9 @@ export function AdminFlags() {
       </PageTitle>
       <Loading data={data}>
         <ul className="grid gap-3">
-          {data?.map((f) => (
+          {data?.map((f, i) => (
             <li key={f.id}>
-              <Card className="grid gap-2">
+              <Card className={`grid gap-2 ${zebra(i)}`}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <Ext to={productLink(f.product.id)}>{f.product.name}</Ext>
                   <span className="text-sm text-muted"><Link to={`/admin/stores/${f.store.id}`} className="hover:underline">{f.store.name}</Link> · {formatPrice(f.offer.price, f.offer.currency)}</span>
@@ -411,9 +411,9 @@ export function AdminFixes() {
       </PageTitle>
       <Loading data={data}>
         <ul className="grid gap-3">
-          {data?.map((fix) => (
+          {data?.map((fix, i) => (
             <li key={fix.id}>
-              <Card className="grid gap-3">
+              <Card className={`grid gap-3 ${zebra(i)}`}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   {fix.product ? <Ext to={productLink(fix.product.id)}>{fix.product.name}</Ext> : <span>—</span>}
                   {fix.kind === 'duplicate'
@@ -452,10 +452,10 @@ export function AdminFixes() {
 
 // --- barcodes ---------------------------------------------------------------------------------------------------------
 
-function CodeCard({ c, onDecide }) {
+function CodeCard({ c, i = 0, onDecide }) {
   const { t } = useTranslation()
   return (
-    <Card className="grid gap-3">
+    <Card className={`grid gap-3 ${zebra(i)}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-lg font-semibold break-all">{c.code}</span>
         {c.status && <Badge tone={c.status === 'conflict' ? 'danger' : c.status === 'confirmed' ? 'success' : 'neutral'}>{t(`admin.barcodes.status.${c.status}`)}</Badge>}
@@ -517,7 +517,7 @@ export function AdminBarcodes() {
       </form>
       {found && <div className="mb-5"><CodeCard c={found} onDecide={decide} /></div>}
       <Loading data={data} empty={t('admin.barcodes.noConflicts')}>
-        <ul className="grid gap-3">{data?.map((c) => <li key={c.code}><CodeCard c={c} onDecide={decide} /></li>)}</ul>
+        <ul className="grid gap-3">{data?.map((c, i) => <li key={c.code}><CodeCard c={c} i={i} onDecide={decide} /></li>)}</ul>
       </Loading>
       <ActionModal action={action} onClose={() => setAction(null)} />
     </>
@@ -565,7 +565,7 @@ function AddChannel({ onAdded }) {
   )
 }
 
-function ChannelRow({ ch, onChanged, onDelete }) {
+function ChannelRow({ ch, i = 0, onChanged, onDelete }) {
   const { t } = useTranslation()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -578,7 +578,7 @@ function ChannelRow({ ch, onChanged, onDelete }) {
   }
   const log = ch.last_log
   return (
-    <Card className="grid gap-3">
+    <Card className={`grid gap-3 ${zebra(i)}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <Ext to={ch.url}>@{ch.username}</Ext>
@@ -621,7 +621,7 @@ export function AdminChannels() {
       <PageTitle title={t('admin.channels.title')} hint={t('admin.channels.fetchHint')} />
       <AddChannel onAdded={reload} />
       <Loading data={data}>
-        <ul className="grid gap-3">{data?.map((ch) => <li key={ch.id}><ChannelRow ch={ch} onChanged={reload} onDelete={remove} /></li>)}</ul>
+        <ul className="grid gap-3">{data?.map((ch, i) => <li key={ch.id}><ChannelRow ch={ch} i={i} onChanged={reload} onDelete={remove} /></li>)}</ul>
       </Loading>
       <ActionModal action={action} onClose={() => setAction(null)} />
     </>
@@ -673,9 +673,9 @@ export function AdminPhotos() {
       <PageTitle title={t('admin.photos.title')} hint={t('admin.photos.hint')} />
       <Loading data={data === null ? null : data?.items} empty={t('admin.photos.empty')}>
         <ul className="grid gap-4">
-          {data?.items.map((c) => (
+          {data?.items.map((c, i) => (
             <li key={c.product.id}>
-              <Card>
+              <Card className={zebra(i)}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-h3 break-words">{c.product.name}</h2>
                   <Ext to={productLink(c.product.id)}>{t('admin.photos.open')}</Ext>

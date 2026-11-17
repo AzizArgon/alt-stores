@@ -7,7 +7,7 @@ import { startTransition, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, FieldBox, Input, Select, Skeleton, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, FILTERS_WIDTH, FieldBox, Input, Select, Skeleton, inputClass, zebra } from '../components/ui'
 import { storeUrl } from '../config/sites'
 import Workspace from '../layouts/Workspace'
 import { NotificationBell } from '../components/Notifications'
@@ -178,10 +178,10 @@ export function ChannelState({ ch }) {
   )
 }
 
-export function LogLine({ a }) {
+export function LogLine({ a, i = 0 }) {
   const { t } = useTranslation()
   return (
-    <li className="grid gap-0.5 border-b border-line py-2.5 text-sm last:border-0">
+    <li className={`grid gap-0.5 rounded-md px-2 py-2.5 text-sm ${zebra(i)}`}>
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-medium">{t(`admin.action.${a.action}`)}</span>
         {a.title && <span className="min-w-0 break-words text-muted">«{a.title}»</span>}
@@ -221,9 +221,9 @@ export function AdminOverview() {
               <Card>
                 <h2 className="mb-2 text-h3"><Link to="/admin/channels" className="hover:underline">{t('admin.overview.channels')}</Link></h2>
                 {data.channels.length ? (
-                  <ul className="grid gap-2">
-                    {data.channels.map((ch) => (
-                      <li key={ch.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <ul className="grid">
+                    {data.channels.map((ch, i) => (
+                      <li key={ch.id} className={`flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-md px-2 py-1.5 ${zebra(i)}`}>
                         <span className="font-medium">@{ch.username} {!ch.enabled && <Badge>{t('admin.channels.disabled')}</Badge>}</span>
                         <ChannelState ch={ch} />
                       </li>
@@ -233,7 +233,7 @@ export function AdminOverview() {
               </Card>
               <Card>
                 <h2 className="mb-1 text-h3"><Link to="/admin/log" className="hover:underline">{t('admin.overview.lastActions')}</Link></h2>
-                {data.last_actions.length ? <ul>{data.last_actions.map((a) => <LogLine key={a.id} a={a} />)}</ul>
+                {data.last_actions.length ? <ul>{data.last_actions.map((a, i) => <LogLine key={a.id} a={a} i={i} />)}</ul>
                   : <EmptyState compact icon={History} title={t('admin.log.empty')} />}
               </Card>
             </div>
@@ -275,7 +275,7 @@ export function AdminLog() {
         <Input label={t('admin.log.to')} type="date" value={f.date_to} onChange={set('date_to')} />
       </div>
       <Loading data={data} empty={t('admin.log.empty')}>
-        <Card><ul>{data?.map((a) => <LogLine key={a.id} a={a} />)}</ul></Card>
+        <Card><ul>{data?.map((a, i) => <LogLine key={a.id} a={a} i={i} />)}</ul></Card>
       </Loading>
     </>
   )
@@ -312,9 +312,9 @@ export function AdminUsers() {
       </div>
       <Loading data={data}>
         <ul className="grid gap-2">
-          {data?.map((u) => (
+          {data?.map((u, i) => (
             <li key={u.id}>
-              <Card padded={false} className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <Card padded={false} className={`flex flex-wrap items-center justify-between gap-3 p-4 ${zebra(i)}`}>
                 <div className="min-w-0">
                   <p className="font-medium break-all">{u.email}</p>
                   <p className="text-xs text-muted">

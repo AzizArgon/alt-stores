@@ -33,6 +33,14 @@ export function SiteLink({ url, ...props }) {
 export const SEARCH_WIDTH = 'w-full sm:max-w-sm lg:w-96 lg:shrink-0'
 // …and a row of filters (selects) is as wide as about four of them
 export const FILTERS_WIDTH = 'max-w-5xl'
+// Phase 17.4: the "zebra" of every table and list of the cabinet and the admin (colours — index.css .zebra-*).
+// i — the row's place from 0: the 1st, 3rd… rows are white, the 2nd, 4th… light grey; a ticked row is light blue.
+// Cells fixed on the left take the row's colour with ZEBRA_CELL; the header row of a table — ZEBRA_HEAD
+export function zebra(i, selected = false) {
+  return `zebra-row ${i % 2 ? 'zebra-even' : 'zebra-odd'}${selected ? ' zebra-selected' : ''}`
+}
+export const ZEBRA_CELL = 'zebra-cell'
+export const ZEBRA_HEAD = 'zebra-head'
 
 export const inputClass = 'w-full min-h-11 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors placeholder:text-faint hover:border-faint focus:border-primary focus:ring-2 focus:ring-primary-soft disabled:bg-surface-2 disabled:text-faint'
 const invalidClass = 'border-danger focus:border-danger focus:ring-danger-soft'
