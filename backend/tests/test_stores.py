@@ -169,3 +169,20 @@ def test_storefront_shows_the_address_of_the_branches(db, client):
     page = client.get(f"/api/catalog/stores/{a.id}").json()
     assert "branches" in page, page
     assert {b["address"] for b in page["branches"]} == {"ул. Мустакиллик, 25", "ул. Навои, 7"}
+
+
+def test_startup_with_only_a_warehouse_and_no_branch(db):
+    """Age on the server, 17.11: stock mode, "Склад" on, no branch and no address — the startup must not fail."""
+    from app.db.models import Branch
+    from app.services.branches import ensure_main_branch, migrate_branches, store_branches, warehouse_of
+
+    a = _shop(db, "wh@example.com")
+    a.address = None
+    db.add(Branch(store_id=a.id, city="tashkent", address="", is_warehouse=True))
+    b = _shop(db, "wh2@example.com")  # an address and only a warehouse: the address still becomes the first branch
+    db.add(Branch(store_id=b.id, city="tashkent", address="", is_warehouse=True))
+    db.commit()
+    migrate_branches(db)
+    assert ensure_main_branch(db, a) is None and store_branches(db, a.id) == [] and warehouse_of(db, a.id) is not None
+    (main,) = store_branches(db, b.id)
+    assert main.is_main and main.address == "ул. Навои, 12" and not warehouse_of(db, b.id).is_main
