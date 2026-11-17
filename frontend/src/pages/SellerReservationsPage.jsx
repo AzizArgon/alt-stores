@@ -7,7 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ErrorText } from '../components/AuthForm'
 import { Modal, useToast } from '../components/overlays'
 import Price from '../components/Price'
-import { Badge, Button, Card, EmptyState, Input, SEARCH_WIDTH, Select, Skeleton, Tabs, inputClass } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, SEARCH_WIDTH, Select, Skeleton, Tabs, inputClass, zebra } from '../components/ui'
 import api from '../services/api'
 import { notifyChanged } from '../services/chat'
 import { formatDate, formatDayMonth, telegramUrl } from '../services/format'
@@ -50,7 +50,7 @@ function Row({ label, children }) {
   return <p className="text-sm"><span className="text-muted">{label}: </span>{children}</p>
 }
 
-function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
+function StoreCard({ r, i = 0, usdRate, highlight, onMoved, onCancel }) {
   const { t } = useTranslation()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -83,7 +83,7 @@ function StoreCard({ r, usdRate, highlight, onMoved, onCancel }) {
     }
   }
   return (
-    <Card as="li" className={`min-w-0 ${highlight ? 'ring-2 ring-primary' : ''}`}>
+    <Card as="li" className={`min-w-0 ${zebra(i, highlight)} ${highlight ? 'ring-2 ring-primary' : ''}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
@@ -219,8 +219,8 @@ export default function SellerReservationsPage() {
         <EmptyState icon={CalendarCheck} title={t('reservation.empty')} hint={t('reservation.emptyStore')} />
       ) : (
         <ul className="grid gap-3">
-          {items.map((r) => (
-            <StoreCard key={r.id} r={r} usdRate={rate} highlight={highlight === r.id} onMoved={load} onCancel={setCancelling} />
+          {items.map((r, i) => (
+            <StoreCard key={r.id} r={r} i={i} usdRate={rate} highlight={highlight === r.id} onMoved={load} onCancel={setCancelling} />
           ))}
         </ul>
       )}

@@ -9,7 +9,7 @@ import { MarketLabel } from '../components/Market'
 import OfferEditor from '../components/OfferEditor'
 import OfferPhotosModal from '../components/OfferPhotos'
 import { Dropdown, DropdownItem, Modal, useToast } from '../components/overlays'
-import { Badge, Button, Card, Checkbox, EmptyState, FILTERS_WIDTH, Pagination, SEARCH_WIDTH, Skeleton, Switch, inputClass } from '../components/ui'
+import { Badge, Button, Card, Checkbox, EmptyState, FILTERS_WIDTH, Pagination, SEARCH_WIDTH, Skeleton, Switch, ZEBRA_CELL, ZEBRA_HEAD, inputClass, zebra } from '../components/ui'
 import api, { errorKey } from '../services/api'
 import { formatDate, formatPrice, roundSum, roundUsd } from '../services/format'
 
@@ -146,7 +146,7 @@ function BulkBar({ count, total, allByFilter, onAll, onClear, onAction, branches
   const [percent, setPercent] = useState('5')
   const [branch, setBranch] = useState(() => String(branches[0]?.id || ''))
   return (
-    <div className="ws-sticky sticky z-10 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
+    <div className="ws-sticky sticky z-20 flex flex-wrap items-center gap-2 border-b border-primary bg-primary-soft px-3 py-2 text-sm md:px-4">
       <span className="font-medium">{t('cabinet.bulk.selected', { count: allByFilter ? total : count })}</span>
       {!allByFilter && total > count && (
         <button type="button" onClick={onAll} className="text-primary underline">{t('cabinet.bulk.selectAll', { count: total })}</button>
@@ -377,10 +377,10 @@ export default function GoodsPage() {
             {/* Phase 17.1: headers on one line, numbers on the right.
                 Phase 17.3: the spare width goes to "Товар" only (w-full), the other columns are as narrow as their content */}
             <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-left text-muted">
+              <thead className={`${ZEBRA_HEAD} text-left`}>
                 <tr>
-                  <th className={`${STICKY_TICK} w-10 bg-surface-2 px-3`}><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
-                  <SortHeader k="name" sort={sort} desc={desc} onSort={onSort} className={`${STICKY_NAME} ${NAME_COL} bg-surface-2`}>{t('cabinet.col.name')}</SortHeader>
+                  <th className={`${STICKY_TICK} ${ZEBRA_CELL} w-10 px-3`}><input type="checkbox" className="size-4 accent-primary" checked={pageChecked} onChange={togglePage} aria-label={t('cabinet.bulk.page')} /></th>
+                  <SortHeader k="name" sort={sort} desc={desc} onSort={onSort} className={`${STICKY_NAME} ${NAME_COL} ${ZEBRA_CELL}`}>{t('cabinet.col.name')}</SortHeader>
                   <SortHeader k="price" sort={sort} desc={desc} onSort={onSort} className={`${COL.price} text-right`}>{t('cabinet.col.price')}</SortHeader>
                   <SortHeader k="condition" sort={sort} desc={desc} onSort={onSort} className={`hidden ${COL.condition} ${stockCols ? '2xl:table-cell' : 'xl:table-cell'}`}>{t('cabinet.col.condition')}</SortHeader>
                   <SortHeader k="stock" sort={sort} desc={desc} onSort={onSort} className={COL.stock}>{t('cabinet.col.stock')}</SortHeader>
@@ -395,12 +395,12 @@ export default function GoodsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {data.items.map((o) => (
-                  <tr key={o.id} className={`group ${selected.has(o.id) || allByFilter ? 'bg-primary-soft/40' : 'hover:bg-surface-2'}`}>
-                    <td className={`${STICKY_TICK} ${stickyBg(selected.has(o.id) || allByFilter)} px-3 py-2 align-top`}>
+                {data.items.map((o, i) => (
+                  <tr key={o.id} className={zebra(i, selected.has(o.id) || allByFilter)}>
+                    <td className={`${STICKY_TICK} ${ZEBRA_CELL} px-3 py-2 align-top`}>
                       <input type="checkbox" className="mt-1 size-4 accent-primary" checked={allByFilter || selected.has(o.id)} onChange={() => toggle(o.id)} aria-label={o.name} />
                     </td>
-                    <td className={`${STICKY_NAME} ${NAME_COL} ${stickyBg(selected.has(o.id) || allByFilter)} px-2 py-2 align-top`}>
+                    <td className={`${STICKY_NAME} ${NAME_COL} ${ZEBRA_CELL} px-2 py-2 align-top`}>
                       {/* 240 px (352 px from 1280): a long name takes two lines instead of pushing the other columns out */}
                       <button type="button" onClick={() => setEditing(o.id)} className={`flex w-full gap-2 text-left ${NAME_MIN}`}>
                         {o.photo
@@ -446,8 +446,8 @@ export default function GoodsPage() {
 
             {/* Phone and tablet: cards, the price and stock are edited the same way */}
             <ul className="divide-y divide-line lg:hidden">
-              {data.items.map((o) => (
-                <li key={o.id} className={`flex gap-3 p-3 ${selected.has(o.id) || allByFilter ? 'bg-primary-soft/40' : ''}`}>
+              {data.items.map((o, i) => (
+                <li key={o.id} className={`flex gap-3 p-3 ${zebra(i, selected.has(o.id) || allByFilter)}`}>
                   <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={allByFilter || selected.has(o.id)} onChange={() => toggle(o.id)} aria-label={o.name} />
                   <div className="min-w-0 flex-1">
                     <button type="button" onClick={() => setEditing(o.id)} className="flex w-full min-w-0 gap-2 text-left">
@@ -517,7 +517,6 @@ export const PRICE_INPUT = 'w-28'
 export const branchColWidth = (label = '') => Math.min(176, Math.max(80, Math.round(label.length * 7.5) + 24))
 // "Рынок": shown when at least one row of the page has a market label; then an empty cell is "—"
 export const hasMarket = (items) => items.some((o) => o.market)
-const stickyBg = (picked) => (picked ? 'bg-primary-soft' : 'bg-surface group-hover:bg-surface-2')
 
 // 1–2 places — a column each; 3 and more — one column "Остатки" with the total (phase 12.5 fix)
 export function stockColumns(branches, chosen = null) {

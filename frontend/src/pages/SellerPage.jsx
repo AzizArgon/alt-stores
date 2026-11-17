@@ -14,7 +14,7 @@ import UndoUpload from '../components/UndoUpload'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
-import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass, useEdgeFade } from '../components/ui'
+import { Badge, Button, Card, EmptyState, Input, Select, Skeleton, inputClass, useEdgeFade, zebra } from '../components/ui'
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
 import { linkProps, storeUrl } from '../config/sites'
@@ -250,9 +250,9 @@ function ImportHistory({ items, onChanged }) {
     <Card>
       <h2 className="text-h2">{t('upload.history')}</h2>
       {items.length === 0 && <EmptyState compact icon={FileSpreadsheet} title={t('upload.empty')} />}
-      <ul className="mt-2 divide-y divide-line">
-        {items.map((imp) => (
-          <li key={imp.id} className="flex flex-col justify-between gap-x-3 gap-y-0.5 py-2 text-sm md:flex-row md:items-center">
+      <ul className="mt-2">
+        {items.map((imp, i) => (
+          <li key={imp.id} className={`flex flex-col justify-between gap-x-3 gap-y-0.5 rounded-md px-2 py-2 text-sm md:flex-row md:items-center ${zebra(i)}`}>
             <span className="min-w-0 break-words md:flex-1 md:truncate">
               <Badge className="mr-2">{t(`manual.source.${imp.source}`)}</Badge>
               {imp.source === 'manual'

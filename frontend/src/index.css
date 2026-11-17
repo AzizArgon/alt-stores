@@ -135,3 +135,14 @@ body {
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .fade-edge-r { mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent); }
+
+/* Phase 17.4: one rule for every table and list of the cabinet and the admin ("zebra").
+   Odd rows white, even rows a very light grey, the row under the pointer a bit darker, a ticked row light blue
+   (stronger than both). The colour lives in --row-bg, so the cells fixed on the left (.zebra-cell) take it too. */
+.zebra-row { --row-bg: var(--color-surface); background-color: var(--row-bg); }
+.zebra-even { --row-bg: #f7f8fa; }
+.zebra-row:hover { --row-bg: #edf0f4; }
+.zebra-selected, .zebra-selected:hover { --row-bg: #dfe6fd; }
+.zebra-row > .zebra-cell { background-color: var(--row-bg); }
+.zebra-head { background-color: #e9ecf1; color: var(--color-muted); }
+.zebra-head .zebra-cell { background-color: #e9ecf1; }

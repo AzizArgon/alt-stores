@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { Monitor } from 'lucide-react'
 import { ErrorText } from '../components/AuthForm'
-import { Button, Card, Checkbox, Pagination, Skeleton, inputClass } from '../components/ui'
+import { Button, Card, Checkbox, Pagination, Skeleton, ZEBRA_HEAD, inputClass, zebra } from '../components/ui'
 import Flags from '../components/Flags'
 import ImportSummary, { ModeChoice } from '../components/ImportSummary'
 import { ColumnsMatch } from '../components/BranchColumns'
@@ -147,7 +147,7 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
       </p>
       <div className="overflow-x-auto">
       <table className="w-full min-w-[960px] table-fixed text-sm">
-        <thead className="bg-surface-2 text-left text-muted">
+        <thead className={`${ZEBRA_HEAD} text-left`}>
           <tr>
             <th className="w-[32%] px-3 py-2 font-medium">{t('import.col.name')}</th>
             <th className="w-[11%] px-3 py-2 font-medium">{t('import.col.brand')}</th>
@@ -160,8 +160,8 @@ function PreviewTable({ importId, rows, setRows, categories, currency, rate, rea
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
-          {pageRows.map((r) => (
-            <tr key={r.row} className={needsAttention(r) ? 'bg-warning-soft/50' : ''}>
+          {pageRows.map((r, i) => (
+            <tr key={r.row} className={needsAttention(r) ? 'bg-warning-soft/50' : zebra(i)}>
               <td className="px-2 py-1.5 align-top">
                 <input className={`${cellInput} font-medium`} disabled={readOnly} value={r.name} required
                   onChange={(e) => edit(r.row, 'name', e.target.value)} />

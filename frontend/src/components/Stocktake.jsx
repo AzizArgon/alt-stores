@@ -7,7 +7,7 @@ import { useScanner } from '../services/barcode'
 import { placeLabel } from '../services/place'
 import { BindBarcode, CameraButton, resolveCode } from './Barcode'
 import { Modal, useToast } from './overlays'
-import { Badge, Button, Card, Checkbox, EmptyState, Skeleton, inputClass } from './ui'
+import { Badge, Button, Card, Checkbox, EmptyState, Skeleton, inputClass, zebra } from './ui'
 import { GoodsInput, stockError } from './Warehouse'
 import i18n from '../i18n'
 import { intlLocale } from '../services/lang'
@@ -46,9 +46,9 @@ export default function Stocktake({ place, places }) {
       <Card>
         <h2 className="text-h3">{t('warehouse.stocktake.history')}</h2>
         {lists.history.length === 0 ? <p className="mt-2 text-sm text-muted">{t('warehouse.stocktake.historyEmpty')}</p> : (
-          <ul className="mt-2 grid gap-2">
-            {lists.history.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-2 text-sm first:border-0 first:pt-0">
+          <ul className="mt-2 grid">
+            {lists.history.map((s, i) => (
+              <li key={s.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 text-sm ${zebra(i)}`}>
                 <span className="font-medium">{when(s.finished_at)} · {placeName(s)}</span>
                 <span className="text-muted">{t('warehouse.stocktake.historyLine', s)}</span>
                 <Link to={`/seller/stock?tab=journal&doc=${s.doc}`} className="text-primary hover:underline">{t('warehouse.stocktake.openJournal')}</Link>
@@ -154,8 +154,8 @@ function Counting({ st, onChange, onDone }) {
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {st.counts.length === 0 ? <div className="rounded-lg border border-dashed border-line"><EmptyState compact icon={ScanBarcode} title={t('warehouse.stocktake.empty')} /></div> : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
-          {st.counts.map((c) => (
-            <li key={c.offer_id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2.5 ${fresh === c.offer_id ? 'border-primary bg-primary-soft ring-2 ring-primary' : 'border-line'}`}>
+          {st.counts.map((c, i) => (
+            <li key={c.offer_id} className={`flex flex-wrap items-center gap-2 rounded-lg border p-2.5 ${fresh === c.offer_id ? `border-primary ring-2 ring-primary ${zebra(i, true)}` : `border-line ${zebra(i)}`}`}>
               <div className="min-w-0 flex-1 basis-48">
                 <p className="truncate text-sm font-medium" title={c.name}>{c.name}</p>
                 <p className="text-xs text-muted">{c.expected == null ? t('warehouse.stocktake.notInBooks') : `${t('warehouse.stocktake.expected')}: ${c.expected}`}</p>
@@ -236,10 +236,10 @@ function Review({ st, onChange, onDone }) {
       <Checkbox label={t('warehouse.stocktake.onlyDiff')} checked={onlyDiff} onChange={(e) => setOnlyDiff(e.target.checked)} />
       {rows.length === 0 ? <EmptyState icon={ClipboardCheck} title={t('warehouse.stocktake.status.match')} /> : (
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
-          {rows.map((l) => {
+          {rows.map((l, i) => {
             const off = excluded.has(l.offer_id)
             return (
-              <li key={l.offer_id} className={`grid gap-2 rounded-lg border border-line p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${off ? 'opacity-60' : ''}`}>
+              <li key={l.offer_id} className={`grid gap-2 rounded-lg border border-line p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${zebra(i, !off && l.diff !== 0)} ${off ? 'opacity-60' : ''}`}>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={TONE[l.status]}>{t(`warehouse.stocktake.status.${l.status}`)}</Badge>

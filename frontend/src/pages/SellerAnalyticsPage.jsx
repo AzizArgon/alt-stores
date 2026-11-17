@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ErrorText } from '../components/AuthForm'
-import { Card, Skeleton } from '../components/ui'
+import { Card, Skeleton, ZEBRA_HEAD, zebra } from '../components/ui'
 import { DemoNote, IndexSection, MarketLabel, ProductLink } from '../components/Market'
 import api, { errorKey } from '../services/api'
 import { formatPrice, roundSum } from '../services/format'
@@ -48,8 +48,8 @@ export default function SellerAnalyticsPage() {
           </div>
         </div>
         <h3 className="mt-6 font-medium">{t('market.gapsTitle')}</h3>
-        <table className="table-cards mt-2 w-full text-sm">
-          <thead className="text-left text-muted">
+        <table className="table-cards mt-2 w-full text-sm [&_td]:px-2 [&_th]:px-2">
+          <thead className={`${ZEBRA_HEAD} text-left`}>
             <tr>
               <th className="py-1 font-normal">{t('market.table.product')}</th>
               <th className="py-1 text-right font-normal">{t('market.table.yourPrice')}</th>
@@ -59,8 +59,8 @@ export default function SellerAnalyticsPage() {
             </tr>
           </thead>
           <tbody>
-            {gaps.map((g) => (
-              <tr key={`${g.id}-${g.condition}`} className="border-t border-line">
+            {gaps.map((g, i) => (
+              <tr key={`${g.id}-${g.condition}`} className={`border-t border-line ${zebra(i)}`}>
                 <td className="py-1.5 pr-4"><ProductLink item={g} />{g.condition !== 'new' && <span className="text-muted"> · {t(`condition.${g.condition}`)}</span>}</td>
                 <td data-label={t('market.table.yourPrice')} className="py-1.5 text-right whitespace-nowrap">{sum(g.price_usd)}</td>
                 <td data-label={t('market.table.market')} className="py-1.5 text-right whitespace-nowrap">{sum(g.market_usd)}</td>
