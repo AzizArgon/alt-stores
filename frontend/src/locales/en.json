@@ -404,7 +404,8 @@
     "mapError": "This is not a Yandex Maps link. Open your place on Yandex Maps, tap \"Share\" → \"Copy link\" and paste it here (like yandex.uz/maps/…)",
     "openMap": "Open on Yandex Maps",
     "route": "Directions",
-    "verifiedShort": "Verified"
+    "verifiedShort": "Verified",
+    "placesHint": "Addresses, opening hours and the map are in “Branches” below"
   },
   "upload": {
     "title": "Price list upload",
@@ -1531,7 +1532,9 @@
       "map_url": "This is not a Yandex Maps link",
       "delete_main": "The main branch cannot be deleted: make another one main first",
       "delete_last": "The store must keep at least one branch"
-    }
+    },
+    "emptyTitle": "Add at least one location — buyers will see the address and the map",
+    "emptyHint": "The city, address, landmark, opening hours and Yandex Maps link are set for each branch"
   },
   "stock": {
     "title": "Stock by branch",
