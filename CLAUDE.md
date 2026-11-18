@@ -69,7 +69,7 @@
 Фаза 17.5 готова и выложена 18.11: в «Моём магазине» только общее (`STORE_FIELDS`), адреса — только в «Филиалах» (подсказка при 0 филиалов), `PUT /stores/me` не трогает поля места; старт не падает при складе без филиалов (`ensure_main_branch`); форма филиала: пустой ориентир/адрес → код от `save_branch`, ошибки — через `errorKey` («Сервер недоступен» — только без ответа).
 Фаза 17.6 готова (исключение из заморозки): отмена неопубликованной загрузки — статус `cancelled` «Отменена», `importer.cancel_import` / `POST /api/imports/<id>/cancel` (строки предпросмотра удаляются, предложения и кэш не трогаются; идущий разбор останавливается перед следующим запросом к ИИ — `_stopper`, `_set` не пишет в отменённую), `components/CancelImport.jsx` на предпросмотре и в «Истории загрузок», авто-отмена через 7 дней — `cancel_stale_imports` в ежечасной задаче `main.py`.
 
-Фаза 19 готова (функции не менялись): материалы диплома — указатель `docs/diploma_index.md`: `presentation.md`, `demo_script.md`, `defense.md`, `experiment.md` §10 (повторный замер), `testing.md`, `report_materials.md`, `diagrams/`, `screenshots/final/`.
+Фаза 19 готова (функции не менялись): материалы диплома — указатель `docs/diploma_index.md`: `presentation.md`, `demo_script.md`, `defense.md`, `experiment.md` §10 (повторный замер), `testing.md`, `report_materials.md`, `diagrams/`, `screenshots/final/`. Фаза 19.1: скорость загрузки прайса — `scripts/benchmark_import.py` (только копия базы, `--cold`, `--no-ai`), `experiment.md` §11.
 
 ## Открытые вопросы
 - Нет.
