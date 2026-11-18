@@ -53,6 +53,7 @@ class ImportStatus(str, enum.Enum):
     failed = "failed"
     published = "published"
     undone = "undone"  # "Undo this upload" (phase 12): can be neither undone nor published again
+    cancelled = "cancelled"  # an unpublished preview the seller dropped (or 7 days old): rows deleted, offers untouched
 
 
 class FlagLevel(str, enum.Enum):

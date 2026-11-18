@@ -1,0 +1,99 @@
+%% ER-диаграмма: сборки, Telegram, чат, уведомления, админка (фазы Б4, 9, 10, 12.5, 13)
+erDiagram
+    users["users · Пользователи"] {
+        int id PK
+        enum role
+    }
+    stores["stores · Магазины"] {
+        int id PK
+        enum kind "shop, telegram"
+    }
+    products["products · Карточки"] {
+        int id PK
+    }
+    builds["builds · Готовые сборки"] {
+        int id PK
+        int store_id FK
+        string name
+        float price
+        enum condition
+    }
+    build_components["build_components · Детали сборки"] {
+        int id PK
+        int build_id FK
+        string slot "cpu, gpu, ram и др."
+        int product_id FK
+        string raw_text
+    }
+    build_price_history["build_price_history · История цен сборок"] {
+        int id PK
+        int build_id FK
+        float price
+    }
+    tg_channels["tg_channels · Telegram-каналы"] {
+        int id PK
+        string username
+        int store_id FK
+        int last_post_id
+    }
+    tg_posts["tg_posts · Посты каналов"] {
+        int id PK
+        int channel_id FK
+        int post_id
+        string text "без контактов"
+        string status
+    }
+    conversations["conversations · Разговоры"] {
+        int id PK
+        int buyer_id FK
+        int store_id FK
+        string topic_kind "товар, сборка, бронь, магазин"
+        int topic_id
+    }
+    messages["messages · Сообщения"] {
+        int id PK
+        int conversation_id FK
+        int sender_id FK
+        string text
+        bool is_read
+    }
+    chat_reports["chat_reports · Жалобы"] {
+        int id PK
+        int conversation_id FK
+        int reporter_id FK
+        string reason
+        string status
+    }
+    store_blocks["store_blocks · Блокировки покупателей"] {
+        int id PK
+        int store_id FK
+        int user_id FK
+    }
+    notifications["notifications · Уведомления"] {
+        int id PK
+        int user_id FK
+        string kind
+        json params
+        bool is_read
+    }
+    admin_actions["admin_actions · Журнал админа"] {
+        int id PK
+        int admin_id FK
+        string action
+        string target_type
+        int target_id
+    }
+
+    stores ||--o{ builds : "собирает"
+    builds ||--o{ build_components : "детали"
+    products |o--o{ build_components : "эталон"
+    builds ||--o{ build_price_history : "история"
+    stores ||--o{ tg_channels : "канал = продавец"
+    tg_channels ||--o{ tg_posts : "посты"
+    users ||--o{ conversations : "покупатель"
+    stores ||--o{ conversations : "магазин"
+    conversations ||--o{ messages : "сообщения"
+    conversations ||--o{ chat_reports : "жалобы"
+    stores ||--o{ store_blocks : "блокирует"
+    users ||--o{ notifications : "получает"
+    users ||--o{ admin_actions : "действия админа"

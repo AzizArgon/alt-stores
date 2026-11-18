@@ -1,0 +1,113 @@
+%% ER-диаграмма: основная схема (каталог, предложения, импорт, мониторинг). Таблицы и поля — backend/app/db/models.py
+erDiagram
+    users["users · Пользователи"] {
+        int id PK
+        string email
+        string password_hash "bcrypt"
+        enum role "buyer, seller, admin"
+        string lang "ru, uz, en"
+    }
+    stores["stores · Магазины"] {
+        int id PK
+        int user_id FK
+        string name
+        enum kind "shop, telegram"
+        bool is_verified
+        string stock_mode "price, stock"
+        bool has_warehouse
+    }
+    categories["categories · Категории"] {
+        int id PK
+        string slug
+        string name
+        string mxik_code "из tasnif.soliq.uz"
+    }
+    products["products · Эталонные карточки"] {
+        int id PK
+        int category_id FK
+        string brand
+        string model
+        string match_key "ключ сведения"
+        json specs_json "характеристики по словарю"
+        int merged_into "после слияния дублей"
+    }
+    offers["offers · Предложения магазинов"] {
+        int id PK
+        int product_id FK
+        int store_id FK
+        string raw_name "строка прайса"
+        float price
+        enum currency "USD, UZS"
+        bool is_in_stock
+        enum condition "новый, б/у и др."
+    }
+    price_history["price_history · История цен"] {
+        int id PK
+        int offer_id FK
+        float price
+        datetime recorded_at
+    }
+    fraud_flags["fraud_flags · Флаги Anti-Fraud"] {
+        int id PK
+        int offer_id FK
+        string type
+        enum level "info, warning, danger"
+        string reason_key "текст в ru, uz, en.json"
+        enum source "rule, ai"
+        enum status "спор продавца"
+    }
+    price_imports["price_imports · Загрузки прайсов"] {
+        int id PK
+        int store_id FK
+        string filename
+        enum status
+        json rows_json "предпросмотр"
+        json undo_json "отмена 7 дней"
+    }
+    parse_cache["parse_cache · Кэш разбора"] {
+        int id PK
+        string key "нормализованная строка"
+        json data
+        string source "rule, ai, seller"
+    }
+    exchange_rates["exchange_rates · Курсы ЦБ"] {
+        int id PK
+        string currency
+        float rate
+        date rate_date
+    }
+    archive_prices["archive_prices · Архив цен 2022"] {
+        int id PK
+        int store_id FK
+        int product_id FK
+        float price
+        date price_date
+    }
+    product_fixes["product_fixes · Исправления карточек"] {
+        int id PK
+        int product_id FK
+        int store_id FK
+        json before
+        json after
+        string status
+    }
+    photos["photos · Фото"] {
+        int id PK
+        string owner_type "карточка, предложение, сборка"
+        int owner_id
+        int store_id FK
+        string status "модерация"
+    }
+
+    users ||--o{ stores : "владеет"
+    categories ||--o{ products : "содержит"
+    products ||--o{ offers : "предложения"
+    stores ||--o{ offers : "продаёт"
+    offers ||--o{ price_history : "история"
+    offers ||--o{ fraud_flags : "флаги"
+    stores ||--o{ price_imports : "загружает"
+    stores ||--o{ archive_prices : "архив"
+    products |o--o{ archive_prices : "сведено"
+    products ||--o{ product_fixes : "исправления"
+    stores ||--o{ product_fixes : "предлагает"
+    stores ||--o{ photos : "загружает"
