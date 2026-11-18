@@ -1,0 +1,98 @@
+%% ER-диаграмма: учёт остатков, склад, штрихкоды, брони (фазы 11, 12.1–12.4)
+erDiagram
+    stores["stores · Магазины"] {
+        int id PK
+        string stock_mode "price, stock"
+        bool has_warehouse
+    }
+    offers["offers · Предложения"] {
+        int id PK
+        int store_id FK
+        int product_id FK
+        float cost_avg "закупка"
+    }
+    products["products · Карточки"] {
+        int id PK
+        string match_key
+    }
+    branches["branches · Филиалы и склад"] {
+        int id PK
+        int store_id FK
+        string name
+        string address
+        bool is_main
+        bool is_warehouse "склад не виден покупателю"
+    }
+    offer_stocks["offer_stocks · Остатки"] {
+        int id PK
+        int offer_id FK
+        int branch_id FK
+        int quantity
+        int reserved "доступно = остаток - резерв"
+    }
+    stock_movements["stock_movements · Журнал движений"] {
+        int id PK
+        int offer_id FK
+        int branch_id FK
+        string kind "приход, продажа, возврат и др."
+        int delta
+        int quantity_before
+        int quantity_after
+        int reservation_id FK
+        int import_id FK
+        int user_id FK
+    }
+    stocktakes["stocktakes · Ревизии"] {
+        int id PK
+        int store_id FK
+        int branch_id FK
+        json counts_json
+        int shortage
+        int surplus
+    }
+    barcodes["barcodes · Штрихкоды магазина"] {
+        int id PK
+        int store_id FK
+        int offer_id FK
+        string code "EAN, UPC"
+    }
+    barcode_codes["barcode_codes · Общая база кодов"] {
+        int id PK
+        string code
+        int product_id FK
+        string status "подтверждён двумя магазинами"
+    }
+    reservations["reservations · Брони"] {
+        int id PK
+        int buyer_id FK
+        int store_id FK
+        int offer_id FK
+        int build_id FK
+        int branch_id FK
+        float price "снимок цены"
+        string status
+        datetime expires_at
+    }
+    reservation_events["reservation_events · Статусы брони"] {
+        int id PK
+        int reservation_id FK
+        string status
+        datetime at
+    }
+
+    stores ||--o{ branches : "филиалы"
+    stores ||--o{ offers : "товары"
+    products ||--o{ offers : "эталон"
+    offers ||--o{ offer_stocks : "остатки"
+    branches ||--o{ offer_stocks : "в филиале"
+    offers ||--o{ stock_movements : "движения"
+    branches |o--o{ stock_movements : "где"
+    reservations |o--o{ stock_movements : "резерв, выдача"
+    stores ||--o{ stocktakes : "ревизии"
+    stores ||--o{ barcodes : "привязал"
+    offers ||--o{ barcodes : "код товара"
+    products |o--o{ barcode_codes : "подтверждённый код"
+    stores ||--o{ reservations : "получает"
+    offers |o--o{ reservations : "товар"
+    branches |o--o{ reservations : "где забрать"
+    reservations ||--o{ reservation_events : "история"

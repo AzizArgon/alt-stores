@@ -1,0 +1,31 @@
+%% Архитектура ALT STORES (фаза 19). Исходник Mermaid; картинка — architecture.svg / .png
+flowchart LR
+    U["👤 Браузер<br/>покупатель · продавец · админ<br/>ПК и телефон"]
+    subgraph EDGE["Сеть"]
+        CF["Cloudflare<br/>HTTPS, защита"]
+        NG["nginx сервера<br/>pcmarket.khudoberdi.uz"]
+    end
+    subgraph DOCKER["VPS · Docker Compose · /opt/alt-stores"]
+        WEB["Контейнер web<br/>React + Vite (статика)<br/>react-i18next: RU · UZ · EN"]
+        API["Контейнер backend<br/>FastAPI + SQLAlchemy<br/>разбор прайсов, Anti-Fraud,<br/>мониторинг, учёт, чат, брони"]
+        DB[("SQLite<br/>database.db<br/>35 таблиц")]
+        MEDIA[("Папка фото<br/>data/media<br/>(позже S3)")]
+        BK[("Копии базы<br/>data/backups")]
+    end
+    subgraph EXT["Внешние сервисы"]
+        AI["ИИ: Gemini<br/>запасной — Groq"]
+        CBU["Курс ЦБ<br/>cbu.uz, раз в день"]
+        TG["Публичные Telegram-каналы<br/>t.me/s/канал"]
+    end
+    PC["💻 ПК автора<br/>ежедневная копия базы"]
+
+    U --> CF --> NG
+    NG -->|"/"| WEB
+    NG -->|"/api"| API
+    API --> DB
+    API --> MEDIA
+    API -->|"только непонятные строки"| AI
+    API -->|"курс USD"| CBU
+    API -->|"новые посты"| TG
+    DB -.->|"backup_db.py"| BK
+    BK -.->|"Планировщик Windows"| PC
