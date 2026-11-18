@@ -11,6 +11,7 @@ import { PLACE_OPEN, placeFor, placeLabel, placesOf, readPlace, savePlace } from
 import { ScopeChoice } from '../components/BranchColumns'
 import { ModeChoice } from '../components/ImportSummary'
 import UndoUpload from '../components/UndoUpload'
+import CancelImport, { CANCELLABLE } from '../components/CancelImport'
 import { ErrorText } from '../components/AuthForm'
 import { Avatar, UnreadBadge } from '../components/Header'
 import { Dropdown, DropdownItem, useToast } from '../components/overlays'
@@ -243,9 +244,13 @@ function ImportHistory({ items, onChanged }) {
             </span>
             <span className="shrink-0 text-xs text-muted md:text-sm">
               {imp.source === 'file' && `${t(`upload.modes.${imp.mode}`)} · `}{imp.currency} · {new Date(imp.created_at).toLocaleString(intlLocale(i18n.language))} · {imp.status === 'undone'
-                ? <Badge tone="warning">{t('import.status.undone')}</Badge> : t(`import.status.${imp.status}`)}
+                ? <Badge tone="warning">{t('import.status.undone')}</Badge> : imp.status === 'cancelled'
+                  ? <Badge>{t('import.status.cancelled')}</Badge> : t(`import.status.${imp.status}`)}
             </span>
             {imp.can_undo && <UndoUpload importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />}
+            {imp.source !== 'manual' && CANCELLABLE.includes(imp.status) && (
+              <CancelImport importId={imp.id} onDone={onChanged} className="self-start md:self-auto" />
+            )}
           </li>
         ))}
       </ul>

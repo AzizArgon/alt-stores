@@ -459,7 +459,8 @@
       "ready": "Ready to check",
       "failed": "Error",
       "published": "Published",
-      "undone": "Undone"
+      "undone": "Undone",
+      "cancelled": "Cancelled"
     },
     "partialQuota": "The daily limit of the free AI ran out, rows not recognized: {{count}}. Fix them by hand or recognize again tomorrow.",
     "retry": "Recognize again",
@@ -491,7 +492,17 @@
     "reparse": "Parse the row again (AI, no cache)",
     "reparseNotProduct": "AI thinks this is not a product. Fix the row by hand or delete it",
     "desktopHint": "The preview table is easier to edit on a computer. On a phone you can scroll it sideways.",
-    "undone": "This upload was undone: prices and stock went back to how they were before publishing. It cannot be published again — upload the file anew."
+    "undone": "This upload was undone: prices and stock went back to how they were before publishing. It cannot be published again — upload the file anew.",
+    "cancelled": "This upload was cancelled: the preview was deleted, your products and prices did not change. To update the price list, upload the file again.",
+    "cancel": {
+      "button": "Cancel upload",
+      "title": "Cancel the upload?",
+      "text": "The preview will be deleted; your products and prices will not change.",
+      "back": "Back",
+      "cancelling": "Cancelling…",
+      "done": "Upload cancelled",
+      "error": "This upload can no longer be cancelled — refresh the page."
+    }
   },
   "used": {
     "link": "Used — in a separate section",

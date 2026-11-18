@@ -11,7 +11,7 @@ from app.schemas.seller import (
     BranchIn, BulkIn, CheckResult, ColumnsIn, StockIn, ImportDetail, ImportOut, OfferFilter, OfferIn, OfferPatch, PreviewRow, ProductIn,
     PublishRequest, PublishResult, RelinkIn, StoreIn, StoreOut, TextImportIn,
 )
-from app.services import branch_stock, branches, cabinet
+from app.services import branch_stock, branches, cabinet, importer
 from app.services.cabinet import EditError
 from app.services.importer import (
     ALLOWED_EXTENSIONS, flag_rows, plan_import, publish_import, reparse_row, retry_failed_rows, run_import, run_text_import,
@@ -214,6 +214,15 @@ def undo_upload(import_id: int, user: User = Depends(seller_only), db: Session =
     imp = _my_import(db, user, import_id)[1]
     _undoable(db, imp)
     return undo.undo_import(db, imp)
+
+
+@router.post("/imports/{import_id}/cancel", response_model=ImportOut)
+def cancel_upload(import_id: int, user: User = Depends(seller_only), db: Session = Depends(get_db)):
+    """Phase 17.6: drop an unpublished preview; a published upload is undone with /undo instead."""
+    imp = _my_import(db, user, import_id)[1]
+    if imp.status not in importer.CANCELLABLE:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": "not_cancellable"})
+    return importer.cancel_import(db, imp)
 
 
 @router.get("/imports/{import_id}", response_model=ImportDetail)

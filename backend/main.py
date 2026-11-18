@@ -9,7 +9,7 @@ from app.api import (admin, auth, barcodes, builds, catalog, chat, market, notif
                      seller, stock)
 from app.core.config import settings
 from app.db.database import SessionLocal, init_db
-from app.services.importer import fail_stale_imports
+from app.services.importer import cancel_stale_imports, fail_stale_imports
 
 
 async def expire_reservations_hourly() -> None:
@@ -24,6 +24,7 @@ async def expire_reservations_hourly() -> None:
             remind_expiring(db)  # phase 12.5: "бронь истекает сегодня" to the buyer
             purge(db)  # notifications older than 30 days
             purge_drafts(db)  # phase 14: photos uploaded but never saved
+            cancel_stale_imports(db)  # phase 17.6: previews not published for 7 days
         await asyncio.sleep(3600)
 
 

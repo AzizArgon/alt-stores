@@ -6,6 +6,7 @@ import io
 import logging
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pdfplumber
@@ -94,9 +95,11 @@ def file_to_markdown(data: bytes, filename: str, notices: list[str] | None = Non
 
 
 def _set(import_id: int, **fields) -> None:
+    # A cancelled import stays cancelled: a parse still running in the background can't bring its rows back
     with SessionLocal() as db:
-        db.execute(update(PriceImport).where(PriceImport.id == import_id).values(**fields))
-        if fields.get("status") in (ImportStatus.ready, ImportStatus.failed):
+        res = db.execute(update(PriceImport).where(PriceImport.id == import_id,
+                                                   PriceImport.status != ImportStatus.cancelled).values(**fields))
+        if res.rowcount and fields.get("status") in (ImportStatus.ready, ImportStatus.failed):
             _notify_parsed(db, import_id, fields["status"] == ImportStatus.ready, len(fields.get("rows_json") or []))
         db.commit()
 
@@ -189,7 +192,7 @@ def save_cache(db: Session, entries: dict[str, dict], source: str) -> None:
 
 
 async def parse_clean_rows(db: Session, rows: list[CleanRow], stats: dict, on_progress=None,
-                           fresh: bool = False) -> list[dict]:
+                           fresh: bool = False, should_stop=None) -> list[dict]:
     """Cache first, then rules, and only the rest goes to the AI in big chunks. fresh: straight to the AI."""
     started = time.monotonic()
     keys = list({cache_key(r.ai_text) for r in rows})
@@ -224,6 +227,8 @@ async def parse_clean_rows(db: Session, rows: list[CleanRow], stats: dict, on_pr
     async def worker(chunk: list[CleanRow]):
         nonlocal done
         async with sem:
+            if should_stop and should_stop():
+                return  # the import was cancelled: no new AI requests, the running ones finish and are cached
             try:
                 items = {it["row"]: it for it in await parse_rows(chunk, stats)}
             except RuntimeError as e:
@@ -264,6 +269,8 @@ def flag_rows(db: Session, rows: list[dict], store_id: int, currency: Currency) 
 
 
 def _finish(import_id: int, rows: list[dict], stats: dict) -> None:
+    if _stopper(import_id)():
+        return
     if not rows:
         # Rows were found, but the AI said none of them is a product (notes, adverts)
         _set(import_id, status=ImportStatus.failed, error="no_products", stats_json=stats)
@@ -279,6 +286,15 @@ def _finish(import_id: int, rows: list[dict], stats: dict) -> None:
 
 def _progress(import_id: int):
     return lambda done, total: _set(import_id, chunks_done=done, chunks_total=total)
+
+
+def _stopper(import_id: int):
+    """True once the seller cancelled the import (checked before every AI request)."""
+    def stopped() -> bool:
+        with SessionLocal() as db:
+            return db.scalar(select(PriceImport.status).where(PriceImport.id == import_id)) in (
+                ImportStatus.cancelled, None)
+    return stopped
 
 
 async def run_import(import_id: int, data: bytes, filename: str) -> None:
@@ -302,7 +318,7 @@ async def run_import(import_id: int, data: bytes, filename: str) -> None:
         if headers:
             stats["branch_columns"] = headers  # the seller matches them to branches before publishing
         with SessionLocal() as db:
-            parsed = await parse_clean_rows(db, rows, stats, _progress(import_id))
+            parsed = await parse_clean_rows(db, rows, stats, _progress(import_id), should_stop=_stopper(import_id))
         _finish(import_id, parsed, stats)
     except Exception as e:  # never leave an import stuck in "processing"
         log.exception("Import %s failed", import_id)
@@ -318,7 +334,7 @@ async def run_text_import(import_id: int, text: str, currency: Currency) -> None
             return
         stats: dict = {}
         with SessionLocal() as db:
-            parsed = await parse_clean_rows(db, rows, stats, _progress(import_id))
+            parsed = await parse_clean_rows(db, rows, stats, _progress(import_id), should_stop=_stopper(import_id))
         _finish(import_id, parsed, stats)
     except Exception as e:  # never leave an import stuck in "processing"
         log.exception("Text import %s failed", import_id)
@@ -365,7 +381,7 @@ async def retry_failed_rows(import_id: int) -> None:
             failed = [_clean_row(r, imp) for r in rows if r.get("source") == "failed"]
             stats = dict(imp.stats_json or {})
             retry_stats: dict = {}
-            reparsed = await parse_clean_rows(db, failed, retry_stats, _progress(import_id))
+            reparsed = await parse_clean_rows(db, failed, retry_stats, _progress(import_id), should_stop=_stopper(import_id))
         by_row = {r["row"]: r for r in rows if r.get("source") != "failed"}
         by_row.update({r["row"]: r for r in reparsed})
         stats["retries"] = stats.get("retries", []) + [retry_stats]
@@ -386,6 +402,34 @@ def fail_stale_imports() -> None:
             .values(status=ImportStatus.failed, error="interrupted")
         )
         db.commit()
+
+
+# Phase 17.6: an unpublished import (parsing, waiting for publication, failed) can be cancelled
+CANCELLABLE = (ImportStatus.processing, ImportStatus.ready, ImportStatus.failed)
+CANCEL_AFTER_DAYS = 7
+
+
+def cancel_import(db: Session, imp: PriceImport) -> PriceImport:
+    """Drops the preview rows; offers, prices, stock, price history and flags are not touched,
+    the parse cache stays (the same file again is fast). A parse still running stops before its next AI request."""
+    imp.status = ImportStatus.cancelled
+    imp.rows_json = []
+    imp.columns_json = None
+    imp.error = None
+    db.commit()
+    return imp
+
+
+def cancel_stale_imports(db: Session, days: int = CANCEL_AFTER_DAYS) -> int:
+    """Unpublished imports older than `days` are cancelled (at startup and every hour)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    res = db.execute(
+        update(PriceImport)
+        .where(PriceImport.status.in_(CANCELLABLE), PriceImport.created_at < cutoff)
+        .values(status=ImportStatus.cancelled, rows_json=[], columns_json=None, error=None)
+    )
+    db.commit()
+    return res.rowcount
 
 
 SELLER_FIELDS = ("category", "brand", "model", "name", "condition")

@@ -9,6 +9,7 @@ import ImportSummary, { ModeChoice } from '../components/ImportSummary'
 import { ColumnsMatch } from '../components/BranchColumns'
 import { branchLabel } from '../components/BranchStock'
 import { Modal } from '../components/overlays'
+import CancelImport, { CANCELLABLE } from '../components/CancelImport'
 import api, { errorKey } from '../services/api'
 import { formatDayMonth, importTitle, formatPrice, roundSum, roundUsd } from '../services/format'
 import { specsText, useSpecDictionary } from '../services/specs'
@@ -318,10 +319,16 @@ export default function ImportPage() {
           <Link to="/seller/imports" className="text-sm text-muted hover:underline">← {t('import.back')}</Link>
           <h1 className="mt-1 text-h2 break-words md:text-h1">{t('import.title')}{imp && `: ${importTitle(imp)}`}</h1>
         </div>
-        {imp?.status === 'ready' && (
-          <Button size="lg" className="w-full md:w-auto" onClick={() => publish()} disabled={busy || rows.length === 0 || needColumns}>
-            {busy ? t('import.publishing') : t('import.publish')}
-          </Button>
+        {CANCELLABLE.includes(imp?.status) && (
+          <div className="flex w-full flex-col-reverse gap-2 md:w-auto md:flex-row">
+            <CancelImport importId={imp.id} size="lg" className="w-full md:w-auto"
+              onDone={(res) => { setImp({ ...imp, ...res, rows: [] }); setRows([]) }} />
+            {imp.status === 'ready' && (
+              <Button size="lg" className="w-full md:w-auto" onClick={() => publish()} disabled={busy || rows.length === 0 || needColumns}>
+                {busy ? t('import.publishing') : t('import.publish')}
+              </Button>
+            )}
+          </div>
         )}
       </div>
       <ErrorText>{error}</ErrorText>
@@ -335,6 +342,9 @@ export default function ImportPage() {
           <p className="font-medium">{t('import.published')}</p>
           {stats && <p className="mt-1 text-sm">{t('import.publishedStats', stats)}</p>}
         </div>
+      )}
+      {imp?.status === 'cancelled' && (
+        <div className="rounded-xl border border-line bg-surface-2 p-4 text-sm text-muted">{t('import.cancelled')}</div>
       )}
       {imp?.status === 'undone' && (
         <div className="rounded-xl border border-warning-line bg-warning-soft p-4 text-sm text-warning">{t('import.undone')}</div>
