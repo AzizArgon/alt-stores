@@ -186,3 +186,27 @@ def test_startup_with_only_a_warehouse_and_no_branch(db):
     assert ensure_main_branch(db, a) is None and store_branches(db, a.id) == [] and warehouse_of(db, a.id) is not None
     (main,) = store_branches(db, b.id)
     assert main.is_main and main.address == "ул. Навои, 12" and not warehouse_of(db, b.id).is_main
+
+
+def test_add_branch_to_a_store_like_age(db, client):
+    """Age on the server, 18.11: stock mode, the warehouse switched off but its row kept, no branch, no address.
+    An empty landmark answered a bare 422 that the form showed as "Сервер недоступен"; now a code, then it works."""
+    from app.db.models import Branch
+    from app.services.branches import store_branches, warehouse_of
+
+    a, h = _seller(db, client, "agelike@example.com")
+    a.address, a.district, a.stock_mode, a.has_warehouse = None, "Чиланзар", "stock", False
+    db.add(Branch(store_id=a.id, city="tashkent", address="", is_warehouse=True))
+    db.commit()
+    for body, code in [({"city": "tashkent", "address": "ул. Бунёдкор, 1", "landmark": None}, "landmark"),
+                       ({"city": "tashkent", "address": "", "landmark": "ЦУМ"}, "address"),
+                       ({"address": "ул. Бунёдкор, 1", "landmark": "ЦУМ"}, "city")]:
+        res = client.post("/api/stores/me/branches", json=body, headers=h)
+        assert res.status_code == 422 and res.json()["detail"] == {"code": code}
+    res = client.post("/api/stores/me/branches", json={"city": "tashkent", "address": "ул. Бунёдкор, 1", "landmark": "ЦУМ"},
+                      headers=h)
+    assert res.status_code == 201, res.text
+    (b,) = store_branches(db, a.id)
+    assert b.is_main and b.address == "ул. Бунёдкор, 1" and not warehouse_of(db, a.id).is_main
+    assert [x["address"] for x in res.json()["branches"]] == ["ул. Бунёдкор, 1"]
+    assert client.get(f"/api/catalog/stores/{a.id}").status_code == 200

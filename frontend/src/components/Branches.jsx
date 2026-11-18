@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MapPin, Pencil, Phone, Plus, Star, Trash2 } from 'lucide-react'
 import { STORE_CITIES } from '../config/cities'
 import { isYandexMapsUrl } from '../config/maps'
-import api from '../services/api'
+import api, { errorKey } from '../services/api'
 import { Modal, useToast } from './overlays'
 import StoreWhere from './StoreWhere'
 import { Badge, Button, Card, EmptyState, Input, Select } from './ui'
@@ -34,7 +34,7 @@ function BranchForm({ branch, onClose, onSaved }) {
     } catch (err) {
       const code = err.response?.data?.detail?.code
       if (code === 'map_url') setMapError(true)
-      else setError(t(code ? `branches.error.${code}` : 'errors.network'))
+      else setError(t(code ? `branches.error.${code}` : errorKey(err)))
     }
   }
 
@@ -78,7 +78,7 @@ export default function BranchesBlock({ store, onChanged }) {
       toast(t(done))
     } catch (err) {
       const code = err.response?.data?.detail?.code
-      setError(t(code ? `branches.error.${code}` : 'errors.network'))
+      setError(t(code ? `branches.error.${code}` : errorKey(err)))
     }
   }
   const remove = (b) => {
