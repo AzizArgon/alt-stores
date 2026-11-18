@@ -47,9 +47,11 @@ class StoreOut(StoreIn):
 
 class BranchIn(BaseModel):
     name: str | None = Field(default=None, max_length=100)
-    city: str
-    address: str = Field(max_length=255)
-    landmark: str = Field(max_length=128)
+    # Phase 17.5 fix: empty is allowed here so that save_branch answers with its own code ("Укажите ориентир…"),
+    # not a bare 422 that the form showed as "Сервер недоступен" (Age, 17.11)
+    city: str | None = None
+    address: str | None = Field(default=None, max_length=255)
+    landmark: str | None = Field(default=None, max_length=128)
     hours: str | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=32)
     map_url: str | None = Field(default=None, max_length=500)
