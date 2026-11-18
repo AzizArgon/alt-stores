@@ -1,0 +1,472 @@
+{
+ "b1": {
+  "parts": 7,
+  "found": 7,
+  "exact": 4,
+  "specs": 3,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "12400F",
+    "level": "exact",
+    "card": "Intel Core i5-12400F, 2.7 GHz, 18MB, OEM, LGA1700",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B760M",
+    "level": "exact",
+    "card": "MSI PRO B760M-E DDR4 LGA1700 Motherboard",
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "16GB",
+    "level": "exact",
+    "card": "Оперативная память Kingston FURY Beast DDR4 16GB 3200MHz",
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "4060",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "980",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "550",
+    "level": "exact",
+    "card": "Блок питания Deepcool PK550D 550W",
+    "source": "rule"
+   },
+   {
+    "slot": "case",
+    "token": "S2",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "Игровой ПК «Нова»",
+  "seconds": 2.4,
+  "style": "Метки по-русски, двоеточие"
+ },
+ "b2": {
+  "parts": 7,
+  "found": 7,
+  "exact": 2,
+  "specs": 5,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "5600",
+    "level": "exact",
+    "card": "Процессор AMD Ryzen 5 5600",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B550M",
+    "level": "exact",
+    "card": "Gigabyte B550M DS3H R2 DDR4 AM4",
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "8GB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "6600",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "1TB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "600",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "case",
+    "token": "903",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "GAMING PC",
+  "seconds": 0.0,
+  "style": "Эмодзи и английские метки"
+ },
+ "b3": {
+  "parts": 7,
+  "found": 7,
+  "exact": 1,
+  "specs": 5,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "12100F",
+    "level": "exact",
+    "card": "Intel Core i3-12100F, 3.3 GHz, 12MB, OEM, LGA1700",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "H610M",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "16GB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "1650",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "512",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "500",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "case",
+    "token": null,
+    "level": "none",
+    "card": null,
+    "source": null
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 1,
+  "ai": "skipped",
+  "name": "Kompyuter sotiladi",
+  "seconds": 0.0,
+  "style": "Узбекский (латиница)"
+ },
+ "b4": {
+  "parts": 7,
+  "found": 7,
+  "exact": 1,
+  "specs": 6,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "12400",
+    "level": "exact",
+    "card": "Intel Core i5-12400, 2.7 GHz, 18MB, OEM, LGA1700",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B660M",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "16GB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "512",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "1TB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "500",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": null,
+    "level": "integrated",
+    "card": null,
+    "source": null
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "Сборка для работы и учёбы",
+  "seconds": 0.0,
+  "style": "Одна строка через «|» и «+»"
+ },
+ "b5": {
+  "parts": 7,
+  "found": 6,
+  "exact": 2,
+  "specs": 4,
+  "extra": [
+   "Мощный процессор Ryzen 7 7800X3D тянет любые игры",
+   "RTX 4070 Super — 2K на ультра"
+  ],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "7800X3D",
+    "level": "exact",
+    "card": "AMD Ryzen 7 7800X3D, 4.2 GHz, 8C/16T, AM5, OEM",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B650",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "32GB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "4070",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "990",
+    "level": "exact",
+    "card": "Samsung 990 PRO 1TB M.2 NVMe SSD",
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "750",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "case",
+    "token": "216",
+    "level": "missed"
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "Мощный ПК для игр",
+  "seconds": 0.0,
+  "style": "Маркеры без меток + блок «Преимущества»"
+ },
+ "b6": {
+  "parts": 8,
+  "found": 8,
+  "exact": 0,
+  "specs": 8,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "10700",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B460M",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "16",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "2060",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "480",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "1TB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "600",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "case",
+    "token": "Aerocool",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "Продаю свой ПК, обслужен, заменена термопаста",
+  "seconds": 0.0,
+  "style": "Б/у, тире и примечания в скобках"
+ },
+ "b7": {
+  "parts": 7,
+  "found": 7,
+  "exact": 2,
+  "specs": 5,
+  "extra": [],
+  "details": [
+   {
+    "slot": "cpu",
+    "token": "7500F",
+    "level": "exact",
+    "card": "Процессор AMD Ryzen 5 7500F",
+    "source": "rule"
+   },
+   {
+    "slot": "motherboard",
+    "token": "B650M",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "ram",
+    "token": "16GB",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "gpu",
+    "token": "7600",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "storage",
+    "token": "NV2",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "psu",
+    "token": "650",
+    "level": "specs",
+    "card": null,
+    "source": "rule"
+   },
+   {
+    "slot": "cooling",
+    "token": "AK400",
+    "level": "exact",
+    "card": "Кулер Deepcool AK400",
+    "source": "rule"
+   }
+  ],
+  "price_ok": true,
+  "used_ok": true,
+  "contacts_cut": true,
+  "ai_rows": 0,
+  "ai": "none",
+  "name": "Ўйин учун компьютер",
+  "seconds": 0.0,
+  "style": "Узбекский (кириллица) и количество"
+ }
+}
