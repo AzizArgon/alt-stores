@@ -459,7 +459,7 @@
       "ready": "Tekshirishga tayyor",
       "failed": "Xato",
       "published": "Eʼlon qilingan",
-      "undone": "Bekor qilingan",
+      "undone": "Orqaga qaytarilgan",
       "cancelled": "Bekor qilindi"
     },
     "partialQuota": "Bepul SI kunlik limiti tugadi, tanilmagan qatorlar: {{count}}. Ularni qoʻlda tuzating yoki ertaga qayta taniting.",
@@ -492,7 +492,7 @@
     "reparse": "Qatorni qaytadan tahlil qilish (SI, keshsiz)",
     "reparseNotProduct": "SI buni mahsulot emas deb hisoblaydi. Qatorni qoʻlda tuzating yoki oʻchiring",
     "desktopHint": "Oldindan koʻrish jadvalini kompyuterda tahrirlash qulayroq. Telefonda uni yon tomonga aylantirish mumkin.",
-    "undone": "Bu yuklash bekor qilingan: narxlar va mavjudlik eʼlon qilishdan oldingi holatga qaytdi. Uni qayta eʼlon qilib boʻlmaydi — faylni yangidan yuklang.",
+    "undone": "Bu yuklash orqaga qaytarilgan: narxlar va mavjudlik eʼlon qilishdan oldingi holatga qaytdi. Uni qayta eʼlon qilib boʻlmaydi — faylni yangidan yuklang.",
     "cancelled": "Bu yuklash bekor qilindi: oldindan koʻrish oʻchirildi, tovarlaringiz va narxlaringiz oʻzgarmadi. Praysni yangilash uchun faylni qaytadan yuklang.",
     "cancel": {
       "button": "Yuklashni bekor qilish",
