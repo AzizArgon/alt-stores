@@ -4,7 +4,8 @@
 # counts again (stores, accounts, offers, Age offers must stay the same) and shows memory and disk.
 # Does not touch Age Computers, prices or passwords; no duplicate/category scripts here.
 set -euo pipefail
-ssh -o ServerAliveInterval=30 pcmarket bash -s <<'EOF'
+# The script rides in the command (base64), not on stdin: so every command inside may get stdin = /dev/null
+remote=$(base64 -w0 <<'EOF'
 set -uo pipefail
 cd /opt/alt-stores
 exec </dev/null
@@ -21,3 +22,5 @@ echo "=== containers"; docker compose ps --format '{{.Name}}: {{.Status}}'
 echo "=== memory (MB)"; free -m | head -2
 echo "=== disk"; df -h / | tail -1; docker system df
 EOF
+)
+ssh -o ServerAliveInterval=30 pcmarket "bash -c \"\$(echo $remote | base64 -d)\""
