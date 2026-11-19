@@ -3,7 +3,8 @@
 # Run through rollback.bat. A second run goes back to the newer version (current and previous swap places).
 set -euo pipefail
 SSH_HOST=pcmarket
-ssh "$SSH_HOST" bash -s <<'EOF'
+# One ssh connection already (Phase 20 checked): the whole rollback runs in this one session
+ssh -o ServerAliveInterval=30 "$SSH_HOST" bash -s <<'EOF'
 set -euo pipefail
 cd /opt/alt-stores
 for img in alt-stores-backend alt-stores-web; do

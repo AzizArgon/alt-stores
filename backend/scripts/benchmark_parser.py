@@ -78,9 +78,15 @@ def file_report(args) -> None:
     if args.live:
         stats: dict = {}
         with _empty_db() as db:
-            parsed = asyncio.run(parse_clean_rows(db, rows, stats))
+            parsed = _arun(parse_clean_rows(db, rows, stats))
         report["after_live"] = stats | {"parsed_rows": len(parsed)}
     print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def _arun(coro):
+    """Each dataset runs in its own event loop; the Gemini client keeps the loop it was made in, so it is remade."""
+    ai_parser._client = None
+    return asyncio.run(coro)
 
 
 def _empty_db():
@@ -93,9 +99,10 @@ def _empty_db():
 # --- AI answers: recorded per row, replayed in later runs ---------------------------------------------------------
 
 class Recorder:
-    def __init__(self, provider: str | None, live: bool):
+    def __init__(self, provider: str | None, live: bool, record: str = ""):
         self.provider, self.live = provider, live
-        self.path = RESULTS / f"ai_{provider}.json"
+        # --record p19: a separate answer file (ai_gemini_p19.json) = a fresh cold run that keeps the old answers
+        self.path = RESULTS / f"ai_{provider}{'_' + record if record else ''}.json"
         self.answers: dict = json.loads(self.path.read_text(encoding="utf-8")) if provider and self.path.exists() else {}
         self.live_requests = self.replayed = self.not_recorded = 0
 
@@ -173,7 +180,7 @@ def run_files(recorder: Recorder) -> list[dict]:
         started = time.monotonic()
         rows = clean_markdown(file_to_markdown(path.read_bytes(), path.name))
         stats: dict = {}
-        parsed = asyncio.run(_parse(rows, stats))
+        parsed = _arun(_parse(rows, stats))
         stats["seconds"] = round(time.monotonic() - started, 1)
         pairs, extra = _match(labels, parsed)
         out.append({"dataset": name, "kind": "synthetic", "currency": info["currency"], "stats": stats,
@@ -197,7 +204,7 @@ def run_gshop(recorder: Recorder) -> list[dict]:
                and r.price == lab["price"] for lab in labels):
             wanted.append(r)
     stats: dict = {"file_rows": len(rows)}
-    parsed = asyncio.run(_parse(wanted, stats))
+    parsed = _arun(_parse(wanted, stats))
     stats["seconds"] = round(time.monotonic() - started, 1)
     pairs, extra = _match(labels, parsed)
     return [{"dataset": "gshop", "kind": "gshop", "currency": data["currency"], "stats": stats, "pairs": pairs,
@@ -217,7 +224,7 @@ def run_posts(recorder: Recorder) -> list[dict]:
             owner[r.row] = p["id"]
             all_rows.append(r)
     stats: dict = {}
-    parsed = asyncio.run(_parse(all_rows, stats))
+    parsed = _arun(_parse(all_rows, stats))
     stats["seconds"] = round(time.monotonic() - started, 1)
     by_post: dict[str, list] = {}
     for row in parsed:
@@ -297,6 +304,16 @@ def check_flags(lab: dict, row: dict | None, currency: str, market: dict) -> dic
 
 def score(results: list[dict]) -> dict:
     market = json.loads((BENCH / "synthetic" / "market.json").read_text(encoding="utf-8"))
+    # The labels keep the card key of the day they were made (Phase 7); the key rule changed since (Phase 16.1:
+    # no OEM/BOX, no type words). The reference key is rebuilt from the labelled card with today's rule.
+    remap = {}
+    for res in results:
+        for lab, _row in res["pairs"]:
+            if lab.get("match_key") and lab.get("name"):
+                new = make_match_key(lab.get("category") or "other", lab["name"], lab.get("brand"), lab.get("specs"))
+                remap[lab["match_key"]] = new
+                lab["match_key"] = new
+    market = {remap.get(k, k): v for k, v in market.items()}
     completions = completion_index(market)  # every reference card of the synthetic set, as in a catalog
     summary = {}
     for res in results:
@@ -403,7 +420,7 @@ def print_summary(summary: dict, config: str) -> None:
 
 def suite(args) -> None:
     provider = PROVIDERS[args.config]
-    recorder = Recorder(provider, args.live)
+    recorder = Recorder(provider, args.live, args.record)
     ai_parser.parse_rows = recorder.parse_rows  # importer imported the name: patch there too
     importer.parse_rows = recorder.parse_rows
     if args.config == "gemini_nocheck":
@@ -432,6 +449,7 @@ def main() -> None:
         ap.add_argument("--datasets", default="synthetic,gshop,posts")
         ap.add_argument("--tag", default="run")
         ap.add_argument("--live", action="store_true")
+        ap.add_argument("--record", default="", help="suffix of the AI answer file; a new suffix = every AI row live")
         suite(ap.parse_args())
         return
     ap = argparse.ArgumentParser()

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Updates the public site with one command (run through deploy.bat on the laptop). Only from the alpha branch.
-# push -> images built here -> loaded on the server -> backup of the DB -> "current" becomes "previous" -> up -> check.
+# push -> images built here -> ONE ssh connection: loaded on the server -> backup of the DB -> "current" becomes "previous" -> up -> check.
 # The server database (data/database.db) is never replaced: only images and docker-compose.yml change.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -38,17 +38,28 @@ step "2/6 build images $tag ($PLATFORM)"
 docker build --platform "$PLATFORM" -t "alt-stores-backend:$tag" ./backend
 docker build --platform "$PLATFORM" -t "alt-stores-web:$tag" ./frontend
 
-step "3/6 upload images and docker-compose.yml"
-docker save "alt-stores-backend:$tag" "alt-stores-web:$tag" | gzip -1 | ssh "$SSH_HOST" 'gunzip | docker load'
-scp -q docker-compose.yml "$SSH_HOST:$DIR/docker-compose.yml.new"
+# Phase 20: ONE ssh connection for the whole server part. The home internet sometimes refuses a quick second
+# connection, so the images go over stdin and the script, docker-compose.yml and the rate ride in the command.
+step "3/6 CBU rate (cbu.uz answers only Uzbek addresses: the laptop fetches it and hands it to the server)"
+rate_b64=""
+if usd=$(curl -sf -m 15 https://cbu.uz/ru/arkhiv-kursov-valyut/json/USD/); then
+    rate_b64=$(printf '%s' "$usd" | base64 -w0)
+    echo "rate fetched"
+else
+    echo "cbu.uz did not answer: the server keeps the last known rate"
+fi
+compose_b64=$(base64 -w0 < docker-compose.yml)
 
-step "4/6 server: backup, switch images, start"
-# The script goes over stdin: every command inside that reads stdin gets </dev/null, or it would eat the rest
-switched=$(ssh "$SSH_HOST" "TAG=$tag DIR=$DIR IMAGES='$IMAGES' bash -s" <<'EOF'
+step "4/6 one ssh connection: upload images, backup, switch images, start"
+# The script reads the images from stdin first; after that stdin is /dev/null for every other command
+remote=$(base64 -w0 <<'EOF'
 set -euo pipefail
 cd "$DIR"
-if [ -n "$(docker compose ps -q backend 2>/dev/null </dev/null)" ]; then
-    docker compose exec -T backend python scripts/backup_db.py before_deploy 5 </dev/null
+gunzip | docker load
+exec </dev/null
+echo "$COMPOSE_B64" | base64 -d > docker-compose.yml.new
+if [ -n "$(docker compose ps -q backend 2>/dev/null)" ]; then
+    docker compose exec -T backend python scripts/backup_db.py before_deploy 5
 fi
 mv docker-compose.yml.new docker-compose.yml
 # Phase 14: photos live in data/media (made here by the owner of data/, so the backend user can write there)
@@ -63,31 +74,35 @@ for img in $IMAGES; do
         docker rmi "$old" >/dev/null 2>&1 || true
     fi
 done
-docker compose up -d </dev/null
+docker compose up -d
 # The running containers must be the new images
 for svc in backend web; do
-    [ "$(docker inspect -f '{{.Image}}' "$(docker compose ps -q "$svc" </dev/null)")" = \
+    [ "$(docker inspect -f '{{.Image}}' "$(docker compose ps -q "$svc")")" = \
       "$(docker image inspect -f '{{.Id}}' "alt-stores-$svc:current")" ] || { echo "$svc is not on the new image"; exit 1; }
 done
 echo "SWITCHED $TAG"
-EOF
-) || { echo "$switched"; echo "DEPLOY FAILED on the server (rollback: rollback.bat)"; exit 1; }
-echo "$switched"
-# A step that silently cut the script short must not end in "DEPLOY OK"
-echo "$switched" | grep -qx "SWITCHED $tag" || { echo "DEPLOY FAILED: the server did not switch to $tag"; exit 1; }
-
-step "5/6 wait for the site, CBU rate"
+echo; echo "=== 5/6 wait for the site, CBU rate"
 for i in $(seq 1 30); do
-    if ssh "$SSH_HOST" 'curl -sf http://127.0.0.1:8095/api/health >/dev/null'; then echo "site is up"; break; fi
-    [ "$i" = 30 ] && { echo "The site did not start, logs:"; ssh "$SSH_HOST" "cd $DIR && docker compose logs --tail 40"; exit 1; }
+    if curl -sf http://127.0.0.1:8095/api/health >/dev/null; then echo "site is up"; break; fi
+    [ "$i" = 30 ] && { echo "The site did not start, logs:"; docker compose logs --tail 40; exit 1; }
     sleep 2
 done
-# cbu.uz answers only Uzbek addresses: the laptop fetches the rate and hands it to the server
-if usd=$(curl -sf -m 15 https://cbu.uz/ru/arkhiv-kursov-valyut/json/USD/); then
-    echo "$usd" | ssh "$SSH_HOST" "cd $DIR && docker compose exec -T backend python scripts/set_rate.py"
-else
-    echo "cbu.uz did not answer: the server keeps the last known rate"
+if [ -n "$RATE_B64" ]; then echo "$RATE_B64" | base64 -d | docker compose exec -T backend python scripts/set_rate.py; fi
+echo "SERVER DONE $TAG"
+EOF
+)
+log=$(mktemp)
+if ! docker save "alt-stores-backend:$tag" "alt-stores-web:$tag" | gzip -1 | \
+     ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "$SSH_HOST" \
+     "TAG=$tag DIR=$DIR IMAGES='$IMAGES' COMPOSE_B64=$compose_b64 RATE_B64=$rate_b64 bash -c \"\$(echo $remote | base64 -d)\"" \
+     | tee "$log"; then
+    if grep -qx "SWITCHED $tag" "$log"; then echo "DEPLOY FAILED after the switch (rollback: rollback.bat)"
+    else echo "DEPLOY FAILED on the server before the switch: the site still runs the old version"; fi
+    rm -f "$log"; exit 1
 fi
+# A step that silently cut the script short must not end in "DEPLOY OK"
+grep -qx "SERVER DONE $tag" "$log" || { rm -f "$log"; echo "DEPLOY FAILED: the server did not switch to $tag"; exit 1; }
+rm -f "$log"
 
 step "6/6 check $SITE"
 api=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$SITE/api/health")
