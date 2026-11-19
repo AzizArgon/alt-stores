@@ -11,3 +11,13 @@ dist/
 .idea/
 /data/
 !.env.example
+# Phase 20: real data never goes to the public repo (keep it in _local\samples, _local\backups)
+*.db
+*.db.gz
+*.sqlite
+*.db-journal
+samples/*.xlsx
+samples/*.xls
+samples/*.csv
+**/Price of Age*
+**/old_store_*

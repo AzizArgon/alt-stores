@@ -220,7 +220,7 @@ def test_price_without_currency_by_size(line, price, currency):
     assert find_price(line)[:3] == (price, currency, True)
 
 
-@pytest.mark.parametrize("line", ["Тел: 903339966", "+998999957866", "6pin 100 ват", "⚡ 192-bit", "Furmark 10 minut 68-69°",
+@pytest.mark.parametrize("line", ["Тел: 900001122", "+998900003344", "6pin 100 ват", "⚡ 192-bit", "Furmark 10 minut 68-69°",
                                   "8/16", "32мб кеш", "Осталось 1шт"])
 def test_noise_numbers_are_not_prices(line):
     assert text_to_rows(f"AMD Ryzen 7 8700F\n{line}") == []
