@@ -8,10 +8,14 @@ KEEP=14
 # _local: ALT_LOCAL_DIR (set by get_backup.bat), otherwise <repo>/_local
 DEST="$(cygpath -u "${ALT_LOCAL_DIR:-$(dirname "$0")/../_local}")/backups/server"
 mkdir -p "$DEST"
-latest=$(ssh -o BatchMode=yes "$SSH_HOST" "ls -1t $REMOTE/*.db.gz | head -1")
-name=$(basename "$latest")
+# Phase 20: ONE ssh connection (the home internet sometimes refuses a quick second one):
+# the newest copy comes inside a tar, which also carries its name
+ssh -o BatchMode=yes "$SSH_HOST" "cd $REMOTE && tar -cf - \"\$(ls -1t *.db.gz | head -1)\"" > "$DEST/latest.tar.part"
+name=$(tar -tf "$DEST/latest.tar.part" | head -1)
+[ -n "$name" ] || { rm -f "$DEST/latest.tar.part"; echo "no backup received"; exit 1; }
 # A broken download must not replace a good copy or push an old one out of the 14
-ssh -o BatchMode=yes "$SSH_HOST" "cat '$latest'" > "$DEST/$name.part"
+tar -xOf "$DEST/latest.tar.part" "$name" > "$DEST/$name.part"
+rm -f "$DEST/latest.tar.part"
 gzip -t < "$DEST/$name.part"
 mv "$DEST/$name.part" "$DEST/$name"
 gzip -df "$DEST/$name"
