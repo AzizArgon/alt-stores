@@ -21,3 +21,7 @@ samples/*.xls
 samples/*.csv
 **/Price of Age*
 **/old_store_*
+
+# thesis build: page renders and Word lock files
+docs/thesis/pages/
+docs/thesis/~$*
