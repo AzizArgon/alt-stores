@@ -280,7 +280,10 @@ def figure(doc, line, ctx):
             continue
         if i:
             p.add_run("  ")
-        p.add_run().add_picture(str(f), width=Cm(width))
+        from PIL import Image
+        with Image.open(f) as im:  # keep the picture within the page height
+            w = min(width, 21.0 * im.width / im.height)
+        p.add_run().add_picture(str(f), width=Cm(w))
     c = doc.add_paragraph()
     fmt(c, WD_ALIGN_PARAGRAPH.CENTER, indent=0, spacing=1, before=6, after=12)
     add_inline(c, f"Рисунок {ctx.labels['fig:' + key]} — {caption}", ctx)
