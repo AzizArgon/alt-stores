@@ -225,3 +225,43 @@ if __name__ == "__main__":
     accuracy()
     who_parsed()
     providers()
+
+
+def dev_process():
+    """Iterative development: stages by date, the cycle of one stage, branches and deployment."""
+    fig, ax = canvas(10, 5.4)
+    stages = [("24–26.10", "Фазы 1–8.5", "разбор прайсов, Anti-Fraud,\nкаталог, мониторинг, VPS"),
+              ("01–04.11", "Бета Б1–Б4", "дизайн, витрина, кабинет,\nсборки, Docker"),
+              ("09–12.11", "Фазы 9–15", "Telegram, чат, брони, учёт,\nсклад, админка, фото, языки"),
+              ("14–18.11", "Фазы 16–17.6", "качество базы, вход,\nполировка интерфейса"),
+              ("18–19.11", "Фазы 19–20", "замеры, документация,\nверсия 1.0")]
+    ax.text(0.2, 10.4, "Этапы по датам", fontsize=11, weight="bold", color=INK)
+    for i, (d, ph, txt) in enumerate(stages):
+        x = 2.0 + i * 4.0
+        box(ax, x, 8.9, 3.6, 2.0, f"{d} · {ph}\n{txt}", size=9)
+        if i:
+            arrow(ax, (x - 2.2, 8.9), (x - 1.8, 8.9))
+    ax.text(0.2, 7.0, "Цикл одного этапа", fontsize=11, weight="bold", color=INK)
+    cycle = [("Задача этапа", "дорожная карта,\nкритерии готовности"), ("Код и автотесты", "серверная часть\nи интерфейс"),
+             ("Проверка", "pytest + Vitest,\nбраузер 375–1920 px"), ("Решения", "спорные вопросы\nфиксируются"),
+             ("Коммит в main", "+ журнал разработки")]
+    for i, (t, txt) in enumerate(cycle):
+        x = 2.0 + i * 4.0
+        box(ax, x, 5.5, 3.6, 1.9, f"{t}\n{txt}", GREEN_BG if i == 2 else BLUE_BG, GREEN if i == 2 else BLUE, size=9)
+        if i:
+            arrow(ax, (x - 2.2, 5.5), (x - 1.8, 5.5))
+    arrow(ax, (14.0, 4.5), (6.0, 4.5), "доработка", color=GRAY, dashed=True, rad=-0.12, ty=-1.1)
+    ax.text(0.2, 3.0, "Контроль версий и выкладка", fontsize=11, weight="bold", color=INK)
+    rel = [("main", "разработка"), ("alpha", "версия сервера"), ("Проверка обновления", "на копии базы сервера"),
+           ("deploy.bat", "копия базы, запуск,\nавтопроверка"), ("Сервер Docker", "откат — rollback.bat")]
+    for i, (t, txt) in enumerate(rel):
+        x = 2.0 + i * 4.0
+        box(ax, x, 1.5, 3.6, 1.8, f"{t}\n{txt}", AMBER_BG if i in (1, 4) else GRAY_BG, AMBER if i in (1, 4) else GRAY,
+            size=9)
+        if i:
+            arrow(ax, (x - 2.2, 1.5), (x - 1.8, 1.5))
+    save(fig, "dev_process.png")
+
+
+if __name__ == "__main__":
+    dev_process()
