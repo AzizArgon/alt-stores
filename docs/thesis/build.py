@@ -30,7 +30,8 @@ STATE = {"fresh": True}  # True right after a page/section break: a chapter head
 def load_sources():
     """95_sources.md: '## group' lines and '- [key] text :: check-url' entries."""
     groups, order, data = [], [], {}
-    for line in (HERE / "95_sources.md").read_text(encoding="utf-8").splitlines():
+    text = re.sub(r"<!--.*?-->", "", (HERE / "95_sources.md").read_text(encoding="utf-8"), flags=re.S)
+    for line in text.splitlines():
         if line.startswith("## "):
             groups.append((line[3:].strip(), []))
         m = re.match(r"- \[([\w-]+)\]\s+(.+?)(?:\s+::\s+(\S+))?\s*$", line)
