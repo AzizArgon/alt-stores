@@ -1,6 +1,11 @@
 # *Аннотация
-Текст.
+
+Выпускная квалификационная работа посвящена разработке информационной системы ALT STORES — единой базы компьютерной техники Узбекистана. Система принимает прайс-листы магазинов в любом виде (Excel, CSV, PDF, посты Telegram), приводит их к эталонным карточкам товаров и позволяет покупателю сравнить предложения всех магазинов, а продавцу — вести учёт остатков по филиалам. Предложен многоуровневый конвейер «код → кэш → правила → языковая модель», в котором модель (Google Gemini, запасная — Groq) разбирает только непонятые правилами строки, а цену, валюту и наличие всегда определяет код; характеристики, не подтверждённые текстом продавца, не сохраняются. Разработаны ключ сведения товаров, словарь характеристик 31 категории, двухслойная проверка подозрительных предложений (Anti-Fraud) и мониторинг цен на основе медианы и индекса Джевонса. Эксперимент на 1 178 строках с известными ответами показал 100 % верных цен и валют, 99,5 % брендов, 97,2 % моделей и 93,1 % верного сведения в карточку; Anti-Fraud нашёл 22 из 22 подвохов. Система (FastAPI, SQLite, React) развёрнута на сервере в Docker и покрыта 733 автотестами. Работа содержит 4 главы, ##FIGS## рисунков, ##TABS## таблиц, ##SRC## источника и 4 приложения.
+
 # *Abstract
-Text.
+
+The graduation thesis presents ALT STORES, an information system that builds a single database of computer hardware offers in Uzbekistan. The system accepts store price lists in any form (Excel, CSV, PDF, Telegram posts), standardizes them into reference product cards and lets buyers compare offers from all stores, while sellers keep track of stock across their branches. We propose a multi-level pipeline "code → cache → rules → language model" in which the large language model (Google Gemini with Groq as a fallback) parses only the rows the rules could not understand, while price, currency and availability are always taken by code, and attributes not confirmed by the seller's text are never stored. The work introduces a product matching key, an attribute dictionary for 31 categories, a two-layer check of suspicious offers (Anti-Fraud) and price monitoring based on the median and the Jevons index. An experiment on 1,178 rows with known answers showed 100 % correct prices and currencies, 99.5 % brands, 97.2 % models and 93.1 % correct matching to the reference card; Anti-Fraud caught 22 of 22 traps. The system (FastAPI, SQLite, React) is deployed on a server with Docker and covered by 733 automated tests.
+
 # *Оглавление
+
 [[TOC]]

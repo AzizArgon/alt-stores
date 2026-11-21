@@ -154,6 +154,9 @@ def resolve(text, ctx: Ctx):
         return "[" + ", ".join(out) + "]"
 
     text = re.sub(r"\[(@[^\]]+)\]", cite, text)
+    text = (text.replace("##FIGS##", str(sum(k.startswith("fig:") for k in ctx.labels)))
+            .replace("##TABS##", str(sum(k.startswith("tab:") for k in ctx.labels)))
+            .replace("##SRC##", str(len(ctx.sources))))
 
     def ref(m):
         key = f"{m.group(1)}:{m.group(2)}"
