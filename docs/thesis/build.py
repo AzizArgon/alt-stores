@@ -337,7 +337,7 @@ def code_block(doc, lines):
         fmt(p, WD_ALIGN_PARAGRAPH.LEFT, indent=0, spacing=1, after=0,
             keep=i < len(lines) - 1 and len(lines) < 25)
         r = p.add_run(line.replace("\t", "    ") or " ")
-        set_run_font(r, 10, name="Courier New")
+        set_run_font(r, 9, name="Courier New")
     p = doc.add_paragraph()
     fmt(p, indent=0, spacing=1)
 
