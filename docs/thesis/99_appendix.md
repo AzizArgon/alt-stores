@@ -202,7 +202,7 @@ def check_offer(row, market_usd=None, usd_rate=None):
 | | form_factor, memory_type | выбор | E-ATX, ATX, mATX, ITX; DDR3, DDR4, DDR5 |
 | | wifi | да/нет | наличие Wi-Fi |
 
-Пример нормализации: строки «16GB», «16 ГБ», «16гб», «2x8GB», «8GB*2» и «16GB (8*2)» дают значение capacity = 16; строки «80+ Gold» и «80 PLUS Gold» — значение certification = Gold; «SO-DIMM» и «SODIM» — form_factor = SODIMM.
+Пример нормализации: строки «16GB», «16 ГБ», «16гб», «2x8GB», «8GB\*2» и «16GB (8\*2)» дают значение capacity = 16; строки «80+ Gold» и «80 PLUS Gold» — значение certification = Gold; «SO-DIMM» и «SODIM» — form_factor = SODIMM.
 
 # ПРИЛОЖЕНИЕ Г. ER-диаграмма прочих таблиц
 

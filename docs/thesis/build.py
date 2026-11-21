@@ -109,6 +109,12 @@ def add_field(paragraph, instr, size=14):
         run._element.append(el)
 
 
+def no_hyphens(p):
+    el = OxmlElement("w:suppressAutoHyphens")
+    el.set(qn("w:val"), "true")
+    p._p.get_or_add_pPr().append(el)
+
+
 def page_break(doc):
     p = doc.add_paragraph()
     fmt(p, indent=0, spacing=1)
@@ -154,9 +160,11 @@ def resolve(text, ctx: Ctx):
         return "[" + ", ".join(out) + "]"
 
     text = re.sub(r"\[(@[^\]]+)\]", cite, text)
-    text = (text.replace("##FIGS##", str(sum(k.startswith("fig:") for k in ctx.labels)))
-            .replace("##TABS##", str(sum(k.startswith("tab:") for k in ctx.labels)))
-            .replace("##SRC##", str(len(ctx.sources))))
+    figs = sum(k.startswith("fig:") for k in ctx.labels)
+    tabs = sum(k.startswith("tab:") for k in ctx.labels)
+    text = (text.replace("##FIGS##", plural(figs, "рисунок", "рисунка", "рисунков"))
+            .replace("##TABS##", plural(tabs, "таблица", "таблицы", "таблиц"))
+            .replace("##SRC##", plural(len(ctx.sources), "источник", "источника", "источников")))
 
     def ref(m):
         key = f"{m.group(1)}:{m.group(2)}"
@@ -171,8 +179,18 @@ def resolve(text, ctx: Ctx):
     return text
 
 
+def plural(n, one, few, many):
+    """Russian plural: 1 рисунок, 2 рисунка, 5 рисунков."""
+    form = one if n % 10 == 1 and n % 100 != 11 else (
+        few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many)
+    return f"{n} {form}"
+
+
+STAR = ""  # a literal '*' written as '\*' in the sources
+
+
 def add_inline(p, text, ctx, size=14, bold=False, italic=False):
-    text = resolve(text, ctx)
+    text = resolve(text, ctx).replace("\\*", STAR)
     for tok in re.split(r"(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`)", text):
         if not tok:
             continue
@@ -183,7 +201,7 @@ def add_inline(p, text, ctx, size=14, bold=False, italic=False):
             tok, i = tok[1:-1], True
         elif tok.startswith("`") and tok.endswith("`"):
             tok, mono = tok[1:-1], True
-        r = p.add_run(tok)
+        r = p.add_run(tok.replace(STAR, "*"))
         set_run_font(r, size - (1 if mono else 0), b, i, "Courier New" if mono else FONT)
 
 
@@ -261,6 +279,7 @@ def heading(doc, text, level, ctx):
         fmt(p, WD_ALIGN_PARAGRAPH.LEFT if level == 2 else WD_ALIGN_PARAGRAPH.JUSTIFY,
             indent=1.25, before=12, after=6, keep=True)
         add_inline(p, text, ctx, bold=True)
+    no_hyphens(p)
     ctx.section = re.sub(r"\s+", " ", text)[:60]
 
 
@@ -327,6 +346,15 @@ def table(doc, caption_line, rows, ctx):
         el = OxmlElement("w:tblHeader")
         el.set(qn("w:val"), "true")
         trpr.append(el)
+    for row in t.rows:  # a row never breaks across pages
+        el = OxmlElement("w:cantSplit")
+        el.set(qn("w:val"), "true")
+        row._tr.get_or_add_trPr().append(el)
+    if len(cells) <= 16:  # short table: keep it on one page with its caption
+        for row in t.rows[:-1]:
+            for cell in row.cells:
+                for cp in cell.paragraphs:
+                    cp.paragraph_format.keep_with_next = True
     after = doc.add_paragraph()
     fmt(after, indent=0, spacing=1)
 
@@ -374,6 +402,10 @@ def title_line(doc, line, ctx):
     fmt(p, align, indent=0, spacing=1.15)
     if kind[0] == "r":
         p.paragraph_format.left_indent = Cm(9)
+    no_hyphens(p)
+    if " | " in text:  # signature line: label | signature at a tab stop
+        p.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
+        text = text.replace(" | ", "\t")
     add_inline(p, text, ctx, bold=kind.endswith("b"))
 
 
