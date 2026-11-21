@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 SHOTS = ROOT / "docs" / "screenshots" / "final"
 DIAGRAMS = ROOT / "docs" / "diagrams"
-OUT = HERE / "ALT_STORES_defense.pptx"
+OUT = Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv else HERE / "ALT_STORES_defense.pptx"
 CACHE = Path(tempfile.mkdtemp(prefix="alt_deck_"))
 
 # Brand tokens: frontend/src/index.css (@theme) and components/Logo.jsx
@@ -893,13 +893,13 @@ def s_tech(deck, sd):
     cw = (CW - gap * (n - 1)) / n
     for i, col in enumerate(sd["cols"]):
         x = MX + i * (cw + gap)
-        box(s, x, TOP, cw, 3.85, fill=BG)
+        box(s, x, TOP, cw, 3.6, fill=BG)
         circle(s, x + 0.3, TOP + 0.3, 0.52, PRIMARY, str(i + 1), size=18)
         text(s, x + 1.0, TOP + 0.3, cw - 1.2, 0.52, col["head"], size=fit_size(col["head"], cw - 1.25, 22),
              bold=True, anchor="m")
         bullets(s, x + 0.35, TOP + 1.15, cw - 0.6, col["items"], size=18, h=2.6, after=14)
-    box(s, MX, TOP + 4.15, CW, 0.8, fill=SUCCESS_SOFT)
-    text(s, MX + 0.35, TOP + 4.15, CW - 0.7, 0.8, sd["bottom"], size=20, bold=True, color=SUCCESS, anchor="m")
+    box(s, MX, TOP + 3.85, CW, 1.12, fill=SUCCESS_SOFT)
+    text(s, MX + 0.35, TOP + 3.85, CW - 0.7, 1.12, sd["bottom"], size=18, bold=True, color=SUCCESS, anchor="m")
 
 
 def tiles(s, x, y, w, items, cols, th, gap=0.2, num_size=36, colors=None, fill=BG):
@@ -941,13 +941,6 @@ def s_results(deck, sd):
           colors=[PRIMARY, SUCCESS, SUCCESS, PRIMARY, PRIMARY, PRIMARY])
 
 
-def s_analogs(deck, sd):
-    s = deck.new(sd)
-    rows = [sd["head"]] + sd["rows"]
-    cols = [2.6, 2.4, 2.65, 2.25, 2.23]
-    table(s, MX, TOP, CW, rows, cols, row_h=0.56, size=16, aligns=["l", "c", "c", "c", "c"],
-          mark=lambda r, c: PRIMARY_SOFT if r == 1 else None)
-    text(s, MX, TOP + 0.56 * len(rows) + 0.2, CW, 0.4, sd["note"], size=16, color=MUTED)
 
 
 def s_future(deck, sd):
@@ -1061,18 +1054,6 @@ def s_b_tests(deck, sd):
     table(s, MX, TOP, CW, sd["table"], [3.3, 2.1, CW - 5.4], row_h=0.62, size=17, aligns=["l", "c", "l"])
 
 
-def s_b_process(deck, sd):
-    s = deck.new(sd)
-    _, w, h = picture(s, DIAGRAMS / "dev_process.png", MX, TOP, h=4.95, radius=0.08, descr=sd["title"])
-    x = MX + w + 0.4
-    cw = W - MX - x
-    y = TOP
-    gh = (4.95 - 3 * 0.2) / 4
-    for i, (head, desc) in enumerate(sd["points"]):
-        box(s, x, y, cw, gh, fill=PRIMARY_SOFT if i < 2 else BG)
-        text(s, x + 0.3, y + 0.12, cw - 0.6, 0.38, head, size=18, bold=True, color=PRIMARY if i < 2 else INK)
-        text(s, x + 0.3, y + 0.5, cw - 0.6, gh - 0.55, desc, size=16, color=INK, spacing=1.02)
-        y += gh + 0.2
 
 
 def s_b_dict(deck, sd):
@@ -1111,26 +1092,6 @@ def s_b_dict(deck, sd):
         text(s, x + 0.3, y + 0.75, lw2 - 0.6, 0.7, desc, size=17, color=INK)
 
 
-def s_b_deploy(deck, sd):
-    s = deck.new(sd)
-    n = len(sd["steps"])
-    gap = 0.45
-    cw = (CW - gap * (n - 1)) / n
-    for i, (head, desc) in enumerate(sd["steps"]):
-        x = MX + i * (cw + gap)
-        box(s, x, TOP, cw, 2.3, fill=PRIMARY if i == 2 else BG)
-        dark = i == 2
-        circle(s, x + 0.25, TOP + 0.25, 0.46, WHITE if dark else PRIMARY_SOFT, str(i + 1), color=PRIMARY, size=16)
-        text(s, x + 0.25, TOP + 0.85, cw - 0.5, 0.45, head, size=fit_size(head, cw - 0.55, 19), bold=True, color=WHITE if dark else INK)
-        text(s, x + 0.25, TOP + 1.3, cw - 0.5, 0.95, desc, size=16, color="DCE3FF" if dark else MUTED, spacing=1.02)
-        if i < n - 1:
-            arrow(s, x + cw + 0.06, TOP + 1.15, x + cw + gap - 0.06, TOP + 1.15)
-    y = TOP + 2.7
-    for head, desc in sd["extras"]:
-        box(s, MX, y, CW, 0.66, fill=WHITE, line=LINE)
-        text(s, MX + 0.3, y, 2.4, 0.66, head, size=18, bold=True, anchor="m")
-        text(s, MX + 2.8, y, CW - 3.1, 0.66, desc, size=17, color=MUTED, anchor="m")
-        y += 0.78
 
 
 def s_b_builds(deck, sd):
@@ -1152,7 +1113,8 @@ def embed_fonts():
     tmp = OUT.with_name("_embed_tmp.pptx")
     ps = ("$pp = New-Object -ComObject PowerPoint.Application; "
           f"$p = $pp.Presentations.Open('{OUT}', -1, 0, 0); "
-          f"$p.SaveAs('{tmp}', 24, -1); $p.Close(); $pp.Quit()")
+          f"$p.SaveAs('{tmp}', 24, -1); $p.Close(); "
+          "if ($pp.Presentations.Count -eq 0) { $pp.Quit() }")  # never close the user's open decks
     try:
         subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True, timeout=300,
                        capture_output=True)

@@ -25,3 +25,6 @@ samples/*.csv
 # thesis build: page renders and Word lock files
 docs/thesis/pages/
 docs/thesis/~$*
+
+# presentation: PowerPoint lock files
+docs/presentation/~$*

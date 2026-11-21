@@ -12,7 +12,7 @@ from pathlib import Path
 import pymupdf as fitz
 
 HERE = Path(__file__).resolve().parent
-DECK = HERE / "ALT_STORES_defense.pptx"
+DECK = Path(sys.argv[sys.argv.index("--deck") + 1]) if "--deck" in sys.argv else HERE / "ALT_STORES_defense.pptx"
 PREVIEW = HERE / "preview"
 PDF = HERE / "ALT_STORES_defense.pdf"
 
