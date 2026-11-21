@@ -122,3 +122,106 @@ if __name__ == "__main__":
     pipeline()
     architecture()
     print("charts: ok")
+
+
+# ------------------------------------------------------------------ screenshots
+SHOTS = ROOT_SHOTS = HERE.parent / "screenshots" / "final"
+# name: max height in source pixels after the automatic trim of empty side margins
+SHOT_LIST = {"01_home": 1080, "02_search_12400f": 900, "03_product_offers": 1500, "04_used": 1000,
+             "05_build": 1100, "06_seller_goods": 900, "07_import_preview": 1500, "08_stock": 760,
+             "08b_stock_journal": 1000, "09_reservations": 600, "10_notifications": 1000, "11_admin": 800,
+             "14_market": 1550, "15_buyer_reservations": 700, "01_home_uz": 760, "phone_home": 1624,
+             "phone_product": 1624, "phone_seller_stock": 1624}
+
+
+def shots():
+    from PIL import Image, ImageChops
+    for name, max_h in SHOT_LIST.items():
+        im = Image.open(SHOTS / f"{name}.jpg").convert("RGB")
+        im = im.crop((0, 0, im.width, min(im.height, max_h)))
+        if name[:2] in ("01", "02", "03", "04", "05", "14", "15"):  # storefront: centered container
+            im = im.crop((300, 0, 1620, im.height))
+        im.save(OUT / f"shot_{name}.jpg", quality=90)
+
+
+if __name__ == "__main__":
+    shots()
+
+
+# ------------------------------------------------------------------ experiment charts (docs/experiment.md)
+C_RULES, C_GEMINI, C_GROQ = "#0d9488", "#2563eb", "#ea580c"  # validated: scripts/validate_palette.js
+
+
+def _axes_clean(ax):
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.spines["left"].set_color("#9ca3af")
+    ax.spines["bottom"].set_color("#9ca3af")
+    ax.tick_params(colors=INK)
+    ax.grid(axis="x", color="#e5e7eb", lw=0.8)
+    ax.set_axisbelow(True)
+
+
+def accuracy():
+    """experiment.md 10.1-10.2: accuracy by field, phase 19, all sets."""
+    fields = ["Категория", "Бренд", "Модель", "Цена", "Валюта", "Верная карточка", "Характеристики"]
+    rules = [69.5, 68.6, 63.4, 100, 100, 74.6, 71.7]
+    gemini = [99.1, 99.5, 97.2, 100, 100, 93.1, 94.5]
+    groq = [98.9, 98.3, 96.8, 99.9, 99.9, 92.5, 94.5]
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    y = range(len(fields))
+    h = 0.26
+    for k, (vals, color, label) in enumerate(((rules, C_RULES, "Только правила"), (gemini, C_GEMINI, "Правила + Gemini"),
+                                              (groq, C_GROQ, "Правила + Groq"))):
+        ax.barh([i + (k - 1) * (h + 0.02) for i in y], vals, height=h, color=color, label=label)
+    for i, v in enumerate(gemini):
+        ax.text(v + 0.6, i, f"{v:.1f}".replace(".", ","), va="center", fontsize=9, color=INK)
+    ax.set_yticks(list(y), fields)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 106)
+    ax.set_xlabel("Доля верных значений, %")
+    _axes_clean(ax)
+    ax.legend(loc="lower left", frameon=False, ncol=3, bbox_to_anchor=(0, -0.28))
+    save(fig, "accuracy.png")
+
+
+def who_parsed():
+    """experiment.md 11.2: who parsed the 2 359 rows of the real price list."""
+    runs = ["Повторная загрузка\n(как на сервере)", "Первая загрузка\n(холодный прогон)", "Повтор после\nпервой загрузки"]
+    cache = [2226, 0, 896]
+    rules = [133, 641, 641]
+    ai = [0, 1718, 822]
+    fig, ax = plt.subplots(figsize=(8, 3.0))
+    left = [0, 0, 0]
+    for vals, color, label in ((cache, C_GEMINI, "Кэш"), (rules, C_RULES, "Правила"), (ai, C_GROQ, "Языковая модель")):
+        ax.barh(runs, vals, left=left, color=color, label=label, height=0.55, edgecolor="white", linewidth=2)
+        for i, v in enumerate(vals):
+            if v > 150:
+                ax.text(left[i] + v / 2, i, f"{v}", ha="center", va="center", fontsize=9.5, color="white", weight="bold")
+        left = [a + b for a, b in zip(left, vals)]
+    ax.invert_yaxis()
+    ax.set_xlabel("Строк прайса (всего 2 359)")
+    _axes_clean(ax)
+    ax.legend(loc="lower left", frameon=False, ncol=3, bbox_to_anchor=(0, -0.42))
+    save(fig, "who_parsed.png")
+
+
+def providers():
+    """experiment.md 10.2: Gemini vs Groq, same 384 rows — requests and time as two panels."""
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(8, 2.6))
+    for ax, vals, title, fmt in ((a1, [6, 31], "Запросов к модели", "{}"), (a2, [325, 740], "Время набора, с", "{}")):
+        ax.barh(["Gemini", "Groq"], vals, color=[C_GEMINI, C_GROQ], height=0.5)
+        for i, v in enumerate(vals):
+            ax.text(v * 1.02, i, fmt.format(v), va="center", fontsize=10, color=INK)
+        ax.set_title(title, fontsize=11, color=INK)
+        ax.set_xlim(0, max(vals) * 1.2)
+        ax.invert_yaxis()
+        _axes_clean(ax)
+    fig.tight_layout()
+    save(fig, "providers.png")
+
+
+if __name__ == "__main__":
+    accuracy()
+    who_parsed()
+    providers()
