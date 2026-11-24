@@ -4,6 +4,7 @@ Run: build.bat (or .venv\\Scripts\\python.exe build.py). Markup is described in 
 """
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 from docx import Document
@@ -23,7 +24,9 @@ FONT = "Times New Roman"
 ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5}
 
 errors: list[str] = []
-STATE = {"fresh": True}  # True right after a page/section break: a chapter heading needs no extra break
+STATE = {"fresh": True, "toc2": True}  # fresh: right after a page/section break; toc2: level-2 headings go to the TOC
+SAME_PAGE = {"Abstract"}  # level-1 headings that continue the previous page (annotation + abstract on one page)
+ZEBRA_HEAD, ZEBRA_ODD = "D9E2F3", "F2F2F2"  # table header and every other body row
 
 
 # ---------------------------------------------------------------- sources
@@ -164,7 +167,9 @@ def resolve(text, ctx: Ctx):
     tabs = sum(k.startswith("tab:") for k in ctx.labels)
     text = (text.replace("##FIGS##", plural(figs, "рисунок", "рисунка", "рисунков"))
             .replace("##TABS##", plural(tabs, "таблица", "таблицы", "таблиц"))
-            .replace("##SRC##", plural(len(ctx.sources), "источник", "источника", "источников")))
+            .replace("##SRC##", plural(len(ctx.sources), "источник", "источника", "источников"))
+            .replace("##EFIGS##", f"{figs} figures").replace("##ETABS##", f"{tabs} tables")
+            .replace("##ESRC##", f"{len(ctx.sources)} references"))
 
     def ref(m):
         key = f"{m.group(1)}:{m.group(2)}"
@@ -174,6 +179,7 @@ def resolve(text, ctx: Ctx):
         return f"({ctx.labels[key]})" if m.group(1) == "eq" else ctx.labels[key]
 
     text = re.sub(r"@(fig|tab|eq):([\w-]+)", ref, text)
+    text = re.sub(r"(\d) (%|°C)", "\\1\u00a0\\2", text)  # '93,1 %' never breaks before the sign
     # typography: ' - ' -> en dash surrounded by nbsp-like spaces
     text = text.replace(" -- ", " – ").replace(" — ", " — ")
     return text
@@ -250,7 +256,11 @@ def setup(doc):
     settings = doc.settings.element
     hyph = OxmlElement("w:autoHyphenation")
     hyph.set(qn("w:val"), "true")
-    settings.append(hyph)
+    tab = settings.find(qn("w:defaultTabStop"))  # schema order: autoHyphenation right after defaultTabStop
+    if tab is not None:
+        tab.addnext(hyph)
+    else:
+        settings.insert(0, hyph)
 
 
 def numbered_section(doc):
@@ -269,15 +279,21 @@ def heading(doc, text, level, ctx):
     toc = not text.startswith("*")
     text = text.lstrip("*").strip()
     if level == 1:
-        if not STATE["fresh"]:
-            page_break(doc)
+        STATE["toc2"] = not text.startswith("ГЛАВА IV")  # chapter IV: only the chapter line in the TOC
+        new_page = text not in SAME_PAGE and not STATE["fresh"]
         p = doc.add_paragraph(style="Heading 1" if toc else None)
         fmt(p, WD_ALIGN_PARAGRAPH.CENTER, indent=0, after=12, keep=True)
+        if new_page:  # the heading itself starts the page: no empty break paragraph left behind
+            p.paragraph_format.page_break_before = True
         add_inline(p, text.upper(), ctx, bold=True)
     else:
+        if level == 2 and not STATE["toc2"]:
+            toc = False
         p = doc.add_paragraph(style=f"Heading {level}" if toc else None)
-        fmt(p, WD_ALIGN_PARAGRAPH.LEFT if level == 2 else WD_ALIGN_PARAGRAPH.JUSTIFY,
-            indent=1.25, before=12, after=6, keep=True)
+        if level == 2:  # paragraph headings: centered, no first-line indent
+            fmt(p, WD_ALIGN_PARAGRAPH.CENTER, indent=0, before=12, after=6, keep=True)
+        else:
+            fmt(p, WD_ALIGN_PARAGRAPH.JUSTIFY, indent=1.25, before=12, after=6, keep=True)
         add_inline(p, text, ctx, bold=True)
     no_hyphens(p)
     ctx.section = re.sub(r"\s+", " ", text)[:60]
@@ -291,7 +307,7 @@ def figure(doc, line, ctx):
     caption, paths, key, width = m.groups()
     width = float(width or 16)
     p = doc.add_paragraph()
-    fmt(p, WD_ALIGN_PARAGRAPH.CENTER, indent=0, spacing=1, before=6, keep=True)
+    fmt(p, WD_ALIGN_PARAGRAPH.CENTER, indent=0, spacing=1, before=12, keep=True)
     for i, path in enumerate(paths.split("|")):
         f = ROOT / path.strip()
         if not f.exists():
@@ -302,10 +318,41 @@ def figure(doc, line, ctx):
         from PIL import Image
         with Image.open(f) as im:  # keep the picture within the page height
             w = min(width, 21.0 * im.width / im.height)
-        p.add_run().add_picture(str(f), width=Cm(w))
+        p.add_run().add_picture(str(contrast(f)), width=Cm(w))
     c = doc.add_paragraph()
     fmt(c, WD_ALIGN_PARAGRAPH.CENTER, indent=0, spacing=1, before=6, after=12)
     add_inline(c, f"Рисунок {ctx.labels['fig:' + key]} — {caption}", ctx)
+
+
+FIGCACHE = Path(tempfile.mkdtemp(prefix="vkr_fig_"))
+
+
+def contrast(src: Path) -> Path:
+    """Higher-contrast copy of a figure for print (the source file is not changed):
+    transparent areas on white, mid and light greys darkened, contrast raised a little."""
+    from PIL import Image, ImageEnhance
+    out = FIGCACHE / f"{len(list(FIGCACHE.iterdir())):03d}_{src.name}"
+    with Image.open(src) as im:
+        im = im.convert("RGBA")
+        bg = Image.new("RGBA", im.size, "white")
+        im = Image.alpha_composite(bg, im).convert("RGB")
+    lut = [round(255 * (v / 255) ** 1.6) for v in range(256)]  # gamma: grey text darker, white stays white
+    im = im.point(lut * 3)
+    im = ImageEnhance.Contrast(im).enhance(1.1)
+    if out.suffix.lower() in (".jpg", ".jpeg"):
+        im.save(out, quality=92)
+    else:
+        im.save(out)
+    return out
+
+
+def shade(cell, color):
+    tcpr = cell._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), color)
+    tcpr.append(shd)
 
 
 def table(doc, caption_line, rows, ctx):
@@ -341,6 +388,10 @@ def table(doc, caption_line, rows, ctx):
             fmt(p, WD_ALIGN_PARAGRAPH.CENTER if i == 0 else WD_ALIGN_PARAGRAPH.LEFT,
                 indent=0, spacing=1)
             add_inline(p, val.replace("<br>", "\n"), ctx, size=size, bold=(i == 0))
+            if i == 0:  # zebra: shaded header, every other body row tinted
+                shade(cell, ZEBRA_HEAD)
+            elif i % 2 == 0:
+                shade(cell, ZEBRA_ODD)
     if len(cells) > 1:  # repeat header row on each page
         trpr = t.rows[0]._tr.get_or_add_trPr()
         el = OxmlElement("w:tblHeader")
